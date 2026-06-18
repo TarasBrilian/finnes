@@ -1,0 +1,10 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+const page = await ctx.newPage();
+await page.goto('http://localhost:3100/institution', { waitUntil: 'networkidle' });
+await page.getByRole('button', { name: /Generate key/i }).click();
+await page.waitForTimeout(900);
+await page.screenshot({ path: '/tmp/finnes-institution-populated.png', fullPage: true });
+console.log('done');
+await b.close();

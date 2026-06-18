@@ -28,9 +28,9 @@ export function KeyManager() {
     <div className="card">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h3 className="text-sm font-semibold text-ink">Shielded key</h3>
+          <h3 className="text-base font-bold text-ink">Shielded key</h3>
           <p className="mt-0.5 text-xs text-ink-muted">
-            Spending + viewing key for the ZK layer. In-memory only — never sent anywhere.
+            Spending + viewing key. In-memory only — never sent anywhere.
           </p>
         </div>
         {kp ? (
@@ -49,7 +49,7 @@ export function KeyManager() {
       </div>
 
       {kp && (
-        <div className="mt-3 space-y-2 rounded-lg bg-slate-50 p-3 text-xs">
+        <div className="mt-3 space-y-2 rounded-xl bg-blue-50/70 p-3 text-xs">
           <div className="flex items-center gap-2">
             <span className="text-ink-muted">owner_pk</span>
             <span className="mono">{shortFr(kp.ownerPk)}</span>
@@ -60,7 +60,7 @@ export function KeyManager() {
             <span className="mono">{revealed ? shortFr(kp.ownerSk) : '•••••• (secret)'}</span>
             <button
               type="button"
-              className="text-brand-600 hover:underline"
+              className="font-medium text-blue-600 hover:underline"
               onClick={() => setRevealed((v) => !v)}
             >
               {revealed ? 'hide' : 'reveal fingerprint'}

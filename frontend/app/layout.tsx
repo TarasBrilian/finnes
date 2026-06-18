@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
 import { TrustBoundaryBanner } from '@/components/TrustBoundaryBanner';
-import { CloudDivider } from '@/components/Batik';
 
 export const metadata: Metadata = {
   title: 'Finnes — Confidential RWA Settlement',
@@ -25,43 +24,40 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body className="min-h-screen">
         <TrustBoundaryBanner />
-        <header className="cloud-band">
-          <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <header className="sticky top-0 z-20 border-b border-blue-100 bg-white/80 backdrop-blur-md">
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5">
             <a href="/" className="group flex items-center gap-3">
-              {/* Wordmark — a small layered-cloud glyph + the name. */}
-              <span
-                aria-hidden="true"
-                className="grid h-9 w-9 place-items-center rounded-xl bg-mega-mendung text-white shadow-sm"
-              >
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                  <path d="M4 17a8 8 0 0 1 16 0" />
-                  <path d="M8 17a4 4 0 0 1 8 0" />
-                  <path d="M11 17a1 1 0 0 1 2 0" />
-                </svg>
-              </span>
-              <span className="flex flex-col leading-tight">
-                <span className="text-lg font-extrabold tracking-tight text-ink">
-                  Finnes
-                </span>
-                <span className="hidden text-[11px] font-medium uppercase tracking-[0.16em] text-sogan-600 sm:inline">
+              {/* Wordmark — Mega Mendung seal (asset) + the name. */}
+              <img src="/seal.svg" alt="" aria-hidden="true" className="h-9 w-9 shadow-sm" />
+              <span className="flex flex-col leading-none">
+                <span className="text-[17px] font-extrabold tracking-tight text-ink">Finnes</span>
+                <span className="mt-1 hidden text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-500 sm:inline">
                   confidential RWA settlement
                 </span>
               </span>
             </a>
-            <span
-              className="badge border border-emas-400/40 bg-emas-300/20 text-sogan-700"
-              title="This is a scaffold UI"
-            >
-              SCAFFOLD · demo
-            </span>
+            <div className="flex items-center gap-2">
+              <nav className="mr-2 hidden items-center gap-1 text-sm font-medium text-ink-muted sm:flex">
+                <a href="/institution" className="rounded-lg px-3 py-1.5 transition hover:bg-blue-50 hover:text-blue-700">
+                  Institution
+                </a>
+                <a href="/regulator" className="rounded-lg px-3 py-1.5 transition hover:bg-blue-50 hover:text-blue-700">
+                  Regulator
+                </a>
+              </nav>
+              <span
+                className="badge border border-blue-200 bg-blue-50 text-blue-700"
+                title="This is a scaffold UI"
+              >
+                SCAFFOLD · demo
+              </span>
+            </div>
           </div>
-          {/* Scalloped Mega Mendung lower edge of the header band. */}
-          <CloudDivider className="block w-full text-brand-600" units={16} opacity={0.4} />
         </header>
-        <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
-        <footer className="mx-auto max-w-6xl px-6 pb-12 pt-6">
-          <CloudDivider className="mb-4 block w-full" units={16} opacity={0.3} />
-          <p className="text-xs text-ink-faint">
+        <main className="mx-auto max-w-6xl px-6 py-10">{children}</main>
+        <footer className="mx-auto max-w-6xl px-6 pb-12 pt-8">
+          <div className="mb-4 h-px w-full bg-blue-100" />
+          <p className="max-w-3xl text-xs leading-relaxed text-ink-faint">
             Finnes is not a mixer — auditability is enforced in-circuit by design. Secrets
             (spending/viewing keys, witness, note plaintext) never leave the client trust zone.
           </p>

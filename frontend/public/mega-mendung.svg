@@ -1,58 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 300" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Mega Mendung cloud motif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 200" fill="none" role="img" aria-label="Mega Mendung cloud line motif">
   <defs>
-    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#0b1a3f"/>
-      <stop offset="1" stop-color="#081230"/>
-    </linearGradient>
-    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1b3a8f"/>
-      <stop offset="1" stop-color="#102a63"/>
-    </linearGradient>
-    <linearGradient id="body2" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2249b5"/>
-      <stop offset="1" stop-color="#16306e"/>
-    </linearGradient>
-    <!-- One scrolling-cloud lobe with a spiral curl (the Mega Mendung signature). -->
-    <g id="lobe">
-      <!-- filled cloud body -->
-      <path d="M0,90
-               C0,52 26,34 60,36
-               C92,38 104,58 104,76
-               C104,92 92,100 80,98
-               C66,96 62,82 72,76
-               C81,71 90,78 86,86
-               C83,92 76,90 76,85
-               L76,90 L0,90 Z"
-            fill="url(#body)"/>
-      <!-- layered contour lines hugging the top edge (ombré) -->
-      <g fill="none" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M2,90 C2,50 28,32 60,34 C94,36 106,58 105,77 C104,93 91,102 79,99 C64,96 60,80 71,74 C82,68 92,77 87,86 C84,92 77,90 77,85"
-              stroke="#bcd3ff" stroke-width="3"/>
-        <path d="M9,90 C9,56 31,40 60,42 C90,44 99,60 98,76 C97,89 87,96 78,94 C67,91 64,80 72,75"
-              stroke="#5b8cf0" stroke-width="2.4"/>
-        <path d="M17,90 C17,62 35,49 60,51 C84,53 91,64 90,76 C89,86 81,91 74,90"
-              stroke="#2f63db" stroke-width="2"/>
-      </g>
+    <!-- A single refined scrolling-cloud scroll, line-art (the Mega Mendung curl). -->
+    <g id="scroll" fill="none" stroke="#6f93e6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M0 72 C0 30 33 9 64 20 C92 30 97 60 77 70 C61 78 49 64 58 54 C65 47 76 52 72 61"/>
+      <path d="M11 72 C11 38 35 22 60 31 C82 39 86 60 72 67"/>
+      <circle cx="64" cy="57" r="3.1"/>
     </g>
   </defs>
 
-  <rect width="600" height="300" fill="url(#sky)"/>
-
-  <!-- distant upper cloud row (smaller, dimmer) -->
-  <g opacity="0.55">
-    <use href="#lobe" transform="translate(-20 40) scale(0.7)"/>
-    <use href="#lobe" transform="translate(150 30) scale(0.7)"/>
-    <use href="#lobe" transform="translate(320 44) scale(0.7)"/>
-    <use href="#lobe" transform="translate(490 30) scale(0.7)"/>
-    <use href="#lobe" transform="translate(640 40) scale(0.7)"/>
+  <!-- far row (smaller, dimmer) -->
+  <g opacity="0.5">
+    <use href="#scroll" transform="translate(30 18) scale(0.66)"/>
+    <use href="#scroll" transform="translate(170 10) scale(0.66)"/>
+    <use href="#scroll" transform="translate(310 20) scale(0.66)"/>
+    <use href="#scroll" transform="translate(450 10) scale(0.66)"/>
   </g>
 
-  <!-- near lower cloud row (full size, layered, offset for seamless repeat) -->
-  <g transform="translate(0 130)">
-    <use href="#lobe" transform="translate(-60 0)"/>
-    <use href="#lobe" transform="translate(95 24)"/>
-    <use href="#lobe" transform="translate(250 6)"/>
-    <use href="#lobe" transform="translate(405 24)"/>
-    <use href="#lobe" transform="translate(560 0)"/>
+  <!-- near row (full size) -->
+  <g opacity="0.9">
+    <use href="#scroll" transform="translate(-30 96)"/>
+    <use href="#scroll" transform="translate(110 110)"/>
+    <use href="#scroll" transform="translate(250 96)"/>
+    <use href="#scroll" transform="translate(390 110)"/>
+    <use href="#scroll" transform="translate(530 96)"/>
   </g>
 </svg>

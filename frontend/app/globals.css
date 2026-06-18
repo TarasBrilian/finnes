@@ -8,65 +8,108 @@
 
 html,
 body {
-  @apply bg-white text-ink antialiased;
+  @apply bg-[#f3f6fc] text-ink antialiased;
 }
 
-/* Very light blue page wash — clean, not busy. The Mega Mendung motif is
-   reserved for the hero banner asset, never a full-page wallpaper. */
-body {
-  background-color: #f6f9ff;
+/* Optical heading rhythm. */
+h1, h2, h3 {
+  letter-spacing: -0.015em;
 }
 
 @layer components {
-  /* Clean white card with a light-blue hairline border. */
+  /* ---- Surfaces ---------------------------------------------------------- */
+
+  /* Clean white card with a light-blue hairline. */
   .card {
-    @apply relative rounded-2xl border border-blue-100 bg-white p-5 shadow-card transition duration-200;
+    @apply relative rounded-2xl border border-blue-100 bg-white p-6 shadow-card transition duration-200;
   }
   .card-hover {
     @apply hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lift;
   }
 
+  /* Deep navy panel — the brand surface (hero, position panel). */
+  .panel-navy {
+    @apply relative overflow-hidden rounded-3xl bg-navy-panel text-white shadow-lift;
+  }
+
+  /* ---- Typography helpers ------------------------------------------------ */
+
+  .eyebrow {
+    @apply inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600;
+  }
+  .eyebrow::before {
+    content: '';
+    @apply h-px w-7 bg-blue-400;
+  }
+  .eyebrow-light {
+    @apply inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-200/90;
+  }
+  .eyebrow-light::before {
+    content: '';
+    @apply h-px w-7 bg-blue-300/70;
+  }
+
+  /* Big confident numeral (balances, stats). */
+  .stat {
+    @apply font-mono text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl;
+  }
+
+  /* ---- Controls ---------------------------------------------------------- */
+
   .label {
-    @apply mb-1 block text-sm font-medium text-ink-muted;
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted;
   }
   .input {
-    @apply w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm
+    @apply w-full rounded-xl border border-blue-200 bg-blue-50/40 px-3.5 py-2.5 text-sm
       text-ink shadow-sm outline-none transition
       placeholder:text-ink-faint
-      focus:border-blue-500 focus:ring-2 focus:ring-blue-100;
+      focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100;
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5
       text-sm font-semibold tracking-tight transition disabled:cursor-not-allowed
       disabled:opacity-50;
   }
   .btn-primary {
     @apply btn bg-blue-600 text-white shadow-sm
       hover:bg-blue-700 hover:shadow-lift
-      focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-white;
+      focus:outline-none focus:ring-4 focus:ring-blue-200;
   }
   .btn-ghost {
-    @apply btn border border-blue-200 bg-white text-ink
+    @apply btn border border-blue-200 bg-white text-blue-700
       hover:border-blue-300 hover:bg-blue-50
-      focus:outline-none focus:ring-2 focus:ring-blue-200;
+      focus:outline-none focus:ring-4 focus:ring-blue-100;
   }
+
+  /* Segmented control (shield / unshield). */
+  .segment {
+    @apply inline-flex rounded-xl border border-blue-200 bg-blue-50 p-0.5 text-xs font-semibold;
+  }
+  .segment-item {
+    @apply rounded-[10px] px-3.5 py-1.5 capitalize text-ink-muted transition;
+  }
+  .segment-item-active {
+    @apply bg-white text-blue-700 shadow-sm;
+  }
+
   .badge {
     @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  /* Compliance chip — pill with a status dot. */
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium;
+  }
+  .chip-good {
+    @apply border-blue-200 bg-blue-50 text-blue-700;
+  }
+  .chip-bad {
+    @apply border-rose-200 bg-rose-50 text-rose-700;
   }
   .mono {
     @apply font-mono text-xs text-ink-muted;
   }
 
-  /* Section eyebrow — small blue-accented kicker above headings. */
-  .eyebrow {
-    @apply inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-600;
-  }
-  .eyebrow::before {
-    content: '';
-    @apply h-px w-6 bg-blue-400;
-  }
-
-  /* Key figure (confidential balances etc.) — tabular, with a blue underline. */
+  /* Key figure with a blue underline (legacy use). */
   .figure {
     @apply font-mono text-ink decoration-blue-300 underline-offset-4;
   }

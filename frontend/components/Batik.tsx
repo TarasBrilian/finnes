@@ -1,112 +1,42 @@
 /**
- * Mega Mendung batik motifs (Cirebon cloud scallops).
+ * Mega Mendung (Cirebon cloud batik) presentation helpers.
  *
- * Decorative only — every node is `aria-hidden`. Used at "Halus" intensity:
- * a thin scalloped divider and a soft hero ornament. The signature of Mega
- * Mendung is the layered cloud + the colour gradient, so the strokes ride the
- * `mega-mendung` spectrum (nila → trust-blue → gold).
+ * The motif is a real asset — `public/mega-mendung.svg` (refined line-art) and
+ * `public/seal.svg` (the brand roundel). Used as a restrained brand signature on
+ * navy surfaces, never a full-page wallpaper. Decorative: `aria-hidden`.
  */
-
-const GRADIENT_ID = 'mega-mendung-stroke';
-
-/** One Mega Mendung cloud = three nested upward arcs + a tiny inner curl. */
-function CloudUnit({ x, baseline = 22 }: { x: number; baseline?: number }) {
-  // Concentric half-circle "bumps" (radii 18 / 11 / 5) make the layered cloud.
-  return (
-    <g transform={`translate(${x} 0)`}>
-      <path d={`M2 ${baseline}a18 18 0 0 1 36 0`} />
-      <path d={`M9 ${baseline}a11 11 0 0 1 22 0`} />
-      <path d={`M15 ${baseline}a5 5 0 0 1 10 0`} />
-      {/* connecting trough to the next cloud */}
-      <path d={`M38 ${baseline}q6 6 12 0`} fill="none" />
-    </g>
-  );
-}
 
 /**
- * Thin scalloped cloud divider. Spans its container width; sits well as a
- * section separator or the lower edge of the header band.
+ * Deep navy brand panel carrying the Mega Mendung line-art as a soft watermark
+ * drifting in from the right. Children render on top (white text), anchored to
+ * the calmer left side.
  */
-export function CloudDivider({
+export function MegaMendungBanner({
+  children,
   className = '',
-  units = 8,
-  opacity = 0.5,
 }: {
+  children?: React.ReactNode;
   className?: string;
-  units?: number;
-  opacity?: number;
 }) {
-  const step = 50; // CloudUnit footprint (cloud + trough)
-  const width = units * step;
   return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      viewBox={`0 0 ${width} 26`}
-      width="100%"
-      height="26"
-      preserveAspectRatio="xMidYMid slice"
-      role="presentation"
-    >
-      <defs>
-        <linearGradient id={GRADIENT_ID} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#26324b" />
-          <stop offset="0.45" stopColor="#2748b0" />
-          <stop offset="0.72" stopColor="#6f86c9" />
-          <stop offset="1" stopColor="#c8962f" />
-        </linearGradient>
-      </defs>
-      <g
-        fill="none"
-        stroke={`url(#${GRADIENT_ID})`}
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        opacity={opacity}
-      >
-        {Array.from({ length: units }, (_, i) => (
-          <CloudUnit key={i} x={i * step} />
-        ))}
-      </g>
-    </svg>
-  );
-}
-
-/**
- * Soft hero ornament: a larger drift of stacked Mega Mendung clouds, faded into
- * the corner so headline text stays on a calm area. Purely atmospheric.
- */
-export function MegaMendungOrnament({ className = '' }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      viewBox="0 0 320 180"
-      fill="none"
-      role="presentation"
-    >
-      <defs>
-        <linearGradient id="mm-fill" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#2748b0" stopOpacity="0.10" />
-          <stop offset="0.6" stopColor="#6f86c9" stopOpacity="0.10" />
-          <stop offset="1" stopColor="#d9ab45" stopOpacity="0.14" />
-        </linearGradient>
-        <linearGradient id="mm-line" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#26324b" />
-          <stop offset="0.5" stopColor="#2748b0" />
-          <stop offset="1" stopColor="#c8962f" />
-        </linearGradient>
-      </defs>
-      {/* layered cloud silhouettes */}
-      <g stroke="url(#mm-line)" strokeWidth="1.6" strokeLinecap="round" opacity="0.45">
-        <path d="M20 150a60 60 0 0 1 120 0" fill="url(#mm-fill)" />
-        <path d="M44 150a36 36 0 0 1 72 0" />
-        <path d="M64 150a16 16 0 0 1 32 0" />
-        <path d="M150 150a78 78 0 0 1 156 0" fill="url(#mm-fill)" />
-        <path d="M180 150a48 48 0 0 1 96 0" />
-        <path d="M206 150a22 22 0 0 1 44 0" />
-        <path d="M228 150a8 8 0 0 1 16 0" />
-      </g>
-    </svg>
+    <section className={`panel-navy ${className}`}>
+      {/* Line-art clouds, faint, on the right. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-10 top-1/2 hidden h-[140%] w-2/3 -translate-y-1/2 bg-contain bg-right bg-no-repeat opacity-60 sm:block"
+        style={{ backgroundImage: 'url(/mega-mendung.svg)' }}
+      />
+      {/* Readability scrim so headline text stays crisp over the clouds. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0c1c44] via-[#0c1c44]/80 to-transparent"
+      />
+      {/* Soft top glow. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -left-20 -top-24 h-64 w-64 rounded-full bg-blue-500/20 blur-3xl"
+      />
+      <div className="relative">{children}</div>
+    </section>
   );
 }
