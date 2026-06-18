@@ -7,7 +7,8 @@
   "type": "module",
   "workspaces": [
     "sdk",
-    "prover"
+    "prover",
+    "frontend"
   ],
   "scripts": {
     "circuits:build": "bash scripts/build-circuits.sh",

@@ -1,0 +1,13 @@
+# Next.js
+.next/
+out/
+
+# dependencies
+node_modules/
+
+# env (NEVER commit secrets — invariant #8)
+.env*
+
+# misc
+*.tsbuildinfo
+next-env.d.ts

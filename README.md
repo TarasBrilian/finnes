@@ -127,12 +127,17 @@ finnes/
 │           └── state.rs      # storage layout
 ├── prover/                   # off-chain prover service (TypeScript)
 ├── sdk/                      # client SDK: note management, scanning, encryption
+├── frontend/                 # Next.js web UI (institution + regulator/auditor views)
 ├── setup/                    # trusted-setup ceremony artifacts (.zkey, VK)
 ├── scripts/                  # build / deploy / demo scripts
 ├── README.md
 ├── ARCHITECTURE.md
 └── CLAUDE.md
 ```
+
+> The **backend tier** (indexer / API / relayer) described in
+> [`ARCHITECTURE.md`](./ARCHITECTURE.md) is not yet scaffolded; the frontend
+> currently reads mock/indexer-stubbed data where it would call that tier.
 
 ---
 
