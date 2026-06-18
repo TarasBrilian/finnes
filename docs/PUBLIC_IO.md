@@ -140,26 +140,34 @@ sentinel rule below.
 
 ## transfer.circom — 2-in / 2-out, single asset
 
-Public signals, in order (`i` = index):
+`D = 20`, `K_a = K_r = 5`. Both output notes carry a mandatory `c_auditor` and a
+`c_recipient` (cm_out_0 = recipient note, cm_out_1 = change note back to sender;
+a zero-value change note is a normal commitment, so no sentinel is needed here).
+
+Public signals, in order (`i` = absolute index):
 
 ```
- 0  anchor_root
- 1  kyc_root
- 2  sanction_root
- 3  assets_root
- 4  frozen_root
- 5  auditor_pk          (TODO: may expand to _x/_y once scheme fixed)
- 6  nf_in_0
- 7  nf_in_1
- 8  cm_out_0
- 9  cm_out_1
-10  new_root
-11  fee                 (per-asset; 0 in demo)
-12 .. 12+D-1            old_frontier[0..D-1]
-   .. +D                new_frontier[0..D-1]
-   .. +K_a              c_auditor   (K_a packed field elements, TODO)
-   .. +K_r              c_recipient (K_r packed field elements, TODO)
+ 0       anchor_root
+ 1       kyc_root
+ 2       sanction_root
+ 3       assets_root
+ 4       frozen_root
+ 5       auditor_pk            (= Poseidon(k_view); single field)
+ 6       nf_in_0
+ 7       nf_in_1
+ 8       cm_out_0              (recipient note)
+ 9       cm_out_1              (change note → sender)
+10       new_root
+11       fee                   (per-asset; 0 in demo)
+12 .. 31 old_frontier[0..19]   (D = 20)
+32 .. 51 new_frontier[0..19]
+52 .. 56 c_auditor_0[0..4]     (output note 0; mandatory)
+57 .. 61 c_auditor_1[0..4]     (output note 1; mandatory)
+62 .. 66 c_recipient_0[0..4]   (output note 0)
+67 .. 71 c_recipient_1[0..4]   (output note 1)
 ```
+
+Total: **72** public signals (`12 + 2·D + 2·K_a + 2·K_r` = `12 + 40 + 10 + 10`).
 
 Private witness: input notes `(asset_id, value, owner_pk, rho, r_note)×2`,
 `owner_sk`, Merkle paths for the two inputs, KYC path, sanctions non-membership
@@ -173,20 +181,25 @@ KYC membership, sanctions + frozen non-membership, assets membership +
 
 ## shield.circom — transparent → shielded (0 shielded inputs, 1 transparent input)
 
+`D = 20`, `K_a = K_r = 5`. One output note ⇒ one mandatory `c_auditor` + one
+`c_recipient`.
+
 ```
- 0  asset_id            (public — derived from deposited SAC; circuit proves = Poseidon(sac_address))
- 1  amount              (public — deposited raw SAC units)
- 2  kyc_root            (depositor/owner KYC membership)
- 3  assets_root
- 4  auditor_pk          (TODO)
- 5  cm_out_0
- 6  new_root
- 7  fee                 (0 in demo)
- 8 .. 8+D-1             old_frontier[0..D-1]
-   .. +D                new_frontier[0..D-1]
-   .. +K_a              c_auditor
-   .. +K_r              c_recipient
+ 0       asset_id            (public — derived from deposited SAC; circuit proves = Poseidon(sac_address))
+ 1       amount              (public — deposited raw SAC units)
+ 2       kyc_root            (depositor/owner KYC membership)
+ 3       assets_root
+ 4       auditor_pk          (= Poseidon(k_view); single field)
+ 5       cm_out_0
+ 6       new_root
+ 7       fee                 (0 in demo)
+ 8 .. 27 old_frontier[0..19] (D = 20)
+28 .. 47 new_frontier[0..19]
+48 .. 52 c_auditor_0[0..4]   (mandatory)
+53 .. 57 c_recipient_0[0..4]
 ```
+
+Total: **58** public signals (`8 + 2·D + K_a + K_r` = `8 + 40 + 5 + 5`).
 
 Key constraint: the output `cm` opens to `(asset_id, amount, owner_pk, rho, r_note)`
 for the **public** `(asset_id, amount)` without revealing `(owner_pk, rho, r_note)`.
@@ -194,24 +207,43 @@ Prevents minting a note labelled as a different/more-valuable asset.
 
 ## unshield.circom — shielded → transparent (1+ shielded inputs, transparent output)
 
+`D = 20`, `K_a = K_r = 5`. The single output is the (optional) change note.
+
 ```
- 0  anchor_root
- 1  kyc_root            (transparent recipient compliance)
- 2  sanction_root
- 3  assets_root
- 4  frozen_root
- 5  auditor_pk          (TODO)
- 6  nf_in_0
- 7  asset_id            (public — for the SAC transfer)
- 8  amount              (public — raw SAC units leaving)
- 9  recipient           (public — transparent Stellar address)
-10  cm_change_0         (optional change note; 0/null if none)
-11  new_root
-12  fee
-13 .. 13+D-1            old_frontier[0..D-1]
-   .. +D                new_frontier[0..D-1]
-   .. +K_a              c_auditor   (for the change note, if any)
+ 0       anchor_root
+ 1       kyc_root            (transparent recipient compliance)
+ 2       sanction_root
+ 3       assets_root
+ 4       frozen_root
+ 5       auditor_pk          (= Poseidon(k_view); single field)
+ 6       nf_in_0
+ 7       asset_id            (public — for the SAC transfer)
+ 8       amount              (public — raw SAC units leaving)
+ 9       recipient           (public — transparent Stellar address; see encoding below)
+10       cm_change_0         (change note; 0 SENTINEL = no change, see below)
+11       new_root
+12       fee
+13 .. 32 old_frontier[0..19] (D = 20)
+33 .. 52 new_frontier[0..19]
+53 .. 57 c_auditor_0[0..4]   (change note; all-zero when cm_change_0 == 0)
+58 .. 62 c_recipient_0[0..4] (change note; all-zero when cm_change_0 == 0)
 ```
+
+Total: **63** public signals (`13 + 2·D + K_a + K_r` = `13 + 40 + 5 + 5`).
+
+**`recipient` encoding (LOCKED, demo):** a **single** field element. The demo's
+transparent addresses are sampled to fit `< r`, and the contract maps
+`pi.recipient` → the concrete Stellar `Address` for the SAC `transfer` via its
+demo account registry. PRODUCTION GAP: a full 32-byte ed25519 / `C…` address can
+exceed `r`; production splits `recipient` into two fields (hi/lo 16 bytes) or binds
+it via the SHA-256 host function (the one on-chain hash invariant #11 permits) —
+either is a fresh-ceremony change.
+
+**"No change note" sentinel (LOCKED):** `cm_change_0 == 0`. The circuit gates the
+change-note commitment and both change ciphertexts on `has_change = (cm_change_0 ≠
+0)` (a constrained witness); when there is no change, `amount == input value`, and
+`c_auditor_0` / `c_recipient_0` are all-zero. `0` is safe as a sentinel because a
+real Poseidon commitment is never `0` (negligible probability over `Fr`).
 
 MUST enforce: input inclusion + nullifier, **frozen-set non-membership** of the
 spent commitment (escape-hatch closure), transparent `recipient` KYC/non-sanctioned,
@@ -224,27 +256,34 @@ parties' secrets (one pairing). Production uses the escrow / two-phase flow
 (ARCHITECTURE.md → "Settlement (DvP)") built from `transfer`/`shield` variants, not
 this combined circuit.
 
+`D = 20`, `K_a = K_r = 5`. Two output notes (one per leg), each with a mandatory
+`c_auditor` + a `c_recipient`.
+
 ```
- 0  anchor_root
- 1  kyc_root
- 2  sanction_root
- 3  assets_root
- 4  frozen_root
- 5  auditor_pk          (TODO)
- 6  nf_legX_0
- 7  nf_legY_0
- 8  cm_out_X            (asset X → B)
- 9  cm_out_Y            (asset Y → A)
-10  new_root
-11  fee_X
-12  fee_Y
-13 .. 13+D-1            old_frontier[0..D-1]
-   .. +D                new_frontier[0..D-1]
-   .. +K_a              c_auditor_X
-   .. +K_a              c_auditor_Y
-   .. +K_r              c_recipient_X
-   .. +K_r              c_recipient_Y
+ 0       anchor_root
+ 1       kyc_root
+ 2       sanction_root
+ 3       assets_root
+ 4       frozen_root
+ 5       auditor_pk          (= Poseidon(k_view); single field)
+ 6       nf_leg_x_0
+ 7       nf_leg_y_0
+ 8       cm_out_X            (asset X → B)
+ 9       cm_out_Y            (asset Y → A)
+10       new_root
+11       fee_x
+12       fee_y
+13 .. 32 old_frontier[0..19] (D = 20)
+33 .. 52 new_frontier[0..19]
+53 .. 57 c_auditor_X[0..4]   (mandatory)
+58 .. 62 c_auditor_Y[0..4]   (mandatory)
+63 .. 67 c_recipient_X[0..4]
+68 .. 72 c_recipient_Y[0..4]
 ```
+
+Total: **73** public signals (`13 + 2·D + 2·K_a + 2·K_r` = `13 + 40 + 10 + 10`).
+Signal names match `DvpPublicInputs` in `contracts/finnes/src/types.rs`
+(`nf_leg_x_0` / `nf_leg_y_0` / `fee_x` / `fee_y`).
 
 Per-leg: conservation per asset, per-leg `per_tx_limit_raw` check, KYC of each
 recipient, frozen/sanctions non-membership. Consent is on-chain via `require_auth`
