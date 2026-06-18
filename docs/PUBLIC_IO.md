@@ -13,9 +13,12 @@ almost always ordering/layout drift — **check this file first**. Changing any
 ordering requires a fresh phase-2 ceremony for that circuit and a new VK
 (see CLAUDE.md → "When adding a new circuit or changing public inputs").
 
-> Status: SCAFFOLD. Field-packing of ciphertexts, the auditor-encryption scheme,
-> and the exact tree depth are marked `TODO` below; the **logical signal order**
-> is the part that is normative and must not be reordered casually.
+> Status: DECISIONS LOCKED (FIN-001). Tree depth, the auditor-encryption scheme,
+> ciphertext field-packing, the `auditor_pk` representation, the transparent
+> `recipient` encoding, and the "no change note" sentinel are all fixed below
+> (no `TODO` remains in the per-circuit signal tables). The **logical signal
+> order** is normative and must not be reordered casually. Changing any locked
+> count or ordering requires a fresh phase-2 ceremony + new VK for that circuit.
 
 ---
 
@@ -51,7 +54,12 @@ on-chain.
 
 ## Tree
 
-- Depth `D = 32` (TODO: confirm capacity vs cost).
+- Depth **`D = 20`** (LOCKED, FIN-001). Capacity `2^20 ≈ 1,048,576` notes —
+  sufficient for the demo, and chosen to keep proving cheap (each input/KYC/
+  sanctions/frozen/assets Merkle path is `D` Poseidon-`t=2` hashes, and the
+  unoptimized HadesMiMC permutation makes per-level cost the dominant term).
+  Production may raise `D` (e.g. 32) — that is a fresh-ceremony change, not a
+  runtime parameter.
 - Frontier = filled-subtrees, `D` field elements.
 - Transition proved in-circuit: `old_frontier` (in) → (`new_frontier`, `new_root`) (out).
 - Contract stores `new_frontier` / `new_root` verbatim — it performs **no hashing**.
