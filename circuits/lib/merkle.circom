@@ -18,12 +18,7 @@ pragma circom 2.1.6;
 // =============================================================================
 
 include "poseidon_bls.circom";
-include "../node_modules/circomlib/circuits/comparators.circom"; // IsEqual / LessThan — field-agnostic bit gadgets only (NOT Poseidon)
-
-// NOTE on the circomlib include above: ONLY field-agnostic helpers (Num2Bits,
-// LessThan, IsEqual, Mux1) are used from circomlib. circomlib's Poseidon is
-// FORBIDDEN here (BN254 constants). If the project vendors its own bit gadgets,
-// repoint this include; the path must resolve under `--prime bls12381`.
+include "bits.circom"; // VENDORED field-agnostic Num2Bits / LessThan / IsZero / IsEqual (NO circomlib, NO BN254)
 
 // -----------------------------------------------------------------------------
 // HashLR — node = Poseidon(left, right)
@@ -56,6 +51,10 @@ template MerkleInclusion(depth) {
     component hashers[depth];
     // running hash up the tree
     signal cur[depth + 1];
+    // per-level ordered children (declared at template scope — circom 2.2 forbids
+    // signal declarations inside a loop body).
+    signal left[depth];
+    signal right[depth];
     cur[0] <== leaf;
 
     for (var i = 0; i < depth; i++) {
@@ -66,12 +65,10 @@ template MerkleInclusion(depth) {
         // if pathIndices[i] == 0: (cur, sibling); else (sibling, cur)
         // left  = cur + idx*(sibling - cur)
         // right = sibling + idx*(cur - sibling)
-        signal left;
-        signal right;
-        left  <== cur[i] + pathIndices[i] * (pathElements[i] - cur[i]);
-        right <== pathElements[i] + pathIndices[i] * (cur[i] - pathElements[i]);
-        hashers[i].left  <== left;
-        hashers[i].right <== right;
+        left[i]  <== cur[i] + pathIndices[i] * (pathElements[i] - cur[i]);
+        right[i] <== pathElements[i] + pathIndices[i] * (cur[i] - pathElements[i]);
+        hashers[i].left  <== left[i];
+        hashers[i].right <== right[i];
         cur[i + 1] <== hashers[i].out;
     }
 
@@ -157,32 +154,56 @@ template FrontierTransition(depth, nInserts) {
     signal output new_frontier[depth];
     signal output new_root;
 
-    // zero/empty-subtree constants per level (Poseidon of empty subtrees).
-    // TODO: precompute zeros[level] = Poseidon(zeros[level-1], zeros[level-1])
-    //       with zeros[0] = EMPTY_LEAF, and either hardcode them as a generated
-    //       include or compute them here. Must match the indexer & contract
-    //       genesis exactly.
+    // --- empty-subtree constants: zeros[0]=0, zeros[l]=Poseidon(zeros[l-1],zeros[l-1])
+    // Computed in-circuit (deterministic; equals sdk/src/merkle.ts emptyTreeZeros
+    // and the contract genesis). Only levels 0..depth-1 are used by inserts.
     signal zeros[depth];
-
-    // TODO: implement incremental insertion:
-    //   for each leaf j in 0..nInserts-1:
-    //     idx = nextIndex + j
-    //     walk levels 0..depth-1: if (idx >> level) is even, this node becomes a
-    //       new filled-subtree at `level` (store in frontier) and stop climbing;
-    //       else combine with old_frontier[level] via Poseidon and continue.
-    //   After all inserts, fold remaining frontier + zeros up to the root.
-    //
-    // Bit decomposition of idx drives the even/odd selection; use Num2Bits on a
-    // bounded width (>= depth). This is the most subtle gadget — it MUST agree
-    // bit-for-bit with `contracts/finnes/src/merkle.rs` and the indexer's tree.
-    //
-    // PLACEHOLDER wiring so the template type-checks. NOT a sound transition —
-    // replace before any ceremony. Outputs are deliberately set to non-final
-    // placeholder values referencing inputs so the under-constraint is obvious.
-    for (var lvl = 0; lvl < depth; lvl++) {
-        zeros[lvl] <== 0;                       // TODO: real empty-subtree consts
-        new_frontier[lvl] <== old_frontier[lvl]; // TODO: real updated frontier
+    component zhash[depth];              // zhash[0] unused (zeros[0] is the constant 0)
+    zeros[0] <== 0;
+    for (var l = 1; l < depth; l++) {
+        zhash[l] = HashLR();
+        zhash[l].left  <== zeros[l - 1];
+        zhash[l].right <== zeros[l - 1];
+        zeros[l] <== zhash[l].out;
     }
-    // TODO: new_root <== fold(new_frontier, zeros)
-    new_root <== leaves[0]; // PLACEHOLDER — replace with folded root.
+
+    // --- thread the frontier across the inserts.
+    // fr[j] = frontier BEFORE insert j; fr[0]=old_frontier; fr[nInserts]=new_frontier.
+    signal fr[nInserts + 1][depth];
+    for (var l = 0; l < depth; l++) { fr[0][l] <== old_frontier[l]; }
+
+    component idxBits[nInserts];
+    component levelHash[nInserts][depth];
+    signal cur[nInserts][depth + 1];    // running hash climbing the tree for insert j
+    signal leftIn[nInserts][depth];
+    signal rightIn[nInserts][depth];
+
+    for (var j = 0; j < nInserts; j++) {
+        // bit l of (nextIndex + j): even at level l => left child, odd => right child.
+        // Num2Bits(depth) also range-bounds the append index to < 2^depth (no overflow).
+        idxBits[j] = Num2Bits(depth);
+        idxBits[j].in <== nextIndex + j;
+
+        cur[j][0] <== leaves[j];
+        for (var l = 0; l < depth; l++) {
+            // Select the two hash inputs by the bit b = idxBits[j].out[l]:
+            //   b==0 (left child):  left = cur,        right = zeros[l]
+            //   b==1 (right child): left = fr[j][l],   right = cur
+            leftIn[j][l]  <== cur[j][l] + idxBits[j].out[l] * (fr[j][l] - cur[j][l]);
+            rightIn[j][l] <== zeros[l]  + idxBits[j].out[l] * (cur[j][l] - zeros[l]);
+
+            levelHash[j][l] = HashLR();
+            levelHash[j][l].left  <== leftIn[j][l];
+            levelHash[j][l].right <== rightIn[j][l];
+            cur[j][l + 1] <== levelHash[j][l].out;
+
+            // frontier update: on a LEFT child (b==0) this node becomes the filled
+            // subtree at level l; on a RIGHT child (b==1) the level is unchanged.
+            fr[j + 1][l] <== fr[j][l] + (1 - idxBits[j].out[l]) * (cur[j][l] - fr[j][l]);
+        }
+    }
+
+    for (var l = 0; l < depth; l++) { new_frontier[l] <== fr[nInserts][l]; }
+    // current tree root after the final insert (empty positions folded as zeros).
+    new_root <== cur[nInserts - 1][depth];
 }
