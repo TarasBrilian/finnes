@@ -74,36 +74,61 @@ inherently — the contract never hashes them, it stores them verbatim.
 
 There is **no embedded curve** (invariant #1), so an in-circuit EC-DH/ElGamal KEM
 is off the table — and Poseidon has no trapdoor, so a true public-key encryption
-(prover encrypts with a public key, auditor decrypts with a private key) is
-impossible BLS-natively. The demo therefore uses a **symmetric shared view-key**:
+*verified in-circuit* is impossible BLS-natively. The resolution: keep the
+value-binding **100% in-circuit (Poseidon)**, and put the asymmetry in the
+**off-circuit key-distribution layer** (a one-time onboarding step, NOT per-tx).
+The in-circuit gadget is **identical** in the demo and in production — only how the
+keying secret is *authorized* changes (a scalar-equality in the demo becomes a
+Merkle membership in production; that core does not change).
+
+**Keying.** Each institution `I` shares a symmetric key `k_I` with the auditor,
+established once at onboarding (e.g. over the auditor's X25519 key — off-circuit,
+not security-critical to per-tx soundness). The **auditor ciphertext of a note is
+keyed by its sender institution's** `k_S`:
 
 ```
-k_view        : the auditor view secret, a single field element. SHARED out-of-band
-                between the enrolled institution(s) and the auditor (DEMO trust:
-                one shared key ⇒ any holder can decrypt every note — acceptable for
-                a single-institution demo, NOT production).
-auditor_pk    = Poseidon(k_view)        ← public contract state; the circuit proves
-                                          auditor_pk == Poseidon(k_view) so the prover
-                                          cannot swap in a key the auditor lacks.
+auditor_pk    = Poseidon(k_S)     ← bound in-circuit so the prover must use a key
+                                    the AUDITOR authorized:
+   • DEMO (single institution): auditor_pk is a single scalar in contract state;
+     the circuit proves auditor_pk == Poseidon(k_view) and the contract checks
+     pi.auditor_pk == state.auditor_pk (exact).
+   • PRODUCTION (multi-institution): contract stores auditor_set_root = Merkle root
+     over { Poseidon(k_I) : I authorized }; the circuit proves Poseidon(k_S) ∈
+     auditor_set_root, REUSING the KYC/assets Merkle-membership gadget. Institution
+     B never holds k_A ⇒ cannot decrypt A's notes (confidential); the auditor holds
+     every k_I ⇒ decrypts all (full audit). This is a fresh-ceremony swap of a
+     scalar-equality for a membership check — the keystream below is unchanged.
 ```
 
 Per **output note**, the prover samples a fresh nonce `ρ_enc` (published, so the
 auditor can recompute the keystream) and masks the bound plaintext fields:
 
 ```
-shared        = Poseidon(k_view, ρ_enc)
+shared        = Poseidon(k_S, ρ_enc)
 ks_i          = Poseidon(shared, i)              // domain-separated by slot index i
 c[i]          = pt[i] + ks_i        (mod r)      // additive one-time pad over Fr
 ```
 
-Decryption (auditor, holding `k_view`): `pt[i] = c[i] − Poseidon(Poseidon(k_view, ρ_enc), i)`.
-In-circuit soundness (FIN-004): `value`/`asset_id`/`owner_pk`/`rho` fed into the
-keystream binding are the **same** signals fed into the note commitment, so the
-ciphertext cannot disagree with the committed note (no "encrypt a zero" attack).
+Decryption (auditor, holding `k_S`): `pt[i] = c[i] − Poseidon(Poseidon(k_S, ρ_enc), i)`.
 
-> PRODUCTION GAP: replace the single shared `k_view` with a per-recipient KEM (or a
-> threshold/multi-auditor split, FIN-020). The in-circuit binding above is
-> unchanged; only the key-distribution layer changes.
+**Soundness (full, both regimes).** `value`/`asset_id`/`owner_pk`/`rho` fed into the
+keystream are the **same** signals fed into the note commitment, so the ciphertext
+cannot disagree with the committed note ("encrypt a zero" is impossible), and the
+key is bound (`Poseidon(k_S)` == `auditor_pk` / ∈ `auditor_set_root`) so the prover
+cannot encrypt to a key the auditor lacks. There is **no griefing gap**: the prover
+can only use its own authorized key, which the auditor can always read. (A pure
+off-circuit X25519 transport with only an in-circuit value-commitment would NOT have
+this property — the prover could publish a value-correct commitment alongside an
+undecryptable blob; this scheme avoids that by binding the keystream itself.)
+
+**Confidentiality.** Demo: single institution, so the single shared `k_view` never
+leaks across parties. Production: per-institution `k_I` ⇒ genuine cross-institution
+confidentiality, with a threshold/multi-auditor split of the auditor's keys
+available as a further hardening (FIN-020).
+
+> The recipient ciphertext (`c_recipient`) uses the same keystream construction but
+> keyed by a sender↔recipient pairwise secret (demo: OOB); it is non-mandatory
+> (invariant #5 requires only the auditor ciphertext) and exists for note discovery.
 
 ### Field-packing (LOCKED)
 
