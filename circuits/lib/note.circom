@@ -4,8 +4,9 @@ pragma circom 2.1.6;
 // note.circom — note commitment & nullifier derivation (Poseidon-BLS)
 // =============================================================================
 //
-// SCAFFOLD. Template signatures and composition are concrete; the hash bodies
-// delegate to PoseidonBLS (itself a TODO stub — see poseidon_bls.circom).
+// Concrete (FIN-003). Hash bodies delegate to PoseidonBLS, which is implemented
+// and circuit↔SDK parity-verified (FIN-002, invariant #13). All hashing here is
+// Poseidon over the BLS12-381 scalar field — mirrored 1:1 by sdk/src/note.ts.
 //
 // Compile with `--prime bls12381` (compiler flag, not pragma).
 //
@@ -108,10 +109,10 @@ template SpentNote() {
     signal output cm;
     signal output nf;
 
-    // (a) ownership: owner_pk must equal Poseidon(owner_sk)
+    // (a) ownership: owner_pk must equal Poseidon(owner_sk). This equality IS the
+    //     spend-authority constraint — without it anyone could spend any note.
     component opk = OwnerPk();
     opk.owner_sk <== owner_sk;
-    // TODO: this equality is the ownership constraint — keep it.
     owner_pk === opk.owner_pk;
 
     // (b) commitment
