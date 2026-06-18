@@ -35,10 +35,13 @@ export {
 } from './note.js';
 
 export {
+  EMPTY_LEAF,
   IncrementalMerkleTree,
   TREE_DEPTH,
+  applyFrontierTransition,
   emptyTreeZeros,
   hashNode,
+  imtLeafHash,
   verifyInclusionPath,
 } from './merkle.js';
 
