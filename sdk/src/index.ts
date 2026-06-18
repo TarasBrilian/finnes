@@ -41,6 +41,7 @@ export {
   applyFrontierTransition,
   emptyTreeZeros,
   hashNode,
+  imtLeafHash,
   verifyInclusionPath,
 } from './merkle.js';
 
