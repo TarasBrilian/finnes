@@ -64,12 +64,77 @@ on-chain.
 - Transition proved in-circuit: `old_frontier` (in) → (`new_frontier`, `new_root`) (out).
 - Contract stores `new_frontier` / `new_root` verbatim — it performs **no hashing**.
 
-## Ciphertext binding (TODO: scheme)
+## Ciphertext binding (LOCKED, FIN-001)
 
-- `c_auditor` (mandatory) and `c_recipient` are carried as **public inputs**
-  (field-packed); Groth16 binds them inherently — the contract never hashes them.
-- Encryption scheme: hybrid (prove value-equality), curve/representation `TODO`.
-- `auditor_pk` representation (`auditor_pk_*`) `TODO` once the scheme is fixed.
+`c_auditor` (mandatory, invariant #5) and `c_recipient` (optional, for note
+discovery) are carried as **public inputs** (field-packed); Groth16 binds them
+inherently — the contract never hashes them, it stores them verbatim.
+
+### Scheme: Poseidon additive keystream over a shared view-key (DEMO)
+
+There is **no embedded curve** (invariant #1), so an in-circuit EC-DH/ElGamal KEM
+is off the table — and Poseidon has no trapdoor, so a true public-key encryption
+(prover encrypts with a public key, auditor decrypts with a private key) is
+impossible BLS-natively. The demo therefore uses a **symmetric shared view-key**:
+
+```
+k_view        : the auditor view secret, a single field element. SHARED out-of-band
+                between the enrolled institution(s) and the auditor (DEMO trust:
+                one shared key ⇒ any holder can decrypt every note — acceptable for
+                a single-institution demo, NOT production).
+auditor_pk    = Poseidon(k_view)        ← public contract state; the circuit proves
+                                          auditor_pk == Poseidon(k_view) so the prover
+                                          cannot swap in a key the auditor lacks.
+```
+
+Per **output note**, the prover samples a fresh nonce `ρ_enc` (published, so the
+auditor can recompute the keystream) and masks the bound plaintext fields:
+
+```
+shared        = Poseidon(k_view, ρ_enc)
+ks_i          = Poseidon(shared, i)              // domain-separated by slot index i
+c[i]          = pt[i] + ks_i        (mod r)      // additive one-time pad over Fr
+```
+
+Decryption (auditor, holding `k_view`): `pt[i] = c[i] − Poseidon(Poseidon(k_view, ρ_enc), i)`.
+In-circuit soundness (FIN-004): `value`/`asset_id`/`owner_pk`/`rho` fed into the
+keystream binding are the **same** signals fed into the note commitment, so the
+ciphertext cannot disagree with the committed note (no "encrypt a zero" attack).
+
+> PRODUCTION GAP: replace the single shared `k_view` with a per-recipient KEM (or a
+> threshold/multi-auditor split, FIN-020). The in-circuit binding above is
+> unchanged; only the key-distribution layer changes.
+
+### Field-packing (LOCKED)
+
+`auditor_pk` is a **single** field element (`Poseidon(k_view)`), not `_x`/`_y`.
+
+```
+K_a = 5  (c_auditor, per output note):
+  [0] ρ_enc            (published nonce)
+  [1] value    + ks_1
+  [2] asset_id + ks_2
+  [3] owner_pk + ks_3
+  [4] rho      + ks_4
+
+K_r = 5  (c_recipient, per output note):
+  [0] ρ_enc            (published nonce; independent of the auditor nonce)
+  [1] value    + ks_1
+  [2] asset_id + ks_2
+  [3] rho      + ks_3
+  [4] r_note   + ks_4
+```
+
+`c_recipient` carries `r_note` instead of `owner_pk` (the recipient re-derives
+`owner_pk` from its own `owner_sk`; it needs `r_note`+`rho` to later spend the
+note). For the demo, the recipient keystream is keyed by an OOB-shared pairwise
+secret (same construction); recipient discovery is **not** security-critical
+(invariant #5 mandates only the auditor ciphertext).
+
+**Every output note carries one mandatory `c_auditor` and one `c_recipient`.** A
+2-out `transfer` therefore publishes `2·K_a + 2·K_r` ciphertext fields. For the
+`unshield` change note and any "no change" case, see the per-circuit table and the
+sentinel rule below.
 
 ---
 
