@@ -91,9 +91,9 @@ export function WalletConnect({
     <div className="card">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h3 className="text-sm font-semibold text-ink">Stellar wallet (Freighter)</h3>
+          <h3 className="text-base font-bold text-ink">Stellar wallet</h3>
           <p className="mt-0.5 text-xs text-ink-muted">
-            Transparent side only — signs shield / unshield. Never sees shielded keys.
+            Freighter — transparent side only. Never sees shielded keys.
           </p>
         </div>
         {state.connected ? (
@@ -108,9 +108,9 @@ export function WalletConnect({
       </div>
 
       {state.connected && (
-        <div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs">
+        <div className="mt-3 rounded-xl bg-blue-50/70 p-3 text-xs">
           <div className="flex items-center gap-2">
-            <span className="badge bg-emerald-100 text-emerald-800">connected</span>
+            <span className="badge bg-blue-100 text-blue-700">connected</span>
             <span className="text-ink-muted">{state.network}</span>
           </div>
           <div className="mono mt-2 break-all">{state.publicKey}</div>

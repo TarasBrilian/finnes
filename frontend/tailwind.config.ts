@@ -54,6 +54,7 @@ const config: Config = {
       },
       backgroundImage: {
         'blue-spectrum': 'linear-gradient(120deg, #0e1f49 0%, #2249b5 50%, #5b8cf0 100%)',
+        'navy-panel': 'linear-gradient(135deg, #0c1c44 0%, #112556 55%, #1a3370 100%)',
       },
       keyframes: {
         fadeUp: {

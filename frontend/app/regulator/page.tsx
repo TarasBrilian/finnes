@@ -26,9 +26,10 @@ export default function RegulatorPage() {
 
   return (
     <div className="space-y-8">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-ink">Regulator / Auditor</h1>
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="space-y-1.5">
+          <span className="eyebrow">Regulator console</span>
+          <h1 className="text-3xl font-extrabold tracking-tight text-ink">Regulator / Auditor</h1>
           <p className="text-sm text-ink-muted">
             The public sees opaque blobs. With the view key, you see everything.
           </p>
@@ -38,21 +39,16 @@ export default function RegulatorPage() {
         </a>
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-1">
-          <AuditorKeyInput />
-        </div>
+      {/* Step 1: the read authority. */}
+      <AuditorKeyInput />
 
-        <div className="lg:col-span-1">
-          <TxList txs={txs} selectedHash={selected?.txHash} onSelect={setSelected} />
-        </div>
-
-        <div className="lg:col-span-1">
-          <DisclosurePanel tx={selected} />
-        </div>
+      {/* The reveal: opaque public ledger (left) → full disclosure (right). */}
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        <TxList txs={txs} selectedHash={selected?.txHash} onSelect={setSelected} />
+        <DisclosurePanel tx={selected} />
       </div>
 
-      <p className="text-[11px] text-ink-faint">
+      <p className="text-[11px] leading-relaxed text-ink-faint">
         Clawback is a separate two-phase / two-key flow (auditor identifies cm_target via the view
         key; issuer_authority freezes it). Not part of this scaffold — see ARCHITECTURE.md → Clawback
         &amp; freeze.

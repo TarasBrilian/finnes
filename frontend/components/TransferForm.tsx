@@ -51,8 +51,8 @@ export function TransferForm({ spending }: { spending: SpendingKeypair | null })
 
   return (
     <div className="card">
-      <h3 className="text-sm font-semibold text-ink">Confidential transfer (A → B)</h3>
-      <p className="mt-0.5 text-xs text-ink-muted">
+      <h3 className="text-base font-bold text-ink">Confidential transfer (A → B)</h3>
+      <p className="mt-1 text-xs text-ink-muted">
         Public sees only an opaque commitment, a nullifier, and ciphertexts.
       </p>
 
