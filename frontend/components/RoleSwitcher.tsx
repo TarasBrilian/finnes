@@ -36,13 +36,24 @@ export function RoleSwitcher() {
             aria-current={active ? 'page' : undefined}
             onClick={() => router.push(r.href)}
             className={[
-              'card text-left transition hover:shadow-md',
-              active ? 'ring-2 ring-brand-500' : '',
+              'card card-hover overflow-hidden text-left',
+              active ? 'border-brand-500 ring-1 ring-brand-500' : '',
             ].join(' ')}
           >
+            {/* gold corner accent on the active role */}
+            {active && (
+              <span
+                aria-hidden="true"
+                className="absolute left-0 top-0 h-full w-1 bg-mega-mendung"
+              />
+            )}
             <div className="flex items-center justify-between">
               <span className="text-base font-semibold text-ink">{r.label}</span>
-              {active && <span className="badge bg-brand-100 text-brand-700">current</span>}
+              {active && (
+                <span className="badge border border-emas-400/40 bg-emas-300/20 text-sogan-700">
+                  current
+                </span>
+              )}
             </div>
             <p className="mt-1 text-sm text-ink-muted">{r.blurb}</p>
           </button>

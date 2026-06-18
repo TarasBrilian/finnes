@@ -8,6 +8,7 @@ import {
 } from '@/lib/finnes-client';
 import type { SpendingKeypair } from '@/lib/keys';
 import { MockBadge } from './MockBadge';
+import { CloudDivider } from './Batik';
 
 /**
  * Shows confidential balances discovered by scanning on-chain ciphertexts with
@@ -54,18 +55,26 @@ export function ConfidentialBalances({ spending }: { spending: SpendingKeypair |
       )}
 
       {spending && balances && balances.length > 0 && (
-        <ul className="divide-y divide-slate-100">
-          {balances.map((b) => (
-            <li key={b.assetId.toString()} className="flex items-center justify-between py-3">
+        <ul className="divide-y divide-sogan-100">
+          {balances.map((b, i) => (
+            <li
+              key={b.assetId.toString()}
+              className="flex animate-fade-up items-center justify-between py-3"
+              style={{ animationDelay: `${i * 70}ms` }}
+            >
               <div>
                 <p className="text-sm font-medium text-ink">{b.assetLabel}</p>
                 <p className="text-xs text-ink-faint">{b.noteCount} note(s)</p>
               </div>
-              <span className="font-mono text-sm text-ink">{formatRawAmount(b.rawAmount)}</span>
+              <span className="figure text-base font-semibold underline">
+                {formatRawAmount(b.rawAmount)}
+              </span>
             </li>
           ))}
         </ul>
       )}
+
+      <CloudDivider className="mt-3 block w-full" units={6} opacity={0.3} />
 
       <p className="mt-3 text-[11px] text-ink-faint">
         Discovered by trial-decrypting on-chain ciphertexts client-side. Amounts are raw SAC units

@@ -20,7 +20,8 @@ export default function InstitutionPage() {
   return (
     <div className="space-y-8">
       <header className="flex items-center justify-between">
-        <div>
+        <div className="space-y-1">
+          <span className="eyebrow">Institution view</span>
           <h1 className="text-2xl font-bold tracking-tight text-ink">Institution</h1>
           <p className="text-sm text-ink-muted">
             Hold notes, settle confidentially, stay provably compliant.
