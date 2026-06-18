@@ -8,10 +8,12 @@ layout and the project root `CLAUDE.md` for the binding security invariants.
 **Status:** `[ ]` todo · `[~]` in progress · `[x]` done
 **Priority:** P0 = blocks everything · P1 = on critical path · P2 = needed for demo · P3 = deferred/backlog
 
-> **FIN-001 (PUBLIC_IO decisions) and FIN-002 (Poseidon-BLS parity) are DONE.**
-> FIN-001 locked D=20, the auditor-encryption scheme (A), K_a=K_r=5, and the
-> recipient/sentinel encodings. FIN-002 hashes identically circuit↔SDK
-> (machine-verified across t=2/3/6). Next on the critical path: **FIN-003**.
+> **FIN-001, FIN-002, FIN-003 are DONE.** FIN-001 locked D=20, the
+> auditor-encryption scheme (A), K_a=K_r=5, recipient/sentinel encodings.
+> FIN-002 hashes identically circuit↔SDK. FIN-003 implemented the note + Merkle
+> gadgets (incl. vendored r-aware comparator + IMT non-membership), all
+> circuit↔SDK parity-verified. Next on the critical path: **FIN-004**
+> (`enc_check.circom` + SDK encryption, per the FIN-001 scheme).
 
 ---
 
@@ -43,9 +45,15 @@ Without this every proof fails — commitments/nullifiers/Merkle must hash ident
 
 ## Phase 2 — Core circuit + gadgets
 
-### [ ] FIN-003 · P1 · Implement note + Merkle gadgets
-Fill `circuits/lib/note.circom` (commitment, nullifier, owner_pk, asset_id) and `circuits/lib/merkle.circom` (inclusion, non-membership, `old_frontier → new_frontier/new_root` transition). Mirror `sdk/src/note.ts` + `sdk/src/merkle.ts`.
-**Acceptance:** gadget-level witness tests pass; SDK and circuit agree on commitment/nullifier/root for shared inputs.
+### [x] FIN-003 · P1 · Implement note + Merkle gadgets — DONE
+Filled `circuits/lib/note.circom`, `circuits/lib/merkle.circom`, vendored bit gadgets, and `sdk/src/merkle.ts`; all circuit↔SDK parity-verified.
+- **Done:** `note.circom` de-scaffolded (commitment/nullifier/owner_pk/asset_id real); mirrors `sdk/src/note.ts`.
+- **Done:** `circuits/lib/bits.circom` — VENDORED field-agnostic gadgets (Num2Bits/LessThan/LessEqThan/IsZero/IsEqual) + **r-aware** AliasCheckBLS / Num2BitsBLS / LessThanField (circomlib was never installed and is BN254-pinned; vendoring keeps the tree BN254-free, invariant #1).
+- **Done:** `merkle.circom` — MerkleInclusion (hoisted loop signals; circom 2.2 fix), **IMT MerkleNonMembership** (full-field sound comparisons), **real FrontierTransition** (incremental filled-subtrees insert, zeros computed in-circuit).
+- **Done:** `sdk/src/merkle.ts` — `IncrementalMerkleTree` (root/frontier/inclusionPath), `applyFrontierTransition`, `emptyTreeZeros`, `imtLeafHash`; D=20; mirrors the circuit exactly.
+- **Done:** parity gates (all green) — `npm run poseidon|note|merkle|comparator|nonmembership:parity`. The comparator gate proves AliasCheckBLS rejects non-canonical (≥ r) witnesses; the non-membership gate proves a member / forged low-leaf cannot prove absence (fund-critical, invariants #14/#19).
+**Acceptance:** ✅ gadget-level witness tests pass; SDK and circuit agree on commitment/nullifier/root.
+**Heads-up for FIN-006:** `FrontierTransition` needs `nextIndex` (current leaf count). For soundness it must be a public input the **contract** supplies from state (not prover-controlled) — this adds one public signal per tree-transition circuit (a small FIN-001 layout amendment to make when wiring `transfer.circom`).
 **Deps:** FIN-002.
 
 ### [ ] FIN-004 · P1 · Implement `enc_check.circom` + SDK encryption
