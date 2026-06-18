@@ -1,0 +1,29 @@
+[package]
+name = "finnes"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Finnes — confidential RWA settlement contract for Soroban (Groth16 over BLS12-381)."
+publish = false
+
+[lib]
+# `cdylib` produces the Wasm contract artifact; `rlib` lets the test harness and
+# downstream tooling link against the crate as a normal Rust library.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# soroban-sdk provides the contract macros, env, storage, crypto host-fn
+# bindings (incl. `env.crypto().bls12_381()`), and types (Bytes, BytesN, Vec).
+# TODO: pin to the exact SDK version matching the target Protocol (22/23) once
+# the toolchain is available; BLS12-381 host fns require a recent SDK.
+soroban-sdk = "22"
+
+[dev-dependencies]
+# Enables the in-memory test environment (`Env::default()`), test utilities, and
+# host-fn emulation used by `src/test.rs`.
+soroban-sdk = { version = "22", features = ["testutils"] }
+
+[features]
+# `testutils` is required by integration tests that register the contract and
+# call entrypoints against a simulated Soroban host.
+testutils = ["soroban-sdk/testutils"]

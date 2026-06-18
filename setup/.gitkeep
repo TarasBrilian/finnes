@@ -1,0 +1,4 @@
+# Keep this directory in version control.
+# Generated trusted-setup artifacts live in setup/build/ and are gitignored
+# (proving keys / .ptau are sensitive — see setup/README.md and CLAUDE.md #10).
+# The public verifying keys (vk_*.json) are committed.

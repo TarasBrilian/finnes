@@ -1,0 +1,26 @@
+{
+  "name": "@finnes/sdk",
+  "version": "0.0.0",
+  "description": "Client SDK for Finnes: shielded-note management, ciphertext scanning, Poseidon-BLS commitments, and ordered public-input assembly.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

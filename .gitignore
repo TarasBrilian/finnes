@@ -1,0 +1,35 @@
+# Node
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+npm-debug.log*
+
+# Rust / Soroban
+target/
+**/target/
+
+# Circom / circuit build artifacts
+*.r1cs
+*.sym
+*_js/
+*.wtns
+circuits/build/
+
+# Trusted setup — sensitive / large. NEVER commit proving keys or ptau.
+*.ptau
+*.zkey
+setup/build/
+# but DO keep exported verifying keys (public)
+!**/verification_key.json
+!**/vk_*.json
+
+# Secrets — see CLAUDE.md invariant #8. Never commit keys or witnesses.
+.env
+.env.*
+*.key
+secrets/
+**/witness.json
+
+# OS
+.DS_Store

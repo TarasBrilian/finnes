@@ -1,0 +1,30 @@
+{
+  "name": "@finnes/prover",
+  "version": "0.0.0",
+  "description": "Off-chain Groth16 prover for Finnes (SnarkJS, BLS12-381). Runs INSIDE the client/institution trust zone — single-tenant, never a shared backend service. Never leaks the witness.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@finnes/sdk": "*",
+    "snarkjs": "^0.7.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

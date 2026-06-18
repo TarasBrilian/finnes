@@ -1,0 +1,511 @@
+#![no_std]
+//! Finnes — confidential RWA settlement contract for Soroban.
+//!
+//! Shielded-note (UTXO) settlement: RWA value moves as Poseidon commitments
+//! (hidden amount/asset/owner) with nullifiers preventing double-spend. The
+//! contract verifies a single Groth16 proof per transaction over the native
+//! BLS12-381 host functions, then mutates state atomically. It performs **no
+//! hashing** (invariant #11): the circuit proves the Merkle transition and the
+//! contract stores the output `(new_frontier, new_root)` verbatim.
+//!
+//! See README.md, ARCHITECTURE.md, CLAUDE.md (Security invariants — binding),
+//! and docs/PUBLIC_IO.md (canonical public-input ordering) at the repo root.
+//!
+//! ## Canonical ordering of checks in every transfer entrypoint (invariant #9)
+//!
+//! 1. validate the anchor root (recent-roots window),
+//! 2. check nullifiers are unused,
+//! 3. check compliance roots match state — `frozen_root` **strict**;
+//!    `kyc_root`/`sanction_root`/`assets_root` **windowed**; `auditor_pk` exact,
+//! 4. verify the Groth16 proof (binds ciphertexts + frozen non-membership),
+//! 5. only then mutate state: store new frontier/root, insert nullifiers and
+//!    commitments.
+//!
+//! Steps 1–4 are read-only; effects happen only after a fully valid proof
+//! ("verify before effects").
+
+mod errors;
+mod merkle;
+mod state;
+mod types;
+mod verifier;
+
+#[cfg(test)]
+mod test;
+
+use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
+
+use crate::errors::Error;
+use crate::state::RECENT_ROOTS_CAPACITY;
+use crate::types::{
+    Circuit, DvpPublicInputs, Proof, Root, Scalar, ShieldPublicInputs, TransferPublicInputs,
+    UnshieldPublicInputs, VerifyingKey, TREE_DEPTH,
+};
+
+#[contract]
+pub struct FinnesContract;
+
+#[contractimpl]
+impl FinnesContract {
+    // -----------------------------------------------------------------------
+    // init — admin setup. Idempotent guard; sets config + seeds the tree.
+    // -----------------------------------------------------------------------
+    /// Initialise the contract. Stores the admin, the auditor (read) key, the
+    /// issuer authority (write) key, the initial compliance roots, the seed
+    /// commitment-tree frontier/root, and the per-circuit verifying keys.
+    ///
+    /// `auditor_pk` and `issuer_authority` are kept as **distinct** authorities
+    /// even if one operator holds both in the demo (invariant #14).
+    #[allow(clippy::too_many_arguments)]
+    pub fn init(
+        env: Env,
+        admin: Address,
+        issuer_authority: Address,
+        auditor_pk: Scalar,
+        kyc_root: Root,
+        sanction_root: Root,
+        assets_root: Root,
+        frozen_root: Root,
+        initial_frontier: Vec<Scalar>,
+        initial_root: Root,
+        vk_shield: VerifyingKey,
+        vk_transfer: VerifyingKey,
+        vk_unshield: VerifyingKey,
+        vk_dvp: VerifyingKey,
+    ) -> Result<(), Error> {
+        if state::is_initialized(&env) {
+            return Err(Error::AlreadyInitialized);
+        }
+        // Admin authorises its own setup.
+        admin.require_auth();
+
+        if initial_frontier.len() != TREE_DEPTH {
+            return Err(Error::MalformedPublicInputs);
+        }
+
+        state::set_admin(&env, &admin);
+        state::set_issuer_authority(&env, &issuer_authority);
+        state::set_auditor_pk(&env, &auditor_pk);
+        state::set_kyc_root(&env, &kyc_root);
+        state::set_sanction_root(&env, &sanction_root);
+        state::set_assets_root(&env, &assets_root);
+        state::set_frozen_root(&env, &frozen_root);
+
+        // Seed the commitment tree (empty-tree frontier/root) and the anchor ring.
+        state::set_frontier(&env, &initial_frontier);
+        state::set_tree_root(&env, &initial_root);
+        state::init_recent_roots(&env, &initial_root);
+
+        state::set_vk(&env, Circuit::Shield, &vk_shield);
+        state::set_vk(&env, Circuit::Transfer, &vk_transfer);
+        state::set_vk(&env, Circuit::Unshield, &vk_unshield);
+        state::set_vk(&env, Circuit::Dvp, &vk_dvp);
+
+        state::bump_instance_ttl(&env);
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // shield — transparent → shielded.
+    // -----------------------------------------------------------------------
+    /// Deposit a transparent RWA token, minting one confidential output note.
+    ///
+    /// `(asset_id, amount)` are public; the proof shows the new commitment opens
+    /// to them without revealing `(owner, rho, r)` (invariant #18 — prevents
+    /// minting a note labelled as a more-valuable asset). No shielded inputs,
+    /// hence no nullifiers and no anchor root.
+    ///
+    /// NOTE: the actual SAC `transfer` of the deposited token into the contract
+    /// (and `depositor.require_auth()`) is a TODO — see step 0 below.
+    pub fn shield(env: Env, depositor: Address, proof: Proof, pi: ShieldPublicInputs) -> Result<(), Error> {
+        ensure_initialized(&env)?;
+
+        // 0. Authorise + pull funds. TODO: `depositor.require_auth()` and call the
+        //    asset's SAC `transfer(depositor -> contract, pi.amount)`; the SAC
+        //    address comes from the assets registry leaf for `pi.asset_id`.
+        depositor.require_auth();
+
+        // 3. Compliance roots match state (shield uses kyc + assets + auditor_pk;
+        //    no sanction/frozen inputs in this circuit's public-IO).
+        check_kyc_root(&env, &pi.kyc_root)?;
+        check_assets_root(&env, &pi.assets_root)?;
+        check_auditor_pk(&env, &pi.auditor_pk)?;
+
+        // 1'. Tree transition: old_frontier must equal state.
+        if !merkle::check_old_frontier(&env, &pi.old_frontier)? {
+            return Err(Error::UnknownAnchorRoot);
+        }
+
+        // 4. Verify Groth16 (binds c_auditor — mandatory, invariant #5).
+        let vk = state::get_vk(&env, Circuit::Shield).ok_or(Error::VerifyingKeyMissing)?;
+        verifier::verify_groth16(&env, &vk, &proof, &pi.to_scalars(&env))?;
+
+        // 5. Effects: store new frontier/root + the new commitment (as the new
+        //    leaf is already folded into new_root/new_frontier by the circuit).
+        merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root)?;
+        state::bump_instance_ttl(&env);
+        // TODO: emit event (cm_out_0, c_auditor, c_recipient) for the indexer.
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // confidential_transfer — shielded → shielded (2-in / 2-out).
+    // -----------------------------------------------------------------------
+    /// Move value confidentially. The public sees only opaque commitments,
+    /// nullifiers, and ciphertexts. Enforces the canonical ordered checks.
+    pub fn confidential_transfer(
+        env: Env,
+        proof: Proof,
+        pi: TransferPublicInputs,
+    ) -> Result<(), Error> {
+        ensure_initialized(&env)?;
+
+        // 1. Validate anchor root (recent-roots window).
+        if !merkle::is_recent_root(&env, &pi.anchor_root) {
+            return Err(Error::UnknownAnchorRoot);
+        }
+
+        // 2. Nullifiers unused (both inputs). Reject if either already spent.
+        if state::nullifier_exists(&env, &pi.nf_in_0)
+            || state::nullifier_exists(&env, &pi.nf_in_1)
+        {
+            return Err(Error::NullifierAlreadyUsed);
+        }
+
+        // 3. Compliance roots match state. frozen_root STRICT; others windowed;
+        //    auditor_pk exact.
+        check_frozen_root_strict(&env, &pi.frozen_root)?;
+        check_kyc_root(&env, &pi.kyc_root)?;
+        check_sanction_root(&env, &pi.sanction_root)?;
+        check_assets_root(&env, &pi.assets_root)?;
+        check_auditor_pk(&env, &pi.auditor_pk)?;
+
+        // 1'. Tree transition input: old_frontier must equal state.
+        if !merkle::check_old_frontier(&env, &pi.old_frontier)? {
+            return Err(Error::UnknownAnchorRoot);
+        }
+
+        // 4. Verify the single Groth16 proof. This binds the auditor/recipient
+        //    ciphertexts (public inputs, invariant #5) and proves frozen-set
+        //    non-membership of every spent note in-circuit.
+        let vk = state::get_vk(&env, Circuit::Transfer).ok_or(Error::VerifyingKeyMissing)?;
+        verifier::verify_groth16(&env, &vk, &proof, &pi.to_scalars(&env))?;
+
+        // 5. Effects (verify-before-effects): record nullifiers, then store the
+        //    new frontier/root. Commitments are folded into new_root by the
+        //    circuit; we emit them for the indexer.
+        state::insert_nullifier(&env, &pi.nf_in_0);
+        state::insert_nullifier(&env, &pi.nf_in_1);
+        merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root)?;
+        state::bump_instance_ttl(&env);
+        // TODO: emit event (nf_in_0, nf_in_1, cm_out_0, cm_out_1, ciphertexts).
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // settle_dvp — atomic two-asset settlement.
+    // -----------------------------------------------------------------------
+    /// Settle a two-asset DvP.
+    ///
+    /// DEMO: a single combined proof holding both parties' secrets (one
+    /// pairing), acceptable ONLY because a test harness controls both keypairs
+    /// (invariant #15). PRODUCTION uses an escrow / two-phase flow built from
+    /// `transfer`/`shield` variants (ARCHITECTURE.md → "Settlement (DvP)"); that
+    /// is **out of scope** in this scaffold.
+    ///
+    /// Counterparty consent is on-chain via `require_auth` over the concrete
+    /// intent (never an in-circuit signature, invariant #15).
+    pub fn settle_dvp(
+        env: Env,
+        party_a: Address,
+        party_b: Address,
+        proof: Proof,
+        pi: DvpPublicInputs,
+    ) -> Result<(), Error> {
+        ensure_initialized(&env)?;
+
+        // Counterparty consent: both parties authorise the concrete intent
+        // (output commitments live in `pi`). TODO: bind a nonce + the output
+        // commitments into the auth payload so consent commits to *this* intent.
+        party_a.require_auth();
+        party_b.require_auth();
+
+        // 1. Anchor root window.
+        if !merkle::is_recent_root(&env, &pi.anchor_root) {
+            return Err(Error::UnknownAnchorRoot);
+        }
+
+        // 2. Nullifiers unused (one per leg).
+        if state::nullifier_exists(&env, &pi.nf_leg_x_0)
+            || state::nullifier_exists(&env, &pi.nf_leg_y_0)
+        {
+            return Err(Error::NullifierAlreadyUsed);
+        }
+
+        // 3. Compliance roots: frozen STRICT; others windowed; auditor_pk exact.
+        check_frozen_root_strict(&env, &pi.frozen_root)?;
+        check_kyc_root(&env, &pi.kyc_root)?;
+        check_sanction_root(&env, &pi.sanction_root)?;
+        check_assets_root(&env, &pi.assets_root)?;
+        check_auditor_pk(&env, &pi.auditor_pk)?;
+
+        // 1'. Tree transition input.
+        if !merkle::check_old_frontier(&env, &pi.old_frontier)? {
+            return Err(Error::UnknownAnchorRoot);
+        }
+
+        // 4. ONE Groth16 proof for both legs (invariant #7 — never two).
+        let vk = state::get_vk(&env, Circuit::Dvp).ok_or(Error::VerifyingKeyMissing)?;
+        verifier::verify_groth16(&env, &vk, &proof, &pi.to_scalars(&env))?;
+
+        // 5. Effects.
+        state::insert_nullifier(&env, &pi.nf_leg_x_0);
+        state::insert_nullifier(&env, &pi.nf_leg_y_0);
+        merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root)?;
+        state::bump_instance_ttl(&env);
+        // TODO: emit event for both legs (nullifiers, cm_out_X/Y, ciphertexts).
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // unshield — shielded → transparent.
+    // -----------------------------------------------------------------------
+    /// Exit the shielded domain: reveal `(asset_id, amount, recipient)` and
+    /// `transfer` the SAC token to the transparent recipient.
+    ///
+    /// Top compliance checkpoint (invariant #19): the circuit MUST prove
+    /// (a) the transparent recipient is KYC-approved / non-sanctioned, and
+    /// (b) **frozen-set non-membership** of the spent commitment (escape-hatch
+    /// closure). Both are part of the proven statement (public inputs:
+    /// `kyc_root`, `sanction_root`, `frozen_root`). The contract additionally
+    /// checks `frozen_root` strictly against state here so a stale frozen root
+    /// can never let a frozen note exit.
+    pub fn unshield(env: Env, proof: Proof, pi: UnshieldPublicInputs) -> Result<(), Error> {
+        ensure_initialized(&env)?;
+
+        // 1. Anchor root window.
+        if !merkle::is_recent_root(&env, &pi.anchor_root) {
+            return Err(Error::UnknownAnchorRoot);
+        }
+
+        // 2. Nullifier unused.
+        if state::nullifier_exists(&env, &pi.nf_in_0) {
+            return Err(Error::NullifierAlreadyUsed);
+        }
+
+        // 3. Compliance roots. frozen_root STRICT (invariant #19 (b) is matched
+        //    in-circuit; we also assert the root equals current state here so
+        //    the proven non-membership is against the *current* frozen set).
+        check_frozen_root_strict(&env, &pi.frozen_root)?;
+        check_kyc_root(&env, &pi.kyc_root)?;
+        check_sanction_root(&env, &pi.sanction_root)?;
+        check_assets_root(&env, &pi.assets_root)?;
+        check_auditor_pk(&env, &pi.auditor_pk)?;
+
+        // 3'. Recipient authorisation (invariant #19 (a)). The KYC/non-sanctioned
+        //     check is proven in-circuit via kyc_root/sanction_root membership of
+        //     `pi.recipient`; this guard is the on-chain belt-and-suspenders.
+        //     TODO: map `pi.recipient` (field-encoded) to a Stellar Address and
+        //     validate it against an allow policy if one exists; for now we rely
+        //     on the in-circuit membership proof and reject the null recipient.
+        if is_zero_scalar(&pi.recipient) {
+            return Err(Error::RecipientNotAuthorised);
+        }
+
+        // 1'. Tree transition input.
+        if !merkle::check_old_frontier(&env, &pi.old_frontier)? {
+            return Err(Error::UnknownAnchorRoot);
+        }
+
+        // 4. Verify the single Groth16 proof (binds change-note ciphertext +
+        //    frozen non-membership + recipient compliance).
+        let vk = state::get_vk(&env, Circuit::Unshield).ok_or(Error::VerifyingKeyMissing)?;
+        verifier::verify_groth16(&env, &vk, &proof, &pi.to_scalars(&env))?;
+
+        // 5. Effects: record nullifier, apply tree transition (change note), then
+        //    perform the transparent payout.
+        state::insert_nullifier(&env, &pi.nf_in_0);
+        merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root)?;
+        // TODO: call the SAC `transfer(contract -> recipient, pi.amount)` for the
+        //       asset identified by `pi.asset_id` (SAC address from the registry).
+        state::bump_instance_ttl(&env);
+        // TODO: emit event (nf_in_0, asset_id, amount, recipient, cm_change_0).
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Admin: root updates (write authority = issuer_authority).
+    // -----------------------------------------------------------------------
+    /// Update `kyc_root`, pushing the prior value out of the window naturally
+    /// (windowed acceptance is per-root; KYC change is benign — invariant #6).
+    pub fn update_kyc_root(env: Env, new_root: Root) -> Result<(), Error> {
+        require_issuer(&env)?;
+        state::set_kyc_root(&env, &new_root);
+        state::bump_instance_ttl(&env);
+        Ok(())
+    }
+
+    /// Update `sanction_root`.
+    pub fn update_sanction_root(env: Env, new_root: Root) -> Result<(), Error> {
+        require_issuer(&env)?;
+        state::set_sanction_root(&env, &new_root);
+        state::bump_instance_ttl(&env);
+        Ok(())
+    }
+
+    /// Update `assets_root` (authorized-assets registry).
+    pub fn update_assets_root(env: Env, new_root: Root) -> Result<(), Error> {
+        require_issuer(&env)?;
+        state::set_assets_root(&env, &new_root);
+        state::bump_instance_ttl(&env);
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Admin: freeze / clawback (two-phase, two-key — invariant #14).
+    // -----------------------------------------------------------------------
+    /// Phase 2 (write): add `cm_target` to the frozen set and advance
+    /// `frozen_root` to `new_frozen_root` (the issuer-set root the circuits will
+    /// match strictly). `frozen_root` is matched STRICTLY on every transfer, so
+    /// this takes effect immediately for all subsequent spends.
+    ///
+    /// `cm_target` is identified in phase 1 by the auditor (read authority) who
+    /// decrypts with the view key. This entrypoint MAY require both signatures.
+    pub fn freeze(env: Env, cm_target: types::Commitment, new_frozen_root: Root) -> Result<(), Error> {
+        // Write authority (issuer). TODO: optionally also require the auditor's
+        // signature here to make the read+write join explicit (DualAuthRequired).
+        require_issuer(&env)?;
+
+        if state::frozen_contains(&env, &cm_target) {
+            return Err(Error::AlreadyFrozen);
+        }
+        state::insert_frozen(&env, &cm_target);
+        // Advance the strict frozen root verbatim (computed off-chain by the
+        // issuer; the contract performs NO hashing — invariant #11).
+        state::set_frozen_root(&env, &new_frozen_root);
+        state::bump_instance_ttl(&env);
+        // TODO: emit Freeze event (cm_target, new_frozen_root).
+        Ok(())
+    }
+
+    /// Mint a recovery note for a clawed-back commitment (issuer write
+    /// authority). The recovery is a normal output note whose commitment is
+    /// folded into the tree via a proof — so this reuses the `shield`-style
+    /// transition. Frozen notes are unspendable by their owner (non-membership
+    /// in every spend), and clawback cannot be done by computing a nullifier
+    /// (that needs the owner's spending key, which no authority holds —
+    /// invariant #14).
+    pub fn mint_recovery(env: Env, proof: Proof, pi: ShieldPublicInputs) -> Result<(), Error> {
+        require_issuer(&env)?;
+        // Reuse the shield circuit/VK for the recovery mint (asset_id/amount
+        // public; opens to the recovered value). Same ordered checks as shield,
+        // minus the depositor SAC pull (value originates from the frozen note).
+        check_assets_root(&env, &pi.assets_root)?;
+        check_auditor_pk(&env, &pi.auditor_pk)?;
+        if !merkle::check_old_frontier(&env, &pi.old_frontier)? {
+            return Err(Error::UnknownAnchorRoot);
+        }
+        let vk = state::get_vk(&env, Circuit::Shield).ok_or(Error::VerifyingKeyMissing)?;
+        verifier::verify_groth16(&env, &vk, &proof, &pi.to_scalars(&env))?;
+        merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root)?;
+        state::bump_instance_ttl(&env);
+        // TODO: emit Clawback/Recovery event (cm_out_0, ciphertexts).
+        Ok(())
+    }
+
+    /// Alias for `mint_recovery` under the spec name `clawback`. Phase-2 write
+    /// step paired with the prior `freeze`.
+    pub fn clawback(env: Env, proof: Proof, pi: ShieldPublicInputs) -> Result<(), Error> {
+        Self::mint_recovery(env, proof, pi)
+    }
+
+    // -----------------------------------------------------------------------
+    // Read-only views (handy for the indexer / tests).
+    // -----------------------------------------------------------------------
+    pub fn current_root(env: Env) -> Option<Root> {
+        state::get_tree_root(&env)
+    }
+
+    pub fn recent_roots_capacity() -> u32 {
+        RECENT_ROOTS_CAPACITY
+    }
+
+    pub fn is_nullifier_used(env: Env, nf: types::Nullifier) -> bool {
+        state::nullifier_exists(&env, &nf)
+    }
+}
+
+// ===========================================================================
+// Internal helpers (not contract entrypoints).
+// ===========================================================================
+
+fn ensure_initialized(env: &Env) -> Result<(), Error> {
+    if state::is_initialized(env) {
+        Ok(())
+    } else {
+        Err(Error::NotInitialized)
+    }
+}
+
+/// Require the configured issuer authority (write authority) to sign.
+fn require_issuer(env: &Env) -> Result<(), Error> {
+    let issuer = state::get_issuer_authority(env).ok_or(Error::NotInitialized)?;
+    issuer.require_auth();
+    Ok(())
+}
+
+/// `frozen_root` is matched STRICTLY against current state (invariant #6 — the
+/// immediacy of clawback). Never accept a stale frozen root.
+fn check_frozen_root_strict(env: &Env, supplied: &Root) -> Result<(), Error> {
+    let current = state::get_frozen_root(env).ok_or(Error::NotInitialized)?;
+    if &current == supplied {
+        Ok(())
+    } else {
+        Err(Error::StaleFrozenRoot)
+    }
+}
+
+// The windowed compliance roots change rarely and benignly. For this scaffold a
+// single current value is stored; we accept an exact match. A future revision
+// can replace each with a per-root recent-window (like the commitment-root ring)
+// without touching the entrypoint flow — that is the intent of the windowed
+// policy in invariant #6. TODO: widen to a windowed match if root churn during
+// proving latency becomes an issue.
+fn check_kyc_root(env: &Env, supplied: &Root) -> Result<(), Error> {
+    match state::get_kyc_root(env) {
+        Some(c) if &c == supplied => Ok(()),
+        Some(_) => Err(Error::StaleKycRoot),
+        None => Err(Error::NotInitialized),
+    }
+}
+
+fn check_sanction_root(env: &Env, supplied: &Root) -> Result<(), Error> {
+    match state::get_sanction_root(env) {
+        Some(c) if &c == supplied => Ok(()),
+        Some(_) => Err(Error::StaleSanctionRoot),
+        None => Err(Error::NotInitialized),
+    }
+}
+
+fn check_assets_root(env: &Env, supplied: &Root) -> Result<(), Error> {
+    match state::get_assets_root(env) {
+        Some(c) if &c == supplied => Ok(()),
+        Some(_) => Err(Error::StaleAssetsRoot),
+        None => Err(Error::NotInitialized),
+    }
+}
+
+fn check_auditor_pk(env: &Env, supplied: &Scalar) -> Result<(), Error> {
+    match state::get_auditor_pk(env) {
+        Some(c) if &c == supplied => Ok(()),
+        Some(_) => Err(Error::AuditorPkMismatch),
+        None => Err(Error::NotInitialized),
+    }
+}
+
+/// True if a scalar is the all-zero (null) sentinel — used for the
+/// "no recipient"/"no change note" cases.
+fn is_zero_scalar(s: &Scalar) -> bool {
+    let zero = [0u8; 32];
+    s.to_array() == zero
+}

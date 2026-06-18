@@ -1,0 +1,23 @@
+# Finnes contracts workspace.
+#
+# Confidential RWA settlement layer on Stellar/Soroban. The single on-chain
+# member is the `finnes` contract crate, which verifies Groth16 proofs over the
+# native BLS12-381 host functions (CAP-0059, Protocol 22/23) and maintains the
+# shielded-note state (commitment tree frontier/root, nullifier set, compliance
+# roots). See ARCHITECTURE.md and CLAUDE.md at the repo root.
+
+[workspace]
+resolver = "2"
+members = ["finnes"]
+
+# Release profile tuned for small, deterministic Wasm. `stellar contract build`
+# uses the `release` profile; these settings minimise contract size and gas.
+[profile.release]
+opt-level = "z"        # optimise for size (Wasm bytecode)
+overflow-checks = true # keep arithmetic overflow checks even in release
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true

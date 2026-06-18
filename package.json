@@ -1,0 +1,29 @@
+{
+  "name": "finnes",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Confidential settlement layer for regulated RWA on Stellar",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "sdk",
+    "prover"
+  ],
+  "scripts": {
+    "circuits:build": "bash scripts/build-circuits.sh",
+    "circuits:test": "bash scripts/test-circuits.sh",
+    "setup:ceremony": "bash scripts/setup-ceremony.sh",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "demo": "tsx scripts/demo.ts",
+    "deploy": "bash scripts/deploy.sh",
+    "typecheck": "tsc -b sdk prover"
+  },
+  "devDependencies": {
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
