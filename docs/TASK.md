@@ -8,20 +8,24 @@ layout and the project root `CLAUDE.md` for the binding security invariants.
 **Status:** `[ ]` todo · `[~]` in progress · `[x]` done
 **Priority:** P0 = blocks everything · P1 = on critical path · P2 = needed for demo · P3 = deferred/backlog
 
-> **FIN-002 (Poseidon-BLS parity) is DONE** — circuit and SDK hash identically
+> **FIN-001 (PUBLIC_IO decisions) and FIN-002 (Poseidon-BLS parity) are DONE.**
+> FIN-001 locked D=20, the auditor-encryption scheme (A), K_a=K_r=5, and the
+> recipient/sentinel encodings. FIN-002 hashes identically circuit↔SDK
 > (machine-verified across t=2/3/6). Next on the critical path: **FIN-003**.
 
 ---
 
 ## Phase 0 — Lock open decisions (cheap, but blocks circuit signal counts)
 
-### [ ] FIN-001 · P0 · Finalize PUBLIC_IO open decisions
-Resolve the `TODO`s in `docs/PUBLIC_IO.md` so signal counts are fixed before circuits are written.
-- Decide tree depth `D` (default **32**) and confirm capacity vs cost.
-- Choose the **auditor-encryption scheme** (hybrid value-equality; pick representation — must be BLS-native, **no embedded curve**, invariant #1).
-- Fix ciphertext field-packing counts `K_a` / `K_r`, and the `auditor_pk` representation (single field vs `_x`/`_y`).
-- Fix the transparent `recipient` field encoding (for unshield) and the "no change note" sentinel.
-**Acceptance:** `docs/PUBLIC_IO.md` has no `TODO` left in the per-circuit signal tables; counts are concrete.
+### [x] FIN-001 · P0 · Finalize PUBLIC_IO open decisions — DONE
+Resolved the `TODO`s in `docs/PUBLIC_IO.md` so signal counts are fixed before circuits are written.
+- **Done:** tree depth `D = 20` (2^20 ≈ 1.05M notes; demo-cheap, fresh-ceremony to raise).
+- **Done:** auditor-encryption scheme = **(A) Poseidon additive keystream over a shared view-key** (BLS-native, no embedded curve). `auditor_pk = Poseidon(k_view)`, per-output published nonce; corrected the scaffold's non-confidential naive formula.
+- **Done:** `K_a = K_r = 5` (1 nonce + 4 masked slots); `auditor_pk` single field; **every output note carries one mandatory `c_auditor` + one `c_recipient`**.
+- **Done:** transparent `recipient` = single field (demo); "no change note" sentinel = `cm_change_0 == 0` (gated `has_change`).
+- **Done:** concrete per-circuit totals — transfer 72, shield 58, unshield 63, dvp 73.
+**Acceptance:** ✅ `docs/PUBLIC_IO.md` has no `TODO` left in the per-circuit signal tables; counts are concrete.
+**Pending user confirmation:** the encryption **secret-model** (single shared `k_view`, demo-only) — flagged for sign-off before FIN-004 builds against it.
 **Deps:** none.
 
 ---
