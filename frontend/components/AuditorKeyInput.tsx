@@ -26,8 +26,8 @@ export function AuditorKeyInput() {
 
   return (
     <div className="card">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-ink">Auditor view key</h3>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-base font-bold text-ink">Auditor view key</h3>
         {kp?.isMock && <MockBadge label="mock key" />}
       </div>
       <p className="mt-0.5 text-xs text-ink-muted">
@@ -35,11 +35,14 @@ export function AuditorKeyInput() {
       </p>
 
       {kp ? (
-        <div className="mt-3 flex items-center justify-between rounded-lg bg-slate-50 p-3 text-xs">
-          <span className="badge bg-emerald-100 text-emerald-800">key loaded</span>
+        <div className="mt-3 flex items-center justify-between rounded-xl bg-blue-50/70 p-3 text-xs">
+          <span className="chip chip-good">
+            <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500" />
+            view key loaded
+          </span>
           <button
             type="button"
-            className="text-brand-600 hover:underline"
+            className="font-medium text-blue-600 hover:underline"
             onClick={() => setAuditorKeypair(null)}
           >
             clear
