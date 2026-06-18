@@ -78,58 +78,67 @@ template MerkleInclusion(depth) {
 }
 
 // -----------------------------------------------------------------------------
-// MerkleNonMembership(depth)
-//   Sorted-Merkle-tree non-membership (sanctions set AND frozen set; reused per
-//   Security invariants #14 & #19). Proves `target` is NOT a leaf by exhibiting
-//   an adjacent pair (lo, hi) that are stored, consecutive leaves with
-//   lo < target < hi, and proving inclusion of that pair's node.
+// MerkleNonMembership(depth) — Indexed Merkle Tree (IMT) non-membership.
+//   Sanctions set AND frozen set (reused per Security invariants #14 & #19;
+//   FIN-001 chose IMT). Each set is an IMT whose leaves form a sorted linked
+//   list: leaf = Poseidon(value, next_index, next_value, 0, 0) (arity 5 = t=6,
+//   the next supported Poseidon width; the 2 zero slots pad value/next_index/
+//   next_value up to a supported arity — see sdk/src/merkle.ts imtLeafHash).
 //
-//   This is the SMT/sorted-list "range gap" technique. Exact leaf encoding
-//   (single sorted-leaf SMT vs. consecutive-pair node) is a TODO to be pinned
-//   together with the indexer's tree construction; the interface below assumes
-//   a sorted pair witness.
+//   `target` is absent iff there is a stored "low" leaf with
+//       low_value < target  AND  (target < low_next_value OR low_next_value == 0)
+//   where low_next_value == 0 marks `low` as the current maximum (the list tail).
+//   Adjacency is INTRINSIC to the IMT: the low leaf's own next_value pointer
+//   bounds the gap, so no extra "canonical consecutive pair" constraint is needed
+//   (this is what the old sorted-pair encoding left as a dangling TODO).
+//
+//   Comparisons use the r-aware LessThanField (bits.circom): `target`,
+//   `low_value`, `low_next_value` are raw Poseidon outputs that span the whole
+//   scalar field, so a 252-bit LessThan would be UNSOUND. LessThanField binds
+//   each operand to its canonical < r form first (fund-critical, invariant #14).
 // -----------------------------------------------------------------------------
 template MerkleNonMembership(depth) {
     signal input target;            // the value asserted to be absent (e.g. owner_pk, cm)
-    signal input lo;                // greatest stored leaf < target
-    signal input hi;                // least stored leaf > target
+    signal input low_value;         // greatest stored value < target (the "low" leaf)
+    signal input low_next_index;    // low leaf's next pointer (index) — part of the leaf hash
+    signal input low_next_value;    // low leaf's next pointer (value); 0 == low is the maximum
     signal input pathElements[depth];
     signal input pathIndices[depth];
     signal input root;
 
-    // (1) ordering: lo < target < hi   (field-agnostic, but operands must be
-    //     range-bounded for LessThan to be sound — see TODO).
-    // TODO: enforce a domain bound (e.g. Num2Bits(252)) on lo/target/hi so the
-    //       LessThan comparisons are sound over the BLS scalar field. Without a
-    //       bit-width bound, LessThan can be gamed by wraparound.
-    component ltLo = LessThan(252);
-    ltLo.in[0] <== lo;
-    ltLo.in[1] <== target;
-    ltLo.out === 1;
+    // (1) low_value < target  (sound over the full field).
+    component ltLow = LessThanField();
+    ltLow.a <== low_value;
+    ltLow.b <== target;
+    ltLow.out === 1;
 
-    component ltHi = LessThan(252);
-    ltHi.in[0] <== target;
-    ltHi.in[1] <== hi;
-    ltHi.out === 1;
+    // (2) target < low_next_value  OR  low_next_value == 0 (low leaf is the tail).
+    component isMax = IsZero();
+    isMax.in <== low_next_value;
+    component ltHigh = LessThanField();
+    ltHigh.a <== target;
+    ltHigh.b <== low_next_value;
+    // hiOk = ltHigh.out OR isMax.out  (assert exactly one branch holds).
+    signal hiOk;
+    hiOk <== 1 - (1 - ltHigh.out) * (1 - isMax.out);
+    hiOk === 1;
 
-    // (2) the (lo, hi) pair must be an actual adjacent leaf-node in the tree.
-    // Leaf encoding for the gap node:
-    //   gapLeaf = Poseidon(lo, hi)   (TODO: confirm encoding matches indexer)
-    component gap = HashLR();
-    gap.left  <== lo;
-    gap.right <== hi;
+    // (3) the low leaf must be a real leaf of the IMT under `root`.
+    //   leaf = Poseidon(low_value, low_next_index, low_next_value, 0, 0)
+    component leafH = PoseidonBLS(5);
+    leafH.in[0] <== low_value;
+    leafH.in[1] <== low_next_index;
+    leafH.in[2] <== low_next_value;
+    leafH.in[3] <== 0;
+    leafH.in[4] <== 0;
 
     component incl = MerkleInclusion(depth);
-    incl.leaf <== gap.out;
+    incl.leaf <== leafH.out;
     for (var i = 0; i < depth; i++) {
         incl.pathElements[i] <== pathElements[i];
         incl.pathIndices[i]  <== pathIndices[i];
     }
     incl.root <== root;
-    // TODO: additionally constrain (lo,hi) to be the canonical consecutive pair
-    //       (no stored leaf strictly between them). In the sorted-pair-node
-    //       encoding this is implied by the pair being a real leaf; document the
-    //       exact invariant once the indexer's encoding is fixed.
 }
 
 // -----------------------------------------------------------------------------

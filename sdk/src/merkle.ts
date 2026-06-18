@@ -40,6 +40,17 @@ export function hashNode(left: Fr, right: Fr): Fr {
 }
 
 /**
+ * Indexed-Merkle-Tree (IMT) leaf hash for the sanctions / frozen non-membership
+ * sets: `Poseidon(value, nextIndex, nextValue, 0, 0)`. The two zero slots pad up
+ * to a supported Poseidon arity (5 → t=6); MUST match `MerkleNonMembership`'s
+ * `leafH` in circuits/lib/merkle.circom. `nextValue == 0` marks the list tail
+ * (the current maximum).
+ */
+export function imtLeafHash(value: Fr, nextIndex: Fr, nextValue: Fr): Fr {
+  return poseidonBLS([value, nextIndex, nextValue, 0n, 0n]);
+}
+
+/**
  * Empty-subtree hashes: `zeros[i]` = root of an all-empty subtree of height `i`.
  * Returns `depth + 1` elements; `zeros[0] = EMPTY_LEAF`, `zeros[depth]` is the
  * empty-tree root. Must match `circuits/lib/merkle.circom`'s in-circuit zeros and
