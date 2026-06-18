@@ -24,12 +24,15 @@ export function TxList({
 }) {
   return (
     <div className="card">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-ink">On-chain transactions (public view)</h3>
+      <div className="mb-1 flex items-center justify-between gap-3">
+        <h3 className="text-base font-bold text-ink">On-chain ledger</h3>
         {txs.some((t) => t.isMock) && <MockBadge />}
       </div>
+      <p className="mb-4 text-xs text-ink-muted">
+        Exactly what the public and competitors can see — opaque blobs only.
+      </p>
 
-      <ul className="divide-y divide-slate-100">
+      <ul className="space-y-2">
         {txs.map((tx) => {
           const active = tx.txHash === selectedHash;
           return (
@@ -37,35 +40,51 @@ export function TxList({
               <button
                 type="button"
                 onClick={() => onSelect(tx)}
+                aria-current={active ? 'true' : undefined}
                 className={[
-                  'w-full rounded-lg px-3 py-3 text-left transition',
-                  active ? 'bg-brand-50 ring-1 ring-brand-500' : 'hover:bg-slate-50',
+                  'w-full rounded-xl border px-4 py-3 text-left transition',
+                  active
+                    ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
+                    : 'border-blue-100 hover:border-blue-200 hover:bg-blue-50/50',
                 ].join(' ')}
               >
-                <div className="flex items-center justify-between">
-                  <span className="mono">{tx.txHash}</span>
-                  <span className="badge bg-slate-100 text-slate-700">{tx.circuit}</span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-xs font-medium text-ink">{tx.txHash}</span>
+                  <span className="badge border border-blue-200 bg-white capitalize text-blue-700">
+                    {tx.circuit}
+                  </span>
                 </div>
-                <div className="mt-1 text-[11px] text-ink-faint">{tx.timestamp}</div>
-                <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-ink-muted">
-                  <div>
-                    <span className="font-medium">nullifiers:</span>{' '}
-                    {tx.nullifiers.length ? tx.nullifiers.join(', ') : '—'}
+                <div className="mt-1 font-mono text-[11px] text-ink-faint">{tx.timestamp}</div>
+                <dl className="mt-2.5 grid grid-cols-2 gap-2 text-[11px] text-ink-muted">
+                  <div className="min-w-0">
+                    <dt className="font-semibold uppercase tracking-wide text-ink-faint">
+                      nullifiers
+                    </dt>
+                    <dd className="truncate font-mono">
+                      {tx.nullifiers.length ? tx.nullifiers.join(', ') : '—'}
+                    </dd>
                   </div>
-                  <div>
-                    <span className="font-medium">commitments:</span>{' '}
-                    {tx.outputCommitments.map(shortCm).join(', ')}
+                  <div className="min-w-0">
+                    <dt className="font-semibold uppercase tracking-wide text-ink-faint">
+                      commitments
+                    </dt>
+                    <dd className="truncate font-mono">
+                      {tx.outputCommitments.map(shortCm).join(', ')}
+                    </dd>
                   </div>
-                </div>
+                </dl>
               </button>
             </li>
           );
         })}
       </ul>
 
-      <p className="mt-3 text-[11px] text-ink-faint">
-        This is everything the public and competitors can see: opaque blobs. No amount, asset, or
-        party is observable here.
+      <p className="mt-4 flex items-start gap-2 border-t border-blue-100 pt-3 text-[11px] leading-relaxed text-ink-faint">
+        <span aria-hidden="true" className="mt-px">
+          🔒
+        </span>
+        No amount, asset, or counterparty is observable here — only the regulator, holding the view
+        key, can resolve it.
       </p>
     </div>
   );
