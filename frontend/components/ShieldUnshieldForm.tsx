@@ -77,9 +77,9 @@ export function ShieldUnshieldForm({ spending }: { spending: SpendingKeypair | n
 
   return (
     <div className="card">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-ink">Shield / Unshield</h3>
-        <div className="inline-flex overflow-hidden rounded-lg border border-slate-300 text-xs">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-base font-bold text-ink">Shield / Unshield</h3>
+        <div className="segment">
           {(['shield', 'unshield'] as Mode[]).map((m) => (
             <button
               key={m}
@@ -88,10 +88,7 @@ export function ShieldUnshieldForm({ spending }: { spending: SpendingKeypair | n
                 setMode(m);
                 setResult(null);
               }}
-              className={[
-                'px-3 py-1.5 font-medium capitalize transition',
-                mode === m ? 'bg-brand-600 text-white' : 'bg-white text-ink hover:bg-slate-50',
-              ].join(' ')}
+              className={`segment-item ${mode === m ? 'segment-item-active' : ''}`}
             >
               {m}
             </button>

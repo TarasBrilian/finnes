@@ -7,16 +7,16 @@ import {
   type ConfidentialBalance,
 } from '@/lib/finnes-client';
 import type { SpendingKeypair } from '@/lib/keys';
-import { MockBadge } from './MockBadge';
-import { CloudDivider } from './Batik';
 
 /**
- * Shows confidential balances discovered by scanning on-chain ciphertexts with
- * the viewing key (ARCHITECTURE.md → Frontend). The institution sees only its
- * OWN notes — nothing about other parties.
+ * The institution's confidential position — discovered by scanning on-chain
+ * ciphertexts with the viewing key (ARCHITECTURE.md → Frontend). Rendered as the
+ * dashboard's primary anchor: a deep navy panel with large per-asset figures.
+ * The institution sees only its OWN notes.
  *
  * SCAFFOLD: sdk scanning throws (encryption scheme not fixed), so the data is
- * clearly labelled MOCK until @finnes/sdk decryption is wired.
+ * clearly labelled MOCK until @finnes/sdk decryption is wired. Per-asset figures
+ * are NOT summed across assets (invariant #3 spirit — no cross-asset total).
  */
 export function ConfidentialBalances({ spending }: { spending: SpendingKeypair | null }) {
   const [balances, setBalances] = useState<ConfidentialBalance[] | null>(null);
@@ -37,49 +37,66 @@ export function ConfidentialBalances({ spending }: { spending: SpendingKeypair |
     };
   }, [spending]);
 
+  const isMock = balances?.some((b) => b.isMock);
+
   return (
-    <div className="card">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-ink">Confidential balances</h3>
-        {balances?.some((b) => b.isMock) && <MockBadge />}
-      </div>
+    <section className="panel-navy p-7 sm:p-8">
+      {/* faint cloud watermark, bottom-right */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -bottom-8 -right-8 h-48 w-2/3 bg-contain bg-right-bottom bg-no-repeat opacity-40"
+        style={{ backgroundImage: 'url(/mega-mendung.svg)' }}
+      />
+      <div className="relative">
+        <div className="flex items-center justify-between">
+          <span className="eyebrow-light">Confidential position</span>
+          {isMock && (
+            <span className="badge bg-white/10 text-blue-100" title="Placeholder — not decrypted yet">
+              mock · not decrypted
+            </span>
+          )}
+        </div>
 
-      {!spending && (
-        <p className="text-sm text-ink-muted">Generate a shielded key to scan for owned notes.</p>
-      )}
+        {!spending && (
+          <p className="mt-5 max-w-md text-sm text-blue-100/80">
+            Generate a shielded key to scan on-chain ciphertexts and reveal the notes you own.
+          </p>
+        )}
 
-      {spending && loading && <p className="text-sm text-ink-muted">Scanning ciphertexts…</p>}
+        {spending && loading && (
+          <p className="mt-5 text-sm text-blue-100/80">Scanning ciphertexts…</p>
+        )}
 
-      {spending && balances && balances.length === 0 && (
-        <p className="text-sm text-ink-muted">No owned notes discovered.</p>
-      )}
+        {spending && balances && balances.length === 0 && (
+          <p className="mt-5 text-sm text-blue-100/80">No owned notes discovered.</p>
+        )}
 
-      {spending && balances && balances.length > 0 && (
-        <ul className="divide-y divide-sogan-100">
-          {balances.map((b, i) => (
-            <li
-              key={b.assetId.toString()}
-              className="flex animate-fade-up items-center justify-between py-3"
-              style={{ animationDelay: `${i * 70}ms` }}
-            >
-              <div>
-                <p className="text-sm font-medium text-ink">{b.assetLabel}</p>
-                <p className="text-xs text-ink-faint">{b.noteCount} note(s)</p>
+        {spending && balances && balances.length > 0 && (
+          <div className="mt-6 grid gap-x-10 gap-y-7 sm:grid-cols-2">
+            {balances.map((b, i) => (
+              <div
+                key={b.assetId.toString()}
+                className="animate-fade-up"
+                style={{ animationDelay: `${i * 70}ms` }}
+              >
+                <p className="text-xs font-medium uppercase tracking-wide text-blue-200/80">
+                  {b.assetLabel}
+                </p>
+                <p className="stat mt-1.5 text-white">{formatRawAmount(b.rawAmount)}</p>
+                <p className="mt-1 text-xs text-blue-200/60">
+                  {b.noteCount} note{b.noteCount === 1 ? '' : 's'} · raw SAC units
+                </p>
               </div>
-              <span className="figure text-base font-semibold underline">
-                {formatRawAmount(b.rawAmount)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+            ))}
+          </div>
+        )}
 
-      <CloudDivider className="mt-3 block w-full" units={6} opacity={0.3} />
-
-      <p className="mt-3 text-[11px] text-ink-faint">
-        Discovered by trial-decrypting on-chain ciphertexts client-side. Amounts are raw SAC units
-        formatted with display decimals; the ZK layer never rescales (invariant #16).
-      </p>
-    </div>
+        <p className="relative mt-7 max-w-2xl border-t border-white/10 pt-4 text-[11px] leading-relaxed text-blue-200/60">
+          Discovered by trial-decrypting on-chain ciphertexts client-side. Amounts are raw SAC units
+          formatted with display decimals; the ZK layer never rescales (invariant #16). Balances are
+          per-asset and never summed across assets.
+        </p>
+      </div>
+    </section>
   );
 }

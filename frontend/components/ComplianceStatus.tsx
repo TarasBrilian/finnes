@@ -3,13 +3,12 @@
 import { useEffect, useState } from 'react';
 import { fetchComplianceState, formatRawAmount, type ComplianceState } from '@/lib/finnes-client';
 import type { SpendingKeypair } from '@/lib/keys';
-import { MockBadge } from './MockBadge';
 
 /**
- * KYC / sanctions / per-asset limit status. In the demo, KYC enrollment is
- * mocked (admin script enrolls all demo accounts into `kyc_root`) — the
- * in-circuit membership check still happens on every transfer; only enrollment
- * is mocked (CLAUDE.md → Out of scope / KYC).
+ * KYC / sanctions / per-asset limit status, as a slim inline chip strip. In the
+ * demo, KYC enrollment is mocked (admin script enrolls all demo accounts into
+ * `kyc_root`) — the in-circuit membership check still happens on every transfer;
+ * only enrollment is mocked (CLAUDE.md → Out of scope / KYC).
  */
 export function ComplianceStatus({ spending }: { spending: SpendingKeypair | null }) {
   const [state, setState] = useState<ComplianceState | null>(null);
@@ -27,49 +26,47 @@ export function ComplianceStatus({ spending }: { spending: SpendingKeypair | nul
   }, [spending]);
 
   return (
-    <div className="card">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-ink">Compliance status</h3>
-        {state?.isMock && <MockBadge />}
-      </div>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
+        Compliance
+      </span>
 
-      {!state && <p className="text-sm text-ink-muted">Generate a key to check status.</p>}
+      {!state && <span className="text-sm text-ink-muted">Generate a key to check status.</span>}
 
       {state && (
-        <dl className="space-y-2 text-sm">
-          <div className="flex items-center justify-between">
-            <dt className="text-ink-muted">KYC</dt>
-            <dd>
-              {state.kycApproved ? (
-                <span className="badge bg-emerald-100 text-emerald-800">approved</span>
-              ) : (
-                <span className="badge bg-rose-100 text-rose-800">not approved</span>
-              )}
-            </dd>
-          </div>
-          <div className="flex items-center justify-between">
-            <dt className="text-ink-muted">Sanctions</dt>
-            <dd>
-              {state.sanctioned ? (
-                <span className="badge bg-rose-100 text-rose-800">listed</span>
-              ) : (
-                <span className="badge bg-emerald-100 text-emerald-800">clear</span>
-              )}
-            </dd>
-          </div>
-          <div className="flex items-center justify-between">
-            <dt className="text-ink-muted">Per-tx limit</dt>
-            <dd className="font-mono text-ink">
-              {state.perTxLimitRaw !== undefined ? formatRawAmount(state.perTxLimitRaw) : '—'}
-            </dd>
-          </div>
-        </dl>
+        <>
+          <span className={state.kycApproved ? 'chip chip-good' : 'chip chip-bad'}>
+            <Dot good={state.kycApproved} />
+            KYC {state.kycApproved ? 'approved' : 'not approved'}
+          </span>
+          <span className={state.sanctioned ? 'chip chip-bad' : 'chip chip-good'}>
+            <Dot good={!state.sanctioned} />
+            Sanctions {state.sanctioned ? 'listed' : 'clear'}
+          </span>
+          {state.perTxLimitRaw !== undefined && (
+            <span className="chip border-blue-200 bg-white text-ink-muted">
+              Per-tx limit
+              <span className="font-mono font-semibold text-ink">
+                {formatRawAmount(state.perTxLimitRaw)}
+              </span>
+            </span>
+          )}
+          {state.isMock && (
+            <span className="badge bg-amber-100 text-amber-800" title="Placeholder data">
+              mock
+            </span>
+          )}
+        </>
       )}
-
-      <p className="mt-3 text-[11px] text-ink-faint">
-        Limits are per-asset, enforced in-circuit via assets-registry membership (value ≤
-        per_tx_limit_raw). The limit is a witness, never a public input.
-      </p>
     </div>
+  );
+}
+
+function Dot({ good }: { good: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`inline-block h-1.5 w-1.5 rounded-full ${good ? 'bg-blue-500' : 'bg-rose-500'}`}
+    />
   );
 }
