@@ -29,8 +29,13 @@ layout and the project root `CLAUDE.md` for the binding security invariants.
 > proven end-to-end off-chain. The prover now uses the SDK builder + SDK ordered
 > public-IO (duplicated `PUBLIC_IO_ORDER` removed, closing FIN-022). The D=20
 > production ceremony is identical but needs `PTAU_POWER=20` + more RAM (or the
-> deferred Poseidon optimisation). **Next on the critical path:** **FIN-009**
-> (implement `verifier.rs` Groth16 over BLS12-381 host fns) — the on-chain side.
+> deferred Poseidon optimisation).
+> **FIN-009 is now DONE too.** `verifier.rs` runs the real Groth16 pairing-check over
+> the BLS12-381 host functions (single `g1_msm` for `vk_x` + one `pairing_check`); a
+> real depth-4 demo proof verifies in `cargo test` and a tampered public signal is
+> rejected (`scripts/gen-verifier-fixture.ts` → `contracts/finnes/src/test_vectors.rs`).
+> clippy/fmt clean, wasm builds. **Next on the critical path:** **FIN-010** (move the
+> real SAC token on shield/unshield) + **FIN-011** (state polish: windowed roots + events).
 
 ---
 
@@ -120,9 +125,12 @@ The prover now produces a real Groth16 proof that verifies locally.
 
 ## Phase 5 — Contract verifier + state
 
-### [ ] FIN-009 · P1 · Implement `verifier.rs` (Groth16 over BLS12-381 host fns)
-Replace the `return false` placeholder: deserialize VK/proof bytes into host `G1Affine`/`G2Affine` (match snarkjs compressed/uncompressed encoding), accumulate `vk_x = IC₀ + Σ xᵢ·ICᵢ`, run the single `pairing_check`. No `unwrap` on untrusted bytes; keep host-fn calls in `verifier.rs` (invariant #7).
-**Acceptance:** `confidential_transfer` accepts the FIN-008 proof and rejects a tampered one, in a `cargo test`.
+### [x] FIN-009 · P1 · Implement `verifier.rs` (Groth16 over BLS12-381 host fns) — DONE
+Replaced the `return false` placeholder with the real pairing math over `env.crypto().bls12_381()`: decode VK/proof points, `vk_x = IC₀ + Σ xᵢ·ICᵢ` via a single `g1_msm` + `g1_add`, and the one multi-`pairing_check` of `e(-A,B)·e(α,β)·e(vk_x,γ)·e(C,δ) == 1` (invariant #7 — exactly one pairing per tx).
+- **Encoding:** VK/proof points arrive already in the host's **uncompressed** big-endian serialization (G1 96B `be(X)‖be(Y)`; G2 192B `be(X_c1)‖be(X_c0)‖be(Y_c1)‖be(Y_c0)` — note the host's `c1`-before-`c0` order vs snarkjs `[c0,c1]`). The curve-specific snarkjs→host conversion lives off-chain in `scripts/gen-verifier-fixture.ts` (`npm run verifier:fixture`), keeping `verifier.rs` a thin, auditable host-fn wrapper. No `unwrap` on untrusted bytes — a wrong-length point returns `MalformedProof`; arity drift returns `VerifyingKeyArityMismatch`.
+- **Test vectors:** the fixture script proves the depth-4 `transfer_test4` demo (41 public signals), then emits `contracts/finnes/src/test_vectors.rs` (PUBLIC vk/proof/signals as host bytes). `cargo test` exercises `verifier::verify_groth16` directly: a REAL proof is **accepted**, a tampered public signal → `InvalidProof`, an arity mismatch and a malformed point are rejected structurally. (Tested at the `verify_groth16` boundary, not through `confidential_transfer`, because that entrypoint is hard-wired to the D=20 layout — 73 signals — and a production proof for it awaits the heavier D=20 ceremony per the FIN-007 note; the pairing math under test is identical.) Verify cost exceeds the test env's default budget, so the tests `reset_unlimited()`; on-chain cost is bounded by the protocol budget and dominated by the single pairing — measure via `simulateTransaction` at deploy.
+- **Green:** `cargo test` (10 passed), `cargo clippy` clean, `cargo fmt`, and `cargo build --target wasm32-unknown-unknown` all pass.
+**Acceptance:** ✅ `verify_groth16` accepts the FIN-008 proof and rejects a tampered one in `cargo test`.
 **Deps:** FIN-008.
 
 ### [ ] FIN-010 · P1 · SAC token movement on shield/unshield

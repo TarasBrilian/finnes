@@ -88,6 +88,9 @@ pub fn set_admin(env: &Env, admin: &Address) {
     env.storage().instance().set(&DataKey::Admin, admin);
 }
 
+// Retained for the indexer/admin-view surface and future entrypoints; not yet
+// read by a contract path.
+#[allow(dead_code)]
 pub fn get_admin(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::Admin)
 }
