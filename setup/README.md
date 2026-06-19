@@ -53,7 +53,7 @@ powersoftau prepare phase2 pot_0001.ptau pot_final.ptau
 ```
 
 `<power>` sets capacity to `2^power` constraints. **TODO:** confirm it covers the
-largest circuit (`transfer` / `dvp`, with tree depth `D = 32` per
+largest circuit (`transfer` / `dvp`, with tree depth `D = 20` per
 [`docs/PUBLIC_IO.md`](../docs/PUBLIC_IO.md)). The script defaults to `2^16`
 (override with `PTAU_POWER`).
 

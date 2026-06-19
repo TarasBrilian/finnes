@@ -1,13 +1,15 @@
 # circuits/ — Finnes ZK circuits (Circom + Groth16 + BLS12-381)
 
-> **STATUS: SCAFFOLD.** These circuits are **not** implemented, compiled,
-> ceremony-ready, or verified. Template signatures, sub-circuit composition, and
-> the public-signal ordering are concrete and intended to be correct. The actual
-> cryptographic **constraint bodies** (Poseidon permutation, Merkle frontier
-> transition, auditor-encryption binding, sorted-set non-membership ordering)
-> are `// TODO:` stubs. Do **not** generate proving keys, run a ceremony, or
-> claim soundness from this tree. Several gadgets are deliberately
-> under-constrained placeholders so they cannot be mistaken for finished crypto.
+> **STATUS: gadgets implemented; top-level wiring in progress.** The reusable
+> `lib/` gadgets are now real and circuit↔SDK parity-tested: Poseidon-BLS
+> (FIN-002), note commitment/nullifier + Merkle inclusion/IMT non-membership +
+> frontier transition (FIN-003), auditor/recipient encryption binding (FIN-004),
+> and authorized-assets membership + per-tx limit (FIN-005). What is NOT yet done:
+> the top-level circuits (`shield`/`transfer`/`unshield`/`dvp`) are still being
+> wired from these gadgets (FIN-006+), no ceremony has run, and no VK exists. Do
+> **not** generate proving keys or claim end-to-end soundness from this tree yet.
+> `D = 20`, `K_a = K_r = 5`, and the auditor-encryption scheme are LOCKED
+> (FIN-001, docs/PUBLIC_IO.md).
 
 Confidential RWA settlement circuits for Stellar/Soroban. Four top-level
 circuits, each with its own verifying key:
@@ -63,30 +65,26 @@ invariant #1**:
   BLS12-381's `r` does **not** produce a valid Poseidon instance — it is a silent
   cryptographic break. Round constants and the MDS matrix must be **generated for
   `r`** and the chosen `(t, R_F, R_P)` profile.
-- From `circomlib` we use **only field-agnostic helpers** — `Num2Bits`,
-  `LessThan`, `LessEqThan`, `IsEqual`, `Mux1` — and never its Poseidon. The
-  includes (`node_modules/circomlib/circuits/{bitify,comparators}.circom`) assume
-  circomlib is installed at the repo root; repoint them if you vendor your own
-  bit gadgets.
+- circomlib is **NOT** installed and is never pulled in (it is BN254-pinned).
+  The field-agnostic helpers we need (`Num2Bits`, `LessThan`, `LessEqThan`,
+  `IsZero`, `IsEqual`) plus r-aware full-field comparators (`Num2BitsBLS`,
+  `AliasCheckBLS`, `LessThanField`) are **VENDORED** in `lib/bits.circom`. All
+  circuits include `bits.circom`, never `node_modules/circomlib/...`.
 - There is **no embedded curve** (no Baby Jubjub / Jubjub) and **no in-circuit
   signature**. The only in-circuit cryptographic primitive is Poseidon-BLS plus
   field-agnostic range/bit checks. DvP/settlement consent is on-chain
   (`require_auth`), never an in-circuit signature gadget.
 
-### Poseidon parameter set (`lib/poseidon_bls.circom`)
+### Poseidon parameter set (`lib/poseidon_bls.circom`) — DONE (FIN-002)
 
-`PoseidonBLS` currently has a **placeholder body** (a linear accumulator, NOT a
-hash). Before any real use:
-
-1. Generate a Poseidon parameter set for the BLS12-381 scalar field `r`
-   (neptune / Filecoin lineage; matching SDF's Privacy Pools work on Soroban):
-   `alpha = 5` (x⁵ sbox), width `t = nInputs + 1`, `R_F = 8`, `R_P` per `t`,
-   plus the round constants `C[]` and MDS matrix `M[][]`.
-2. Vendor them as a generated include (e.g. `lib/poseidon_bls_params.circom`)
-   with provenance notes, and implement the permutation in `PoseidonBLS`.
-3. **Mirror the exact same parameter set byte-for-byte in `sdk/src/poseidon.ts`**
-   (Security invariant #13). Ship a cross-implementation test vector (same inputs
-   → same digest in circuit and JS) as a CI gate.
+`PoseidonBLS` implements the real permutation (unoptimized HadesMiMC, `alpha = 5`,
+`R_F = 8`, `R_P` per width). The parameters are generated for the BLS12-381 scalar
+field `r` by `scripts/gen-poseidon-params.mjs` into both
+`lib/poseidon_constants.circom` and `sdk/src/poseidon-params.ts` (byte-identical,
+invariant #13). The cross-implementation parity vector is a CI gate
+(`scripts/test-poseidon-parity.ts`, `sdk/test/poseidon.test.ts`). Supported widths
+are `t ∈ {2,3,6}` (arities 1, 2, 5) — a 4-field leaf is padded to arity 5
+(see `assets.circom` / `imtLeafHash`).
 
 ---
 
@@ -106,21 +104,20 @@ almost always ordering/layout drift — **check `docs/PUBLIC_IO.md` first**.
 Changing any ordering (or `D`, `K_a`, `K_r`) requires a fresh phase-2 ceremony
 for that circuit and a new VK.
 
-### Parameters pending resolution
+### Parameters (LOCKED, FIN-001)
 
-- `D = 32` — commitment-tree depth (PUBLIC_IO.md; **TODO** confirm capacity vs
-  proving cost).
-- `K_a`, `K_r` — packed ciphertext element counts. Set to **`4` as placeholders**
-  pending the auditor-encryption scheme; pin them in `docs/PUBLIC_IO.md` and the
-  enc-check gadget together.
-- `auditor_pk` is a single public field today; the encryption scheme may expand
-  it to `_x/_y` (PUBLIC_IO.md TODO).
+- `D = 20` — commitment-tree depth (capacity 2^20 ≈ 1.05M notes; demo-cheap).
+- `K_a = K_r = 5` — packed ciphertext element counts (1 nonce + 4 masked slots,
+  additive Poseidon keystream; see `lib/enc_check.circom` / `sdk/src/encrypt.ts`).
+- `auditor_pk` is a **single** public field, `= Poseidon(k_view)`.
+
+Changing any of these requires a fresh phase-2 ceremony + new VK.
 
 ---
 
 ## Security invariants honoured by the structure (see CLAUDE.md)
 
-These are wired into the template composition (bodies still TODO):
+These are wired into the gadgets (lib done; top-level wiring is FIN-006+):
 
 - **#1 BLS12-381 only / no embedded curve / no in-circuit signature** — only
   `PoseidonBLS` + range/bit checks; `--prime bls12381`.
@@ -131,7 +128,8 @@ These are wired into the template composition (bodies still TODO):
 - **#4 Nullifiers mandatory** — every spent input derives and publishes a
   nullifier bound to a public input.
 - **#5 Auditor encryption mandatory** — `AuditorEncCheck` on every output note,
-  bound to public `c_auditor` (hybrid value-equality; **scheme TODO**).
+  bound to public `c_auditor` (additive Poseidon keystream, DONE FIN-004; the key
+  is bound via `auditor_pk = Poseidon(k_view)`).
 - **#12 Tree transition in-circuit** — `old_frontier` (public input) →
   (`new_frontier`, `new_root`) (public outputs); contract stores verbatim, no
   on-chain hashing.
@@ -150,24 +148,25 @@ These are wired into the template composition (bodies still TODO):
 
 ## Outstanding TODOs a human must resolve
 
-1. **`PoseidonBLS` permutation + BLS12-381 params** (`lib/poseidon_bls.circom`)
-   and SDK parity (`sdk/src/poseidon.ts`) + CI test vector.
-2. **Auditor-encryption scheme** (`lib/enc_check.circom`): pick the hybrid
-   value-equality construction (no embedded curve → no in-circuit EC-DH), bind
-   each plaintext field to a ciphertext slot, fix `K_a` / `K_r` and `auditor_pk`
-   representation. Currently the ciphertext is **unconstrained** (insecure
-   placeholder).
-3. **`FrontierTransition`** (`lib/merkle.circom`): real incremental-insert logic,
-   empty-subtree constants, `nextIndex` wiring, and a no-op path for the
-   no-change case in `unshield`. Must match `contracts/finnes/src/merkle.rs` and
-   the indexer bit-for-bit. Currently a placeholder (under-constrained).
-4. **`MerkleNonMembership`** (`lib/merkle.circom`): confirm the sorted-set leaf
-   encoding with the indexer; add domain range-bounds so `LessThan` is sound.
-5. **KYC/recipient binding**: bind the proven KYC leaf to the actual recipient
-   identity (in `unshield`, to the public transparent `recipient`).
-6. **Confirm `D = 32`**, and **pin `K_a` / `K_r`** in `docs/PUBLIC_IO.md`.
-7. **Tests** (`circuits/test/`): per CLAUDE.md, each circuit needs a passing
-   witness and ≥1 failing witness (unbalanced values, bad path, missing/garbled
-   auditor ciphertext, frozen note spend).
-8. **`dvp.circom` is the non-production demo combined circuit** — production DvP
-   is the escrow/two-phase flow built from `transfer`/`shield` variants.
+DONE (lib gadgets, parity-tested): `PoseidonBLS` + params (FIN-002);
+`NoteCommitment`/`Nullifier`, `MerkleInclusion`/`MerkleNonMembership` (IMT,
+r-aware comparisons), `FrontierTransition` (FIN-003); `AuditorEncCheck` /
+`RecipientEncCheck` (FIN-004); `AssetsMembership` + per-tx limit (FIN-005). `D`,
+`K_a`, `K_r` are LOCKED (FIN-001).
+
+Remaining:
+
+1. **`transfer.circom` wiring (FIN-006)**: bind the SECOND output note's mandatory
+   c_auditor/c_recipient (PUBLIC_IO carries 2·K_a + 2·K_r), supply `nextIndex` as a
+   constrained witness pinned to the contract leaf count, and bind `kyc_leaf` to
+   the real recipient. Then ≥1 failing witness per constraint class.
+2. **Boundary circuits (FIN-012/013)**: `shield.circom` (asset-binding open) and
+   `unshield.circom` (frozen non-membership + transparent-recipient KYC; no-change
+   `cm_change_0 == 0` sentinel path).
+3. **`dvp.circom` (FIN-016)**: non-production demo combined circuit — production
+   DvP is the escrow/two-phase flow built from `transfer`/`shield` variants.
+4. **`FrontierTransition` ↔ contract parity**: confirm `nextIndex` / no-change
+   handling matches `contracts/finnes/src/merkle.rs` and the indexer bit-for-bit.
+5. **Tests** (`circuits/test/`): per CLAUDE.md, each top-level circuit needs a
+   passing witness and ≥1 failing witness (unbalanced values, bad path,
+   missing/garbled auditor ciphertext, frozen note spend, over-limit).

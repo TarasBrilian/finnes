@@ -30,10 +30,11 @@ import type { CircuitName, FieldElement, MerklePath, Note, Witness } from "./typ
  * the per-circuit assemblers below.
  *
  * NOTE on variable-length tails: `old_frontier` / `new_frontier` are each `D`
- * elements (Tree depth D = 32, TODO confirm) and the ciphertexts `c_auditor` /
- * `c_recipient` are `K_a` / `K_r` packed field elements (TODO: scheme/packing).
- * They occupy the documented positions but are represented as named array
- * signals in the SnarkJS input object rather than flattened here.
+ * elements (Tree depth D = 20, LOCKED FIN-001) and the ciphertexts `c_auditor` /
+ * `c_recipient` are `K_a` / `K_r` = 5 packed field elements each (additive
+ * Poseidon keystream, LOCKED FIN-001 / FIN-004). They occupy the documented
+ * positions but are represented as named array signals in the SnarkJS input
+ * object rather than flattened here.
  *
  * KEEP IN SYNC WITH docs/PUBLIC_IO.md AND the contract's PublicInputs::to_vec().
  */
@@ -45,7 +46,7 @@ export const PUBLIC_IO_ORDER: Record<CircuitName, readonly string[]> = {
     "sanction_root", // 2
     "assets_root", // 3
     "frozen_root", // 4
-    "auditor_pk", // 5  (TODO: may expand to _x/_y once scheme fixed)
+    "auditor_pk", // 5  (= Poseidon(k_view); single field, LOCKED FIN-001)
     "nf_in_0", // 6
     "nf_in_1", // 7
     "cm_out_0", // 8
@@ -59,8 +60,8 @@ export const PUBLIC_IO_ORDER: Record<CircuitName, readonly string[]> = {
   ],
   // docs/PUBLIC_IO.md → shield.circom (transparent → shielded)
   shield: [
-    "asset_id", // 0 (public — circuit proves = Poseidon(sac_address))
-    "amount", // 1 (public — deposited raw SAC units)
+    "asset_id", // 0 (public - circuit proves = Poseidon(sac_address))
+    "amount", // 1 (public - deposited raw SAC units)
     "kyc_root", // 2
     "assets_root", // 3
     "auditor_pk", // 4 (TODO)
@@ -81,9 +82,9 @@ export const PUBLIC_IO_ORDER: Record<CircuitName, readonly string[]> = {
     "frozen_root", // 4
     "auditor_pk", // 5 (TODO)
     "nf_in_0", // 6
-    "asset_id", // 7 (public — for the SAC transfer)
-    "amount", // 8 (public — raw SAC units leaving)
-    "recipient", // 9 (public — transparent Stellar address)
+    "asset_id", // 7 (public - for the SAC transfer)
+    "amount", // 8 (public - raw SAC units leaving)
+    "recipient", // 9 (public - transparent Stellar address)
     "cm_change_0", // 10 (optional change note; 0/null if none)
     "new_root", // 11
     "fee", // 12
@@ -122,7 +123,7 @@ export interface CommonPublicInputs {
   sanction_root: FieldElement;
   assets_root: FieldElement;
   frozen_root: FieldElement;
-  /** TODO: may expand to auditor_pk_x / auditor_pk_y once the enc scheme is fixed. */
+  /** `auditor_pk = Poseidon(k_view)` - single field (LOCKED FIN-001). */
   auditor_pk: FieldElement;
 }
 
@@ -137,7 +138,7 @@ export interface ShieldWitnessInput {
   auditor_pk: FieldElement;
   /** Output note opening (the freshly-minted shielded note). SECRET. */
   outNote: Note;
-  /** Owner spending key. SECRET — derives owner_pk = Poseidon(owner_sk). */
+  /** Owner spending key. SECRET - derives owner_pk = Poseidon(owner_sk). */
   owner_sk: FieldElement;
   /** Merkle frontier before insertion (D filled-subtree elements). */
   old_frontier: FieldElement[];
@@ -163,7 +164,7 @@ export interface ShieldWitnessInput {
  * (note-commitment gadget I/O, enc_check signal names). Fill once finalised.
  */
 export function assembleShieldWitness(input: ShieldWitnessInput): Witness {
-  // NOTE: do NOT log `input` — it contains owner_sk, rho, r_note, value, randomness.
+  // NOTE: do NOT log `input` - it contains owner_sk, rho, r_note, value, randomness.
   const witness: Witness = {
     // Public signals (PUBLIC_IO_ORDER.shield):
     asset_id: input.asset_id,
@@ -294,7 +295,7 @@ export interface UnshieldWitnessInput {
   inInclusionPath: MerklePath;
   kycPath: MerklePath;
   sanctionPath: MerklePath;
-  /** Frozen-set non-membership path — MANDATORY (invariant #19, escape-hatch closure). */
+  /** Frozen-set non-membership path - MANDATORY (invariant #19, escape-hatch closure). */
   frozenPath: MerklePath;
   assetsPath: MerklePath;
   per_tx_limit_raw: FieldElement;
@@ -398,7 +399,7 @@ export interface DvpWitnessInput {
  * TODO(circuit): private signal names depend on dvp.circom internals.
  */
 export function assembleDvpWitness(input: DvpWitnessInput): Witness {
-  // NOTE: do NOT log `input` — holds BOTH parties' spending keys.
+  // NOTE: do NOT log `input` - holds BOTH parties' spending keys.
   const c = input.common;
   const witness: Witness = {
     // Public signals (PUBLIC_IO_ORDER.dvp):
@@ -411,7 +412,7 @@ export function assembleDvpWitness(input: DvpWitnessInput): Witness {
     fee_X: input.legX.fee ?? "0",
     fee_Y: input.legY.fee ?? "0",
     old_frontier: input.old_frontier,
-    // Private witness — leg X:
+    // Private witness - leg X:
     legX_owner_sk: input.legX.owner_sk,
     legX_in_asset_id: input.legX.inNote.asset_id,
     legX_in_value: input.legX.inNote.value,
@@ -433,7 +434,7 @@ export function assembleDvpWitness(input: DvpWitnessInput): Witness {
     legX_sanction_path_indices: input.legX.sanctionPath.pathIndices,
     legX_assets_path_siblings: input.legX.assetsPath.siblings,
     legX_assets_path_indices: input.legX.assetsPath.pathIndices,
-    // Private witness — leg Y:
+    // Private witness - leg Y:
     legY_owner_sk: input.legY.owner_sk,
     legY_in_asset_id: input.legY.inNote.asset_id,
     legY_in_value: input.legY.inNote.value,

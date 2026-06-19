@@ -1,27 +1,29 @@
 pragma circom 2.1.6;
 
 // =============================================================================
-// merkle.circom — Merkle gadgets over Poseidon-BLS
+// merkle.circom - Merkle gadgets over Poseidon-BLS
 //   - MerkleInclusion        : leaf ∈ tree(root)            (KYC, input notes)
 //   - MerkleNonMembership    : leaf ∉ sorted tree(root)     (sanctions, frozen)
 //   - FrontierTransition     : old_frontier -> (new_frontier, new_root)
 // =============================================================================
 //
-// SCAFFOLD. Path-selection wiring is concrete; hashing delegates to PoseidonBLS
-// (TODO stub). The non-membership ordering predicate and the incremental-insert
-// frontier update logic are TODO bodies.
+// CONCRETE (FIN-003). Path-selection wiring, the IMT non-membership ordering
+// predicate (r-aware comparisons), and the incremental-insert frontier update are
+// all implemented and circuit↔SDK parity-tested (scripts/test-merkle-parity.ts,
+// scripts/test-nonmembership-parity.ts). Hashing is Poseidon-BLS (FIN-002).
 //
 // Compile with `--prime bls12381`.
 //
-// Tree depth D = 32 (PUBLIC_IO.md; TODO confirm capacity vs proving cost).
-// 2-ary Merkle tree, node = Poseidon(left, right).
+// Tree depth D = 20 (LOCKED FIN-001, docs/PUBLIC_IO.md §"Tree"). Callers pass the
+// depth as a template parameter; this file is depth-agnostic. 2-ary Merkle tree,
+// node = Poseidon(left, right).
 // =============================================================================
 
 include "poseidon_bls.circom";
 include "bits.circom"; // VENDORED field-agnostic Num2Bits / LessThan / IsZero / IsEqual (NO circomlib, NO BN254)
 
 // -----------------------------------------------------------------------------
-// HashLR — node = Poseidon(left, right)
+// HashLR - node = Poseidon(left, right)
 // -----------------------------------------------------------------------------
 template HashLR() {
     signal input left;
@@ -51,7 +53,7 @@ template MerkleInclusion(depth) {
     component hashers[depth];
     // running hash up the tree
     signal cur[depth + 1];
-    // per-level ordered children (declared at template scope — circom 2.2 forbids
+    // per-level ordered children (declared at template scope - circom 2.2 forbids
     // signal declarations inside a loop body).
     signal left[depth];
     signal right[depth];
@@ -78,12 +80,12 @@ template MerkleInclusion(depth) {
 }
 
 // -----------------------------------------------------------------------------
-// MerkleNonMembership(depth) — Indexed Merkle Tree (IMT) non-membership.
+// MerkleNonMembership(depth) - Indexed Merkle Tree (IMT) non-membership.
 //   Sanctions set AND frozen set (reused per Security invariants #14 & #19;
 //   FIN-001 chose IMT). Each set is an IMT whose leaves form a sorted linked
 //   list: leaf = Poseidon(value, next_index, next_value, 0, 0) (arity 5 = t=6,
 //   the next supported Poseidon width; the 2 zero slots pad value/next_index/
-//   next_value up to a supported arity — see sdk/src/merkle.ts imtLeafHash).
+//   next_value up to a supported arity - see sdk/src/merkle.ts imtLeafHash).
 //
 //   `target` is absent iff there is a stored "low" leaf with
 //       low_value < target  AND  (target < low_next_value OR low_next_value == 0)
@@ -100,7 +102,7 @@ template MerkleInclusion(depth) {
 template MerkleNonMembership(depth) {
     signal input target;            // the value asserted to be absent (e.g. owner_pk, cm)
     signal input low_value;         // greatest stored value < target (the "low" leaf)
-    signal input low_next_index;    // low leaf's next pointer (index) — part of the leaf hash
+    signal input low_next_index;    // low leaf's next pointer (index) - part of the leaf hash
     signal input low_next_value;    // low leaf's next pointer (value); 0 == low is the maximum
     signal input pathElements[depth];
     signal input pathIndices[depth];
@@ -150,7 +152,7 @@ template MerkleNonMembership(depth) {
 //
 //   `old_frontier` is a PUBLIC INPUT (checked == contract state upstream);
 //   `new_frontier` and `new_root` are PUBLIC OUTPUTS the contract stores
-//   VERBATIM — the contract performs NO hashing (Security invariant #11, #12).
+//   VERBATIM - the contract performs NO hashing (Security invariant #11, #12).
 //
 //   Frontier = filled-subtrees array of `depth` field elements. `nextIndex` is
 //   the current leaf count (witness) and determines the merge pattern.

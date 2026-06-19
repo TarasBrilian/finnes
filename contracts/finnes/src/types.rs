@@ -1,6 +1,6 @@
 //! On-chain types for proofs, verifying keys, and public inputs.
 //!
-//! # CANONICAL PUBLIC-INPUT ORDERING — DO NOT REORDER
+//! # CANONICAL PUBLIC-INPUT ORDERING - DO NOT REORDER
 //!
 //! The `to_scalars()` ordering for every circuit below MUST match
 //! `docs/PUBLIC_IO.md` **exactly**, byte-for-byte field-for-field. That file is
@@ -15,21 +15,23 @@
 //! Changing any ordering here requires a fresh phase-2 ceremony for that circuit
 //! and a new `VerifyingKey` (CLAUDE.md → "When adding a new circuit…").
 //!
-//! Invariant #12: the Merkle transition is public-IO — `old_frontier` (in,
+//! Invariant #12: the Merkle transition is public-IO - `old_frontier` (in,
 //! `D` elements, checked equal to state) and `new_frontier`/`new_root` (out,
 //! stored verbatim). Root alone is insufficient.
 //!
 //! Invariant #5: auditor (and recipient) ciphertexts are carried as public
 //! inputs (field-packed). Groth16 binds public inputs inherently, so the
-//! contract NEVER hashes ciphertext blobs — it just feeds them into the verify.
+//! contract NEVER hashes ciphertext blobs - it just feeds them into the verify.
 
 use soroban_sdk::{contracttype, Bytes, BytesN, Env, Vec};
 
 /// Merkle tree depth (filled-subtree frontier length).
 ///
-/// MUST equal the circuits' depth. PUBLIC_IO.md marks `D = 32` as TODO-confirm
-/// (capacity vs. proving cost); keep this constant in lockstep with the circuit.
-pub const TREE_DEPTH: u32 = 32;
+/// MUST equal the circuits' depth. `D = 20` is LOCKED (FIN-001, docs/PUBLIC_IO.md
+/// §"Tree"): capacity 2^20 ≈ 1.05M notes, demo-cheap to prove. Keep this constant
+/// in lockstep with the circuits and `sdk/src/merkle.ts`; changing it is a
+/// fresh-ceremony event, not a runtime parameter.
+pub const TREE_DEPTH: u32 = 20;
 
 /// A BLS12-381 scalar-field (`Fr`) element, big-endian, 32 bytes.
 ///
@@ -38,7 +40,7 @@ pub const TREE_DEPTH: u32 = 32;
 /// boundary everything is fixed-width bytes (CLAUDE.md → Field encoding).
 pub type Scalar = BytesN<32>;
 
-/// Commitment / nullifier / root — all are `Fr` elements on the wire.
+/// Commitment / nullifier / root - all are `Fr` elements on the wire.
 pub type Commitment = BytesN<32>;
 pub type Nullifier = BytesN<32>;
 pub type Root = BytesN<32>;
@@ -91,11 +93,11 @@ pub enum Circuit {
 }
 
 // ---------------------------------------------------------------------------
-// PublicInputs — one struct per circuit. Each `to_scalars()` reproduces the
+// PublicInputs - one struct per circuit. Each `to_scalars()` reproduces the
 // exact index order documented in docs/PUBLIC_IO.md.
 // ---------------------------------------------------------------------------
 
-/// `transfer.circom` — 2-in / 2-out, single asset.
+/// `transfer.circom` - 2-in / 2-out, single asset.
 ///
 /// Index order (docs/PUBLIC_IO.md § transfer.circom):
 /// ```text
@@ -122,9 +124,9 @@ pub struct TransferPublicInputs {
     pub cm_out_1: Commitment,
     pub new_root: Root,
     pub fee: Scalar,
-    /// `old_frontier` — exactly `TREE_DEPTH` elements; checked equal to state.
+    /// `old_frontier` - exactly `TREE_DEPTH` elements; checked equal to state.
     pub old_frontier: Vec<Scalar>,
-    /// `new_frontier` — exactly `TREE_DEPTH` elements; stored verbatim.
+    /// `new_frontier` - exactly `TREE_DEPTH` elements; stored verbatim.
     pub new_frontier: Vec<Scalar>,
     /// `c_auditor` packed field elements (mandatory, invariant #5).
     pub c_auditor: Vec<Scalar>,
@@ -132,7 +134,7 @@ pub struct TransferPublicInputs {
     pub c_recipient: Vec<Scalar>,
 }
 
-/// `shield.circom` — transparent → shielded (0 shielded inputs, 1 transparent).
+/// `shield.circom` - transparent → shielded (0 shielded inputs, 1 transparent).
 ///
 /// Index order (docs/PUBLIC_IO.md § shield.circom):
 /// ```text
@@ -159,7 +161,7 @@ pub struct ShieldPublicInputs {
     pub c_recipient: Vec<Scalar>,
 }
 
-/// `unshield.circom` — shielded → transparent (1+ shielded inputs, transparent out).
+/// `unshield.circom` - shielded → transparent (1+ shielded inputs, transparent out).
 ///
 /// Index order (docs/PUBLIC_IO.md § unshield.circom):
 /// ```text
@@ -182,7 +184,7 @@ pub struct UnshieldPublicInputs {
     pub nf_in_0: Nullifier,
     pub asset_id: Scalar,
     pub amount: Scalar,
-    /// Transparent recipient — a field-encoded Stellar address used for the SAC
+    /// Transparent recipient - a field-encoded Stellar address used for the SAC
     /// `transfer`. The contract additionally checks recipient authorisation
     /// (invariant #19) before performing effects.
     pub recipient: Scalar,
@@ -195,7 +197,7 @@ pub struct UnshieldPublicInputs {
     pub c_auditor: Vec<Scalar>,
 }
 
-/// `dvp.circom` — atomic two-asset settlement (DEMO: single combined proof).
+/// `dvp.circom` - atomic two-asset settlement (DEMO: single combined proof).
 ///
 /// Index order (docs/PUBLIC_IO.md § dvp.circom):
 /// ```text
@@ -233,8 +235,8 @@ pub struct DvpPublicInputs {
 
 // ---------------------------------------------------------------------------
 // to_scalars(): flatten each struct into the verifier's ordered scalar vector.
-// The verifier consumes this vector positionally — index i pairs with vk.ic[i+1]
-// — so the push order below IS the public-IO contract. Keep it identical to
+// The verifier consumes this vector positionally - index i pairs with vk.ic[i+1]
+// - so the push order below IS the public-IO contract. Keep it identical to
 // docs/PUBLIC_IO.md.
 // ---------------------------------------------------------------------------
 
