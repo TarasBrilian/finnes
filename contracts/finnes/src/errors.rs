@@ -50,6 +50,10 @@ pub enum Error {
     VerifyingKeyMissing = 22,
     /// VK `ic` length does not match the declared number of public inputs.
     VerifyingKeyArityMismatch = 23,
+    /// `next_index` in public inputs does not equal the stored leaf count, so the
+    /// circuit's tree transition would insert at the wrong append position
+    /// (invariants #11/#12). Never accept a prover-chosen index.
+    NextIndexMismatch = 24,
 
     // --- unshield / dvp specifics ---
     /// Transparent recipient on `unshield` is not authorised (KYC/non-sanctioned).

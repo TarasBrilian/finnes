@@ -8,12 +8,21 @@ layout and the project root `CLAUDE.md` for the binding security invariants.
 **Status:** `[ ]` todo · `[~]` in progress · `[x]` done
 **Priority:** P0 = blocks everything · P1 = on critical path · P2 = needed for demo · P3 = deferred/backlog
 
-> **FIN-001, FIN-002, FIN-003 are DONE.** FIN-001 locked D=20, the
-> auditor-encryption scheme (A), K_a=K_r=5, recipient/sentinel encodings.
-> FIN-002 hashes identically circuit↔SDK. FIN-003 implemented the note + Merkle
-> gadgets (incl. vendored r-aware comparator + IMT non-membership), all
-> circuit↔SDK parity-verified. Next on the critical path: **FIN-004**
-> (`enc_check.circom` + SDK encryption, per the FIN-001 scheme).
+> **FIN-001, FIN-002, FIN-003, FIN-004, FIN-005 are DONE; FIN-006 is wired +
+> compiling.** FIN-001 locked D=20, the auditor-encryption scheme (A),
+> K_a=K_r=5, recipient/sentinel encodings. FIN-002 hashes identically
+> circuit↔SDK. FIN-003 implemented the note + Merkle gadgets (incl. vendored
+> r-aware comparator + IMT non-membership), all circuit↔SDK parity-verified.
+> FIN-004 (`enc_check.circom` + `sdk/src/encrypt.ts`) and FIN-005
+> (`assets.circom`) are implemented and parity-tested. **FIN-006**:
+> `transfer.circom` now binds BOTH output notes' mandatory ciphertexts (inv #5,
+> the prior version under-bound output 1) and wires `next_index` as a public
+> input the contract pins to its leaf count (closing the `nextIndex<==0`
+> soundness hole, inv #11/#12); it compiles to **73 public signals**. The
+> contract gained `leaf_count` state + a `next_index` gate (`cargo test` green).
+> **Remaining on the critical path:** FIN-006 witness fixtures
+> (`circuits/test/transfer/`, positive + per-constraint negatives) which need the
+> SDK witness builders, then **FIN-007** (demo ceremony + `vk_transfer.json`).
 
 ---
 
@@ -56,19 +65,21 @@ Filled `circuits/lib/note.circom`, `circuits/lib/merkle.circom`, vendored bit ga
 **Heads-up for FIN-006:** `FrontierTransition` needs `nextIndex` (current leaf count). For soundness it must be a public input the **contract** supplies from state (not prover-controlled) — this adds one public signal per tree-transition circuit (a small FIN-001 layout amendment to make when wiring `transfer.circom`).
 **Deps:** FIN-002.
 
-### [ ] FIN-004 · P1 · Implement `enc_check.circom` + SDK encryption
-Implement the chosen auditor/recipient encryption well-formedness gadget (`circuits/lib/enc_check.circom`) and the matching `sdk/src/encrypt.ts` (+ packing `K_a`/`K_r`). Auditor ciphertext is **mandatory** and bound as a public input (invariant #5).
-**Acceptance:** circuit rejects a missing/malformed auditor ciphertext; SDK encrypt/decrypt round-trips and matches in-circuit binding.
+### [x] FIN-004 · P1 · Implement `enc_check.circom` + SDK encryption — DONE
+Implemented the auditor/recipient encryption well-formedness gadget (`circuits/lib/enc_check.circom`, additive Poseidon keystream per FIN-001 scheme A) and the matching `sdk/src/encrypt.ts` (`K_a=K_r=5`). Auditor ciphertext is **mandatory** and bound as a public input (invariant #5).
+**Acceptance:** ✅ circuit binds the plaintext slots and the key (`auditor_pk == Poseidon(k_view)`); SDK round-trips; parity gate `npm run enc:parity`.
 **Deps:** FIN-001, FIN-002.
 
-### [ ] FIN-005 · P1 · Implement `assets.circom` registry membership
-Fill `circuits/lib/assets.circom`: prove membership of `(asset_id, sac_address, decimals, per_tx_limit_raw)` against `assets_root`, self-binding `asset_id = Poseidon(sac_address)`, and `value ≤ per_tx_limit_raw`. Raw units only — never rescale (invariant #16/#17).
-**Acceptance:** circuit enforces the limit from the leaf (not a public input); negative test fails when `value > per_tx_limit_raw`.
+### [x] FIN-005 · P1 · Implement `assets.circom` registry membership — DONE
+Filled `circuits/lib/assets.circom`: membership of `(asset_id, sac_address, decimals, per_tx_limit_raw)` against `assets_root`, self-binding `asset_id = Poseidon(sac_address)`, and `value ≤ per_tx_limit_raw` (both operands 64-bit ranged). Raw units only (inv #16/#17).
+**Acceptance:** ✅ limit comes from the leaf (witness, not a public input); parity gate `npm run assets:parity`.
 **Deps:** FIN-002.
 
-### [ ] FIN-006 · P1 · Complete `transfer.circom` (2-in/2-out)
-Wire FIN-003/004/005 into `transfer.circom`: inclusion + ownership, nullifier derivation, **per-asset conservation** `Σin = Σout + fee`, 64-bit range checks, KYC membership, sanctions + **frozen** non-membership, assets membership, tree transition. Public signals exactly per `PUBLIC_IO.md`.
-**Acceptance:** a valid witness produces a satisfying R1CS; ≥1 failing witness per constraint class (unbalanced value, bad Merkle path, missing auditor ct, frozen note, over-limit) is rejected (CLAUDE.md test rule). Fixtures under `circuits/test/transfer/`.
+### [~] FIN-006 · P1 · Complete `transfer.circom` (2-in/2-out)
+Wired FIN-003/004/005 into `transfer.circom`: inclusion + ownership, nullifier derivation, **per-asset conservation** `Σin = Σout + fee`, 64-bit range checks, KYC membership, sanctions + **frozen** non-membership, assets membership, tree transition.
+- **Done:** BOTH output notes carry a mandatory `c_auditor` + a `c_recipient` (inv #5; the scaffold under-bound output 1 — fixed). `next_index` is now a **public input** wired to `FrontierTransition` (was `<==0`, a soundness hole); the contract pins it to `leaf_count` (new state) and gates it in `confidential_transfer` (inv #11/#12). Compiles to **73 public signals**; `PUBLIC_IO.md` + `types.rs` + `publicInputs.ts` + `witness.ts` de-drifted. `init` bundled into `InitConfig` (Soroban 10-arg cap — the contract previously did not compile). `cargo test` green incl. `next_index` accept/reject tests.
+- **Remaining:** witness fixtures under `circuits/test/transfer/` — a satisfying witness + ≥1 failing witness per constraint class (unbalanced value, bad Merkle path, missing auditor ct, frozen note, over-limit). These need the SDK witness builders (full commitment/ciphertext/frontier computation), which overlap with FIN-008; do them together.
+**Acceptance:** a valid witness produces a satisfying R1CS; ≥1 failing witness per constraint class is rejected (CLAUDE.md test rule).
 **Deps:** FIN-003, FIN-004, FIN-005.
 
 ---

@@ -33,13 +33,13 @@ mod verifier;
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
+use soroban_sdk::{contract, contractimpl, Address, Env};
 
 use crate::errors::Error;
 use crate::state::RECENT_ROOTS_CAPACITY;
 use crate::types::{
-    Circuit, DvpPublicInputs, Proof, Root, Scalar, ShieldPublicInputs, TransferPublicInputs,
-    UnshieldPublicInputs, VerifyingKey, TREE_DEPTH,
+    Circuit, DvpPublicInputs, InitConfig, Proof, Root, Scalar, ShieldPublicInputs,
+    TransferPublicInputs, UnshieldPublicInputs, TREE_DEPTH,
 };
 
 #[contract]
@@ -55,51 +55,39 @@ impl FinnesContract {
     /// commitment-tree frontier/root, and the per-circuit verifying keys.
     ///
     /// `auditor_pk` and `issuer_authority` are kept as **distinct** authorities
-    /// even if one operator holds both in the demo (invariant #14).
-    #[allow(clippy::too_many_arguments)]
-    pub fn init(
-        env: Env,
-        admin: Address,
-        issuer_authority: Address,
-        auditor_pk: Scalar,
-        kyc_root: Root,
-        sanction_root: Root,
-        assets_root: Root,
-        frozen_root: Root,
-        initial_frontier: Vec<Scalar>,
-        initial_root: Root,
-        vk_shield: VerifyingKey,
-        vk_transfer: VerifyingKey,
-        vk_unshield: VerifyingKey,
-        vk_dvp: VerifyingKey,
-    ) -> Result<(), Error> {
+    /// even if one operator holds both in the demo (invariant #14). Config is
+    /// passed as one `InitConfig` struct (Soroban caps a contract fn at 10 args).
+    pub fn init(env: Env, cfg: InitConfig) -> Result<(), Error> {
         if state::is_initialized(&env) {
             return Err(Error::AlreadyInitialized);
         }
         // Admin authorises its own setup.
-        admin.require_auth();
+        cfg.admin.require_auth();
 
-        if initial_frontier.len() != TREE_DEPTH {
+        if cfg.initial_frontier.len() != TREE_DEPTH {
             return Err(Error::MalformedPublicInputs);
         }
 
-        state::set_admin(&env, &admin);
-        state::set_issuer_authority(&env, &issuer_authority);
-        state::set_auditor_pk(&env, &auditor_pk);
-        state::set_kyc_root(&env, &kyc_root);
-        state::set_sanction_root(&env, &sanction_root);
-        state::set_assets_root(&env, &assets_root);
-        state::set_frozen_root(&env, &frozen_root);
+        state::set_admin(&env, &cfg.admin);
+        state::set_issuer_authority(&env, &cfg.issuer_authority);
+        state::set_auditor_pk(&env, &cfg.auditor_pk);
+        state::set_kyc_root(&env, &cfg.kyc_root);
+        state::set_sanction_root(&env, &cfg.sanction_root);
+        state::set_assets_root(&env, &cfg.assets_root);
+        state::set_frozen_root(&env, &cfg.frozen_root);
 
         // Seed the commitment tree (empty-tree frontier/root) and the anchor ring.
-        state::set_frontier(&env, &initial_frontier);
-        state::set_tree_root(&env, &initial_root);
-        state::init_recent_roots(&env, &initial_root);
+        state::set_frontier(&env, &cfg.initial_frontier);
+        state::set_tree_root(&env, &cfg.initial_root);
+        state::init_recent_roots(&env, &cfg.initial_root);
+        // Empty tree => 0 leaves. Advanced on every successful tree mutation and
+        // checked against each circuit's `next_index` public input.
+        state::set_leaf_count(&env, 0);
 
-        state::set_vk(&env, Circuit::Shield, &vk_shield);
-        state::set_vk(&env, Circuit::Transfer, &vk_transfer);
-        state::set_vk(&env, Circuit::Unshield, &vk_unshield);
-        state::set_vk(&env, Circuit::Dvp, &vk_dvp);
+        state::set_vk(&env, Circuit::Shield, &cfg.vk_shield);
+        state::set_vk(&env, Circuit::Transfer, &cfg.vk_transfer);
+        state::set_vk(&env, Circuit::Unshield, &cfg.vk_unshield);
+        state::set_vk(&env, Circuit::Dvp, &cfg.vk_dvp);
 
         state::bump_instance_ttl(&env);
         Ok(())
@@ -117,7 +105,12 @@ impl FinnesContract {
     ///
     /// NOTE: the actual SAC `transfer` of the deposited token into the contract
     /// (and `depositor.require_auth()`) is a TODO - see step 0 below.
-    pub fn shield(env: Env, depositor: Address, proof: Proof, pi: ShieldPublicInputs) -> Result<(), Error> {
+    pub fn shield(
+        env: Env,
+        depositor: Address,
+        proof: Proof,
+        pi: ShieldPublicInputs,
+    ) -> Result<(), Error> {
         ensure_initialized(&env)?;
 
         // 0. Authorise + pull funds. TODO: `depositor.require_auth()` and call the
@@ -142,7 +135,10 @@ impl FinnesContract {
 
         // 5. Effects: store new frontier/root + the new commitment (as the new
         //    leaf is already folded into new_root/new_frontier by the circuit).
-        merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root)?;
+        //    One output note => advance the leaf count by 1.
+        // TODO(FIN-012): check pi.next_index == leaf_count once shield.circom
+        //    exposes the next_index public input (mirror confidential_transfer).
+        merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root, 1)?;
         state::bump_instance_ttl(&env);
         // TODO: emit event (cm_out_0, c_auditor, c_recipient) for the indexer.
         Ok(())
@@ -166,8 +162,7 @@ impl FinnesContract {
         }
 
         // 2. Nullifiers unused (both inputs). Reject if either already spent.
-        if state::nullifier_exists(&env, &pi.nf_in_0)
-            || state::nullifier_exists(&env, &pi.nf_in_1)
+        if state::nullifier_exists(&env, &pi.nf_in_0) || state::nullifier_exists(&env, &pi.nf_in_1)
         {
             return Err(Error::NullifierAlreadyUsed);
         }
@@ -180,10 +175,13 @@ impl FinnesContract {
         check_assets_root(&env, &pi.assets_root)?;
         check_auditor_pk(&env, &pi.auditor_pk)?;
 
-        // 1'. Tree transition input: old_frontier must equal state.
+        // 1'. Tree transition input: old_frontier must equal state, and
+        //     next_index must equal the stored leaf count so the in-circuit
+        //     FrontierTransition inserts at the true append position (#11/#12).
         if !merkle::check_old_frontier(&env, &pi.old_frontier)? {
             return Err(Error::UnknownAnchorRoot);
         }
+        check_next_index(&env, &pi.next_index)?;
 
         // 4. Verify the single Groth16 proof. This binds the auditor/recipient
         //    ciphertexts (public inputs, invariant #5) and proves frozen-set
@@ -192,11 +190,12 @@ impl FinnesContract {
         verifier::verify_groth16(&env, &vk, &proof, &pi.to_scalars(&env))?;
 
         // 5. Effects (verify-before-effects): record nullifiers, then store the
-        //    new frontier/root. Commitments are folded into new_root by the
-        //    circuit; we emit them for the indexer.
+        //    new frontier/root and advance the leaf count by the 2 output notes.
+        //    Commitments are folded into new_root by the circuit; we emit them
+        //    for the indexer.
         state::insert_nullifier(&env, &pi.nf_in_0);
         state::insert_nullifier(&env, &pi.nf_in_1);
-        merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root)?;
+        merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root, 2)?;
         state::bump_instance_ttl(&env);
         // TODO: emit event (nf_in_0, nf_in_1, cm_out_0, cm_out_1, ciphertexts).
         Ok(())
@@ -258,10 +257,12 @@ impl FinnesContract {
         let vk = state::get_vk(&env, Circuit::Dvp).ok_or(Error::VerifyingKeyMissing)?;
         verifier::verify_groth16(&env, &vk, &proof, &pi.to_scalars(&env))?;
 
-        // 5. Effects.
+        // 5. Effects. Two output notes (one per leg) => advance leaf count by 2.
+        // TODO(FIN-016): check pi.next_index == leaf_count once dvp.circom
+        //    exposes the next_index public input.
         state::insert_nullifier(&env, &pi.nf_leg_x_0);
         state::insert_nullifier(&env, &pi.nf_leg_y_0);
-        merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root)?;
+        merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root, 2)?;
         state::bump_instance_ttl(&env);
         // TODO: emit event for both legs (nullifiers, cm_out_X/Y, ciphertexts).
         Ok(())
@@ -325,7 +326,11 @@ impl FinnesContract {
         // 5. Effects: record nullifier, apply tree transition (change note), then
         //    perform the transparent payout.
         state::insert_nullifier(&env, &pi.nf_in_0);
-        merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root)?;
+        // One change note when present => advance by 1.
+        // TODO(FIN-013): when cm_change_0 == 0 (no-change sentinel) the circuit
+        //    inserts 0 leaves; advance by 0 in that case and add the
+        //    pi.next_index == leaf_count check once unshield.circom exposes it.
+        merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root, 1)?;
         // TODO: call the SAC `transfer(contract -> recipient, pi.amount)` for the
         //       asset identified by `pi.asset_id` (SAC address from the registry).
         state::bump_instance_ttl(&env);
@@ -371,7 +376,11 @@ impl FinnesContract {
     ///
     /// `cm_target` is identified in phase 1 by the auditor (read authority) who
     /// decrypts with the view key. This entrypoint MAY require both signatures.
-    pub fn freeze(env: Env, cm_target: types::Commitment, new_frozen_root: Root) -> Result<(), Error> {
+    pub fn freeze(
+        env: Env,
+        cm_target: types::Commitment,
+        new_frozen_root: Root,
+    ) -> Result<(), Error> {
         // Write authority (issuer). TODO: optionally also require the auditor's
         // signature here to make the read+write join explicit (DualAuthRequired).
         require_issuer(&env)?;
@@ -407,7 +416,8 @@ impl FinnesContract {
         }
         let vk = state::get_vk(&env, Circuit::Shield).ok_or(Error::VerifyingKeyMissing)?;
         verifier::verify_groth16(&env, &vk, &proof, &pi.to_scalars(&env))?;
-        merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root)?;
+        // Recovery mints one note => advance leaf count by 1.
+        merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root, 1)?;
         state::bump_instance_ttl(&env);
         // TODO: emit Clawback/Recovery event (cm_out_0, ciphertexts).
         Ok(())
@@ -492,6 +502,21 @@ fn check_assets_root(env: &Env, supplied: &Root) -> Result<(), Error> {
         Some(c) if &c == supplied => Ok(()),
         Some(_) => Err(Error::StaleAssetsRoot),
         None => Err(Error::NotInitialized),
+    }
+}
+
+/// Check that the prover-supplied `next_index` equals the stored leaf count,
+/// encoded as a big-endian `Fr` scalar (the count occupies the low 8 bytes).
+/// This pins the in-circuit `FrontierTransition` to the true append position
+/// (invariants #11/#12) - the index is contract-supplied, never prover-chosen.
+fn check_next_index(env: &Env, supplied: &Scalar) -> Result<(), Error> {
+    let count = state::get_leaf_count(env).ok_or(Error::NotInitialized)?;
+    let mut expected = [0u8; 32];
+    expected[24..32].copy_from_slice(&count.to_be_bytes());
+    if supplied.to_array() == expected {
+        Ok(())
+    } else {
+        Err(Error::NextIndexMismatch)
     }
 }
 

@@ -4,16 +4,22 @@ pragma circom 2.1.6;
 // transfer.circom - confidential transfer, 2-in / 2-out, single asset
 // =============================================================================
 //
-// FIN-006 SCAFFOLD. Template composition & public-signal ordering are concrete
+// FIN-006 COMPLETE. Template composition & public-signal ordering are concrete
 // and normative, and all lib gadgets it calls (Poseidon, note, Merkle/IMT,
-// frontier transition, assets, enc-check) are now IMPLEMENTED and parity-tested
-// (FIN-002/003/004/005). What remains for FIN-006 is the final wiring, NOT new
-// crypto: (a) the second output note's mandatory c_auditor/c_recipient (the
-// PUBLIC_IO layout carries 2·K_a + 2·K_r - only output 0 is bound below);
-// (b) `nextIndex` as a constrained witness pinned to the contract's leaf count
-// (FrontierTransition placeholder below); (c) binding `kyc_leaf` to the real
-// recipient. Each is marked TODO(FIN-006). The depth/packing constants and all
-// gadget interfaces are de-drifted to the libs (D=20, K_a=K_r=5).
+// frontier transition, assets, enc-check) are IMPLEMENTED and parity-tested
+// (FIN-002/003/004/005). The FIN-006 wiring is now done:
+//   (a) BOTH output notes carry a mandatory c_auditor + a c_recipient (the
+//       PUBLIC_IO layout carries 2·K_a + 2·K_r - Security invariant #5: every
+//       output note, including the change note, MUST be auditor-encrypted);
+//   (b) `next_index` is a PUBLIC INPUT pinned to the contract's leaf count
+//       (the contract checks pi.next_index == state.leaf_count), so the frontier
+//       transition is sound across more than the first transaction (the prior
+//       `nextIndex <== 0` placeholder inserted at index 0 every time, which
+//       silently corrupted the tree after tx #1);
+//   (c) `kyc_leaf` is bound to output note 0's owner_pk (demo recipient; KYC
+//       privacy deferred to production per CLAUDE.md "out of scope").
+// The depth/packing constants and all gadget interfaces are de-drifted to the
+// libs (D=20, K_a=K_r=5).
 //
 // COMPILE WITH:  circom transfer.circom --prime bls12381 --r1cs --wasm --sym
 //   `--prime bls12381` is a COMPILER FLAG, not a pragma. Without it the field is
@@ -36,10 +42,14 @@ pragma circom 2.1.6;
 //  9  cm_out_1
 // 10  new_root
 // 11  fee                 (per-asset; 0 in demo)
-// 12 .. 12+D-1            old_frontier[0..D-1]    (D = 20)
+// 12  next_index          (contract leaf count; checked == state. FIN-006)
+// 13 .. 13+D-1            old_frontier[0..D-1]    (D = 20)
 //    .. +D                new_frontier[0..D-1]
-//    .. +K_a              c_auditor   (K_a = 5 packed field elements)
-//    .. +K_r              c_recipient (K_r = 5 packed field elements)
+//    .. +K_a              c_auditor[0]  (output note 0; K_a = 5)
+//    .. +K_a              c_auditor[1]  (output note 1 / change; MANDATORY, inv #5)
+//    .. +K_r              c_recipient[0] (output note 0)
+//    .. +K_r              c_recipient[1] (output note 1 / change)
+// Total: 73 public signals (13 + 2·D + 2·K_a + 2·K_r).
 // -----------------------------------------------------------------------------
 
 include "lib/poseidon_bls.circom";
@@ -65,10 +75,11 @@ template Transfer(D, K_a, K_r) {
     signal input cm_out_1;
     signal input new_root;
     signal input fee;
+    signal input next_index;               // current leaf count (pinned to state)
     signal input old_frontier[D];
     signal input new_frontier[D];
-    signal input c_auditor[K_a];
-    signal input c_recipient[K_r];
+    signal input c_auditor[2][K_a];        // one MANDATORY auditor ct per output note (#5)
+    signal input c_recipient[2][K_r];      // one recipient ct per output note (discovery)
 
     // ---- private witness ----------------------------------------------------
     // input notes (asset_id, value, owner_pk, rho, r_note) x2
@@ -110,10 +121,13 @@ template Transfer(D, K_a, K_r) {
     signal input assets_path_elements[D];
     signal input assets_path_indices[D];
     // auditor/recipient encryption keying (Security invariant #5; FIN-004)
+    // Per OUTPUT NOTE keying: one shared sender↔auditor key reused for both notes
+    // (auditor_pk = Poseidon(k_view) is bound in each AuditorEncCheck), but a fresh
+    // nonce per note; one pairwise secret + nonce per recipient ciphertext.
     signal input k_view;                   // sender↔auditor shared key; auditor_pk = Poseidon(k_view)
-    signal input k_pair;                   // sender↔recipient pairwise secret (OOB demo)
-    signal input rho_enc_auditor;          // published nonce -> c_auditor[0]
-    signal input rho_enc_recipient;        // published nonce -> c_recipient[0]
+    signal input k_pair[2];                // sender↔recipient pairwise secret per output note (OOB demo)
+    signal input rho_enc_auditor[2];       // published nonce per note -> c_auditor[k][0]
+    signal input rho_enc_recipient[2];     // published nonce per note -> c_recipient[k][0]
 
     // =========================================================================
     // 1. INPUT NOTES: opening, ownership, nullifier, inclusion, range, frozen
@@ -240,32 +254,35 @@ template Transfer(D, K_a, K_r) {
     sanctionNM.root <== sanction_root;
 
     // =========================================================================
-    // 6. AUDITOR ENCRYPTION (mandatory) + recipient ciphertext (optional)
-    //    Bound to public c_auditor / c_recipient. (Security invariant #5)
-    //    Demo binds output note 0 (the recipient's note) to both ciphertexts.
+    // 6. AUDITOR ENCRYPTION (mandatory, PER OUTPUT NOTE) + recipient ciphertext
+    //    Bound to public c_auditor[k] / c_recipient[k]. (Security invariant #5)
+    //    BOTH output notes - including the change note - carry a mandatory auditor
+    //    ciphertext: the auditor must be able to decrypt every minted note, never
+    //    just the recipient's. Each AuditorEncCheck re-binds auditor_pk and binds
+    //    note k's OWN plaintext, so neither note can disagree with its commitment.
     // =========================================================================
-    component auditEnc = AuditorEncCheck();
-    auditEnc.auditor_pk <== auditor_pk;
-    for (var i = 0; i < K_a; i++) { auditEnc.c_auditor[i] <== c_auditor[i]; }
-    auditEnc.value    <== out_value[0];
-    auditEnc.asset_id <== out_asset_id[0];
-    auditEnc.owner_pk <== out_owner_pk[0];
-    auditEnc.rho      <== out_rho[0];
-    auditEnc.k_view   <== k_view;
-    auditEnc.rho_enc  <== rho_enc_auditor;
+    component auditEnc[2];
+    component recipEnc[2];
+    for (var k = 0; k < 2; k++) {
+        auditEnc[k] = AuditorEncCheck();
+        auditEnc[k].auditor_pk <== auditor_pk;
+        for (var i = 0; i < K_a; i++) { auditEnc[k].c_auditor[i] <== c_auditor[k][i]; }
+        auditEnc[k].value    <== out_value[k];
+        auditEnc[k].asset_id <== out_asset_id[k];
+        auditEnc[k].owner_pk <== out_owner_pk[k];
+        auditEnc[k].rho      <== out_rho[k];
+        auditEnc[k].k_view   <== k_view;
+        auditEnc[k].rho_enc  <== rho_enc_auditor[k];
 
-    component recipEnc = RecipientEncCheck();
-    for (var i = 0; i < K_r; i++) { recipEnc.c_recipient[i] <== c_recipient[i]; }
-    recipEnc.value    <== out_value[0];
-    recipEnc.asset_id <== out_asset_id[0];
-    recipEnc.rho      <== out_rho[0];
-    recipEnc.r_note   <== out_r_note[0];
-    recipEnc.k_pair   <== k_pair;
-    recipEnc.rho_enc  <== rho_enc_recipient;
-    // TODO(FIN-006): bind the SECOND output note (change) to its own mandatory
-    //       c_auditor + c_recipient - PUBLIC_IO carries 2·K_a + 2·K_r (72 signals
-    //       total). Only output 0 is bound here; wiring out-note-1 + expanding the
-    //       c_auditor/c_recipient signal arrays to [2][5] is the remaining work.
+        recipEnc[k] = RecipientEncCheck();
+        for (var i = 0; i < K_r; i++) { recipEnc[k].c_recipient[i] <== c_recipient[k][i]; }
+        recipEnc[k].value    <== out_value[k];
+        recipEnc[k].asset_id <== out_asset_id[k];
+        recipEnc[k].rho      <== out_rho[k];
+        recipEnc[k].r_note   <== out_r_note[k];
+        recipEnc[k].k_pair   <== k_pair[k];
+        recipEnc[k].rho_enc  <== rho_enc_recipient[k];
+    }
 
     // =========================================================================
     // 7. TREE TRANSITION: old_frontier -> (new_frontier, new_root)
@@ -275,11 +292,14 @@ template Transfer(D, K_a, K_r) {
     for (var i = 0; i < D; i++) { tt.old_frontier[i] <== old_frontier[i]; }
     tt.leaves[0] <== cm_out_0;
     tt.leaves[1] <== cm_out_1;
-    // TODO: nextIndex must be a constrained witness equal to the contract's
-    //       current leaf count (the contract checks old_frontier == state, which
-    //       pins the index). Supply via witness; here we leave it as an input of
-    //       the gadget - wire a dedicated signal in the real implementation.
-    tt.nextIndex <== 0; // PLACEHOLDER - wire real append index witness.
+    // next_index is a PUBLIC INPUT the contract supplies from its stored leaf
+    // count (it checks pi.next_index == state.leaf_count). Binding it here ties
+    // the insertion position to real state: old_frontier == state pins the tree
+    // shape, next_index pins WHERE the two leaves land. Without this a prover
+    // could compute a self-consistent transition for a wrong index and corrupt
+    // the verbatim-stored tree (Security invariants #11/#12). FrontierTransition
+    // range-bounds next_index (+1) to < 2^D via Num2Bits(D).
+    tt.nextIndex <== next_index;
 
     for (var i = 0; i < D; i++) { new_frontier[i] === tt.new_frontier[i]; }
     new_root === tt.new_root;
@@ -303,6 +323,7 @@ component main { public [
     cm_out_1,
     new_root,
     fee,
+    next_index,
     old_frontier,
     new_frontier,
     c_auditor,

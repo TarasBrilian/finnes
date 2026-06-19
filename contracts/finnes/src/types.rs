@@ -23,7 +23,7 @@
 //! inputs (field-packed). Groth16 binds public inputs inherently, so the
 //! contract NEVER hashes ciphertext blobs - it just feeds them into the verify.
 
-use soroban_sdk::{contracttype, Bytes, BytesN, Env, Vec};
+use soroban_sdk::{contracttype, Address, Bytes, BytesN, Env, Vec};
 
 /// Merkle tree depth (filled-subtree frontier length).
 ///
@@ -81,6 +81,31 @@ pub struct VerifyingKey {
     pub ic: Vec<Bytes>,
 }
 
+/// `init` configuration bundle.
+///
+/// Soroban caps a contract function at 10 parameters, so the initial config is
+/// passed as one struct rather than 13 positional args. `admin` and
+/// `issuer_authority` are kept as **distinct** authorities (read vs write) even
+/// if one operator holds both in the demo (invariant #14).
+#[contracttype]
+#[derive(Clone)]
+pub struct InitConfig {
+    pub admin: Address,
+    pub issuer_authority: Address,
+    pub auditor_pk: Scalar,
+    pub kyc_root: Root,
+    pub sanction_root: Root,
+    pub assets_root: Root,
+    pub frozen_root: Root,
+    /// Empty-tree frontier seed; exactly `TREE_DEPTH` elements.
+    pub initial_frontier: Vec<Scalar>,
+    pub initial_root: Root,
+    pub vk_shield: VerifyingKey,
+    pub vk_transfer: VerifyingKey,
+    pub vk_unshield: VerifyingKey,
+    pub vk_dvp: VerifyingKey,
+}
+
 /// Identifies which circuit a proof belongs to (selects the VK and the
 /// public-input layout). Stored in `DataKey::Vk(Circuit)`.
 #[contracttype]
@@ -103,12 +128,13 @@ pub enum Circuit {
 /// ```text
 ///  0 anchor_root  1 kyc_root  2 sanction_root  3 assets_root  4 frozen_root
 ///  5 auditor_pk   6 nf_in_0   7 nf_in_1        8 cm_out_0     9 cm_out_1
-/// 10 new_root    11 fee
-/// 12..12+D-1   old_frontier[0..D-1]
+/// 10 new_root    11 fee      12 next_index
+/// 13..13+D-1   old_frontier[0..D-1]
 ///    ..+D       new_frontier[0..D-1]
-///    ..+K_a     c_auditor    (packed)
-///    ..+K_r     c_recipient  (packed)
+///    ..+2·K_a   c_auditor    (c_auditor_0 ‖ c_auditor_1; BOTH mandatory, inv #5)
+///    ..+2·K_r   c_recipient  (c_recipient_0 ‖ c_recipient_1)
 /// ```
+/// Total 73 public signals.
 #[contracttype]
 #[derive(Clone)]
 pub struct TransferPublicInputs {
@@ -124,13 +150,19 @@ pub struct TransferPublicInputs {
     pub cm_out_1: Commitment,
     pub new_root: Root,
     pub fee: Scalar,
+    /// Current leaf count before insertion; the contract checks this equals the
+    /// stored `leaf_count` so the circuit's `FrontierTransition` inserts at the
+    /// true append index (invariants #11/#12). Never prover-controlled.
+    pub next_index: Scalar,
     /// `old_frontier` - exactly `TREE_DEPTH` elements; checked equal to state.
     pub old_frontier: Vec<Scalar>,
     /// `new_frontier` - exactly `TREE_DEPTH` elements; stored verbatim.
     pub new_frontier: Vec<Scalar>,
-    /// `c_auditor` packed field elements (mandatory, invariant #5).
+    /// `c_auditor` = `c_auditor_0 ‖ c_auditor_1`, `2·K_a` packed field elements;
+    /// EVERY output note (incl. the change note) carries a mandatory auditor
+    /// ciphertext (invariant #5).
     pub c_auditor: Vec<Scalar>,
-    /// `c_recipient` packed field elements.
+    /// `c_recipient` = `c_recipient_0 ‖ c_recipient_1`, `2·K_r` packed elements.
     pub c_recipient: Vec<Scalar>,
 }
 
@@ -264,10 +296,11 @@ impl TransferPublicInputs {
         v.push_back(self.cm_out_1.clone()); // 9
         v.push_back(self.new_root.clone()); // 10
         v.push_back(self.fee.clone()); // 11
-        extend(&mut v, &self.old_frontier); // 12 .. 12+D-1
+        v.push_back(self.next_index.clone()); // 12
+        extend(&mut v, &self.old_frontier); // 13 .. 13+D-1
         extend(&mut v, &self.new_frontier); //    .. +D
-        extend(&mut v, &self.c_auditor); //    .. +K_a
-        extend(&mut v, &self.c_recipient); //    .. +K_r
+        extend(&mut v, &self.c_auditor); //    .. +2·K_a (note 0 ‖ note 1)
+        extend(&mut v, &self.c_recipient); //    .. +2·K_r (note 0 ‖ note 1)
         v
     }
 }

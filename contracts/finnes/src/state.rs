@@ -55,6 +55,10 @@ pub enum DataKey {
     FrozenRoot,
     /// Current commitment-tree root (latest published).
     TreeRoot,
+    /// Number of leaves inserted into the commitment tree so far (the next append
+    /// index). Checked against the circuits' `next_index` public input so the
+    /// in-circuit `FrontierTransition` inserts at the true position (#11/#12).
+    LeafCount,
     /// Groth16 verifying key for a given circuit.
     Vk(Circuit),
 
@@ -141,6 +145,23 @@ pub fn get_tree_root(env: &Env) -> Option<Root> {
     env.storage().instance().get(&DataKey::TreeRoot)
 }
 
+/// Commitment-tree leaf count (the next append index). Instance storage: a small
+/// `u64` always loaded with config. Seeded to 0 at `init` (empty tree) and
+/// advanced by `advance_leaf_count` on every successful tree mutation.
+pub fn set_leaf_count(env: &Env, count: u64) {
+    env.storage().instance().set(&DataKey::LeafCount, &count);
+}
+pub fn get_leaf_count(env: &Env) -> Option<u64> {
+    env.storage().instance().get(&DataKey::LeafCount)
+}
+
+/// Advance the leaf count by `n` newly-inserted leaves. Saturating add guards
+/// against wraparound (the tree caps at 2^TREE_DEPTH long before u64 overflow).
+pub fn advance_leaf_count(env: &Env, n: u32) {
+    let cur = get_leaf_count(env).unwrap_or(0);
+    set_leaf_count(env, cur.saturating_add(n as u64));
+}
+
 pub fn set_vk(env: &Env, circuit: Circuit, vk: &VerifyingKey) {
     env.storage().instance().set(&DataKey::Vk(circuit), vk);
 }
@@ -154,7 +175,9 @@ pub fn get_vk(env: &Env, circuit: Circuit) -> Option<VerifyingKey> {
 
 /// True if `nf` has already been spent.
 pub fn nullifier_exists(env: &Env, nf: &Nullifier) -> bool {
-    env.storage().persistent().has(&DataKey::Nullifier(nf.clone()))
+    env.storage()
+        .persistent()
+        .has(&DataKey::Nullifier(nf.clone()))
 }
 
 /// Insert `nf` as spent and bump its TTL. Caller must have already checked it
@@ -229,4 +252,3 @@ pub fn bump_instance_ttl(env: &Env) {
         .instance()
         .extend_ttl(PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND);
 }
-

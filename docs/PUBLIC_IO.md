@@ -184,15 +184,26 @@ Public signals, in order (`i` = absolute index):
  9       cm_out_1              (change note → sender)
 10       new_root
 11       fee                   (per-asset; 0 in demo)
-12 .. 31 old_frontier[0..19]   (D = 20)
-32 .. 51 new_frontier[0..19]
-52 .. 56 c_auditor_0[0..4]     (output note 0; mandatory)
-57 .. 61 c_auditor_1[0..4]     (output note 1; mandatory)
-62 .. 66 c_recipient_0[0..4]   (output note 0)
-67 .. 71 c_recipient_1[0..4]   (output note 1)
+12       next_index            (current leaf count; checked == contract state)
+13 .. 32 old_frontier[0..19]   (D = 20)
+33 .. 52 new_frontier[0..19]
+53 .. 57 c_auditor_0[0..4]     (output note 0; mandatory)
+58 .. 62 c_auditor_1[0..4]     (output note 1; mandatory)
+63 .. 67 c_recipient_0[0..4]   (output note 0)
+68 .. 72 c_recipient_1[0..4]   (output note 1)
 ```
 
-Total: **72** public signals (`12 + 2·D + 2·K_a + 2·K_r` = `12 + 40 + 10 + 10`).
+Total: **73** public signals (`13 + 2·D + 2·K_a + 2·K_r` = `13 + 40 + 10 + 10`).
+
+> **`next_index` (FIN-006 layout amendment).** Added so the `FrontierTransition`
+> insertion position is sound. `old_frontier == state` pins the tree shape but not
+> *where* the new leaves land; `next_index` (the current leaf count) is a public
+> input the **contract supplies from state** (`pi.next_index == state.leaf_count`),
+> never prover-controlled — otherwise a prover could compute a self-consistent
+> transition for a wrong index and corrupt the verbatim-stored tree
+> (invariants #11/#12). The FIN-003 heads-up flagged this; it is now wired.
+> `shield`/`unshield`/`dvp` need the same signal when their circuits are completed
+> (FIN-012/013/016) — their tables below are NOT yet amended.
 
 Private witness: input notes `(asset_id, value, owner_pk, rho, r_note)×2`,
 `owner_sk`, Merkle paths for the two inputs, KYC path, sanctions non-membership

@@ -50,11 +50,15 @@ function checkFrontier(name: string, frontier: Frontier, expectedDepth: number):
 
 /**
  * transfer.circom - 2-in / 2-out, single asset.
- * Order (docs/PUBLIC_IO.md §transfer.circom):
+ * Order (docs/PUBLIC_IO.md §transfer.circom, 73 signals):
  *   0 anchor_root, 1 kyc_root, 2 sanction_root, 3 assets_root, 4 frozen_root,
  *   5 auditor_pk, 6 nf_in_0, 7 nf_in_1, 8 cm_out_0, 9 cm_out_1, 10 new_root,
- *   11 fee, 12.. old_frontier[D], ..new_frontier[D], ..c_auditor[K_a],
- *   ..c_recipient[K_r].
+ *   11 fee, 12 next_index, 13.. old_frontier[D], ..new_frontier[D],
+ *   ..c_auditor_0[K_a], ..c_auditor_1[K_a], ..c_recipient_0[K_r], ..c_recipient_1[K_r].
+ *
+ * EVERY output note carries a MANDATORY auditor ciphertext (invariant #5), so
+ * `cAuditor` and `cRecipient` are 2-tuples (note 0 = recipient, note 1 = change).
+ * `nextIndex` is the current leaf count; the contract checks it equals state.
  */
 export function buildTransferPublicInputs(args: {
   roots: StateRoots;
@@ -63,10 +67,12 @@ export function buildTransferPublicInputs(args: {
   cmOut: readonly [Commitment, Commitment];
   newRoot: MerkleRoot;
   fee: RawAmount;
+  nextIndex: Fr;
   oldFrontier: Frontier;
   newFrontier: Frontier;
-  cAuditor: Ciphertext;
-  cRecipient: Ciphertext;
+  /** One ciphertext per output note [note0, note1]; both auditor cts mandatory. */
+  cAuditor: readonly [Ciphertext, Ciphertext];
+  cRecipient: readonly [Ciphertext, Ciphertext];
   treeDepth: number;
 }): PublicInputVector {
   checkFrontier('oldFrontier', args.oldFrontier, args.treeDepth);
@@ -84,10 +90,13 @@ export function buildTransferPublicInputs(args: {
     args.cmOut[1],
     args.newRoot,
     args.fee,
+    args.nextIndex,
     ...args.oldFrontier,
     ...args.newFrontier,
-    ...args.cAuditor.fields,
-    ...args.cRecipient.fields,
+    ...args.cAuditor[0].fields,
+    ...args.cAuditor[1].fields,
+    ...args.cRecipient[0].fields,
+    ...args.cRecipient[1].fields,
   ];
 }
 

@@ -51,7 +51,13 @@ pub fn check_old_frontier(env: &Env, old_frontier: &Vec<Scalar>) -> Result<bool,
 }
 
 /// Commit the circuit-output tree transition: store `new_frontier` and
-/// `new_root` verbatim, and push `new_root` into the recent-roots ring.
+/// `new_root` verbatim, push `new_root` into the recent-roots ring, and advance
+/// the stored leaf count by `n_inserts` (the number of output commitments the
+/// circuit folded in - shield=1, transfer=2, dvp=2, unshield change=1).
+///
+/// `n_inserts` MUST equal the `nInserts` the circuit's `FrontierTransition` used;
+/// it keeps `LeafCount` in lockstep with the tree so the next tx's `next_index`
+/// check is sound (invariants #11/#12).
 ///
 /// Caller MUST have already (a) verified `old_frontier` equals state and (b)
 /// verified the Groth16 proof, per the ordered flow in `lib.rs` (invariant #9).
@@ -59,6 +65,7 @@ pub fn apply_transition(
     env: &Env,
     new_frontier: &Vec<Scalar>,
     new_root: &Root,
+    n_inserts: u32,
 ) -> Result<(), Error> {
     if new_frontier.len() != TREE_DEPTH {
         return Err(Error::MalformedPublicInputs);
@@ -67,6 +74,7 @@ pub fn apply_transition(
     state::set_frontier(env, new_frontier);
     state::set_tree_root(env, new_root);
     push_recent_root(env, new_root);
+    state::advance_leaf_count(env, n_inserts);
     Ok(())
 }
 

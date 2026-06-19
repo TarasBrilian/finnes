@@ -53,10 +53,11 @@ export const PUBLIC_IO_ORDER: Record<CircuitName, readonly string[]> = {
     "cm_out_1", // 9
     "new_root", // 10
     "fee", // 11 (per-asset; 0 in demo)
-    "old_frontier", // 12 .. 12+D-1   (D elements)
+    "next_index", // 12 (current leaf count; contract checks == state)
+    "old_frontier", // 13 .. 13+D-1   (D elements)
     "new_frontier", // .. +D          (D elements)
-    "c_auditor", // .. +K_a        (packed, TODO)
-    "c_recipient", // .. +K_r        (packed, TODO)
+    "c_auditor", // .. +2·K_a      ([2][K_a]: note 0 ‖ note 1; BOTH mandatory #5)
+    "c_recipient", // .. +2·K_r      ([2][K_r]: note 0 ‖ note 1)
   ],
   // docs/PUBLIC_IO.md → shield.circom (transparent → shielded)
   shield: [
