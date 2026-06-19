@@ -1,139 +1,133 @@
 pragma circom 2.1.6;
 
 // =============================================================================
-// enc_check.circom — auditor-encryption well-formedness (MANDATORY)
+// enc_check.circom — auditor/recipient encryption well-formedness (FIN-004)
 // =============================================================================
 //
-// SCAFFOLD. The encryption SCHEME is a TODO (see PUBLIC_IO.md "Ciphertext
-// binding (TODO: scheme)"). This file fixes the INTERFACE and the invariant that
-// the auditor ciphertext is mandatory and circuit-constrained, not the concrete
-// AEAD/KEM math.
+// CONCRETE (FIN-001 scheme A, LOCKED in docs/PUBLIC_IO.md "Ciphertext binding").
+// The auditor ciphertext is MANDATORY and bound to the proof as public inputs
+// (Security invariant #5). This gadget proves the published ciphertext slots are
+// the correct additive-Poseidon-keystream encryption of THIS note's plaintext —
+// the prover cannot ship a value-correct commitment alongside an undecryptable or
+// disagreeing ciphertext ("encrypt a zero" is impossible).
 //
-// Compile with `--prime bls12381`.
-//
-// -----------------------------------------------------------------------------
-// WHY THIS EXISTS (Security invariant #5)
-// -----------------------------------------------------------------------------
-// Every output note MUST be encrypted to the regulator view key, and that
-// ciphertext MUST be bound to the proof as a PUBLIC INPUT. Groth16 binds public
-// inputs inherently, so the contract stores the ciphertext VERBATIM and never
-// hashes it. The prover must NOT be able to supply an unconstrained ciphertext:
-// this gadget proves the public `c_auditor` field elements are a correct
-// encryption of THIS note's plaintext (at minimum its `value`, and per the
-// chosen scheme also asset_id/owner/rho) under `auditor_pk`.
+// Compile with `--prime bls12381`. Mirrors sdk/src/encrypt.ts EXACTLY (the
+// keystream, the slot layout, and the domain separation). Any divergence is a
+// parity break — guarded by scripts/test-enc-parity.ts.
 //
 // -----------------------------------------------------------------------------
-// CHOSEN APPROACH: HYBRID — prove value-equality (CLAUDE.md "What to do when
-// unsure" + Security invariant #5). The intended MVP path is NOT a full
-// in-circuit AEAD. Instead:
-//   - The note is symmetrically encrypted off-circuit (or the symmetric part is
-//     opaque to the circuit), and
-//   - the circuit proves that the committed ciphertext fields encode the SAME
-//     `value` (and binding fields) that the note commitment opens to — i.e. the
-//     plaintext the auditor will recover equals the real note plaintext.
-// This prevents a prover from committing to a valid note while shipping an
-// auditor ciphertext that decrypts to a different (e.g. zero) value.
-//
+// SCHEME (no embedded curve — invariant #1; asymmetry lives off-circuit):
 // -----------------------------------------------------------------------------
-// SCHEME — TODO (must be fixed before ceremony)
-// -----------------------------------------------------------------------------
-// Because there is NO embedded curve (Security invariant #1: no Baby Jubjub /
-// Jubjub, no in-circuit signature), an in-circuit EC-DH/ElGamal KEM is OFF the
-// table. Candidate hybrid schemes (decide & document):
-//   (A) Poseidon-based KEM/commitment: derive a shared secret off-circuit; prove
-//       in-circuit that c_value = value + Poseidon(shared_secret, domain) (a
-//       one-time-pad / additive blinding over the field), binding `value` to the
-//       public ciphertext field via a Poseidon keystream. auditor_pk then acts
-//       as a Poseidon-based public key / KEM tag.
-//   (B) Commit-and-prove: c_auditor carries a Poseidon commitment to the
-//       plaintext plus an opaque symmetric blob; the circuit proves the
-//       commitment opens to the note's (value, asset_id, owner_pk, rho).
-// Either way the binding fields and the field-packing layout (K_a elements) must
-// match PUBLIC_IO.md and `sdk/src/poseidon.ts` / the SDK encryptor.
+//   auditor_pk = Poseidon(k_view)                         (bound in-circuit)
+//   shared     = Poseidon(k_view, rho_enc)                (rho_enc published)
+//   ks_i       = Poseidon(shared, i)   for slot i = 1..4  (domain-separated)
+//   c[0]       = rho_enc                                  (published nonce)
+//   c[i]       = pt[i-1] + ks_i   (mod r)                 (additive one-time pad)
 //
-// `auditor_pk` representation (single field vs _x/_y) is TODO until the scheme is
-// fixed; PUBLIC_IO.md currently carries it as a single public input.
+// auditor ciphertext binds plaintext slots [value, asset_id, owner_pk, rho];
+// recipient ciphertext binds [value, asset_id, rho, r_note]. Both K = 5.
+//
+// SOUNDNESS: the plaintext signals fed here are the SAME signals the note
+// commitment opens to upstream (the caller wires `outNote.value` etc. into both),
+// so the ciphertext cannot disagree with the committed note. For the auditor
+// ciphertext the key is bound (`Poseidon(k_view) == auditor_pk`), so the prover
+// must encrypt to a key the auditor authorized — no griefing gap. The recipient
+// ciphertext is NON-mandatory (invariant #5 requires only the auditor one) and is
+// keyed by a sender↔recipient pairwise secret (demo: out-of-band), so it carries
+// no in-circuit key-authorization constraint — only well-formedness, for scanning.
 // =============================================================================
 
 include "poseidon_bls.circom";
 
 // -----------------------------------------------------------------------------
-// AuditorEncCheck(nCipher)
-//   Proves the public auditor ciphertext fields `c_auditor[nCipher]` are a
-//   well-formed encryption, to `auditor_pk`, of the note plaintext described by
-//   (asset_id, value, owner_pk, rho), using `enc_rand` as the encryption
-//   randomness/ephemeral secret.
+// AuditorEncCheck — mandatory auditor ciphertext (K_a = 5).
 //
-//   nCipher = K_a, the number of packed field elements (TODO: pin to scheme).
+//   c_auditor = [ rho_enc,
+//                 value    + ks_1,
+//                 asset_id + ks_2,
+//                 owner_pk + ks_3,
+//                 rho      + ks_4 ]
 // -----------------------------------------------------------------------------
-template AuditorEncCheck(nCipher) {
+template AuditorEncCheck() {
     // public
-    signal input auditor_pk;
-    signal input c_auditor[nCipher];
-    // note plaintext being bound (private)
-    signal input asset_id;
+    signal input auditor_pk;     // = Poseidon(k_view); checked against contract state
+    signal input c_auditor[5];   // published field-packed ciphertext (public input)
+    // note plaintext being bound (same signals as the note commitment upstream)
     signal input value;
+    signal input asset_id;
     signal input owner_pk;
     signal input rho;
-    // encryption randomness (private)
-    signal input enc_rand;
+    // keying material (private witness)
+    signal input k_view;         // sender↔auditor shared key; auditor_pk = Poseidon(k_view)
+    signal input rho_enc;        // published nonce; equals c_auditor[0]
 
-    // ---- Hybrid value-equality binding (SCHEME = TODO) ----------------------
-    // Sketch for candidate (A), additive Poseidon keystream:
-    //   shared   = Poseidon(auditor_pk, enc_rand)          // KEM-ish derivation
-    //   ks_value = Poseidon(shared, DOMAIN_VALUE)
-    //   c_auditor[VALUE_SLOT] === value + ks_value
-    //   ... and analogous bindings for asset_id / owner_pk / rho in their slots.
-    //
-    // The crucial soundness property: `value` here is the SAME signal fed into
-    // the NoteCommitment upstream, so the ciphertext cannot disagree with the
-    // committed note. Do NOT relax this to leave any plaintext field
-    // unconstrained.
-    //
-    // PLACEHOLDER so the template type-checks. NOT a real encryption check; it
-    // does NOT yet bind value to c_auditor. MUST be replaced before ceremony.
-    component shared = PoseidonBLS(2);
-    shared.in[0] <== auditor_pk;
-    shared.in[1] <== enc_rand;
+    // (1) bind the key: the prover may only use a key the auditor authorized.
+    component pk = PoseidonBLS(1);
+    pk.in[0] <== k_view;
+    auditor_pk === pk.out;
 
-    // touch the plaintext signals so they are not dangling; this is NOT the real
-    // binding constraint (TODO: bind each plaintext field to a ciphertext slot).
-    signal plaintext_acc;
-    plaintext_acc <== asset_id + value + owner_pk + rho;
-    // TODO: replace with per-slot equality against c_auditor[...] derived from
-    //       the Poseidon keystream above. Until then c_auditor is unconstrained
-    //       — this is a SCAFFOLD and is explicitly insecure.
-    signal cipher_acc;
-    var acc = 0;
-    for (var i = 0; i < nCipher; i++) {
-        acc += c_auditor[i];
+    // (2) the published nonce occupies slot 0.
+    c_auditor[0] === rho_enc;
+
+    // (3) shared secret = Poseidon(k_view, rho_enc).
+    component sh = PoseidonBLS(2);
+    sh.in[0] <== k_view;
+    sh.in[1] <== rho_enc;
+
+    // (4) additive Poseidon keystream over Fr, domain-separated by slot index.
+    signal pt[4];
+    pt[0] <== value;
+    pt[1] <== asset_id;
+    pt[2] <== owner_pk;
+    pt[3] <== rho;
+    component ks[4];
+    for (var i = 0; i < 4; i++) {
+        ks[i] = PoseidonBLS(2);
+        ks[i].in[0] <== sh.out;
+        ks[i].in[1] <== i + 1;                 // slot index 1..4
+        c_auditor[i + 1] === pt[i] + ks[i].out; // OTP binding (mod r)
     }
-    cipher_acc <== acc;
-    // No constraint linking plaintext_acc/shared.out to cipher_acc yet (TODO).
 }
 
 // -----------------------------------------------------------------------------
-// RecipientEncCheck(nCipher)
-//   OPTIONAL recipient ciphertext (`c_recipient`). Same shape, encrypted to the
-//   recipient's pk instead of auditor_pk. Not security-critical for compliance
-//   (the recipient can always be told out-of-band), but kept so the recipient
-//   can scan & discover the note. NOT mandatory (unlike c_auditor).
+// RecipientEncCheck — optional recipient ciphertext (K_r = 5).
+//
+//   c_recipient = [ rho_enc,
+//                   value    + ks_1,
+//                   asset_id + ks_2,
+//                   rho      + ks_3,
+//                   r_note   + ks_4 ]
+//
+// Keyed by a sender↔recipient pairwise secret `k_pair` (demo: OOB). NOT mandatory
+// (invariant #5 mandates only the auditor ciphertext) and carries no key-binding;
+// it exists so the recipient can scan & discover the note (sdk/src/scan.ts). The
+// recipient re-derives owner_pk from its own owner_sk, so owner_pk is not packed.
 // -----------------------------------------------------------------------------
-template RecipientEncCheck(nCipher) {
-    signal input recipient_pk;
-    signal input c_recipient[nCipher];
-    signal input asset_id;
+template RecipientEncCheck() {
+    signal input c_recipient[5];
     signal input value;
-    signal input owner_pk;
+    signal input asset_id;
     signal input rho;
-    signal input enc_rand;
+    signal input r_note;
+    signal input k_pair;         // sender↔recipient pairwise secret (private witness)
+    signal input rho_enc;        // published nonce; equals c_recipient[0]
 
-    // TODO: same hybrid value-equality binding as AuditorEncCheck.
-    signal acc_sig;
-    var acc = 0;
-    for (var i = 0; i < nCipher; i++) {
-        acc += c_recipient[i];
+    c_recipient[0] === rho_enc;
+
+    component sh = PoseidonBLS(2);
+    sh.in[0] <== k_pair;
+    sh.in[1] <== rho_enc;
+
+    signal pt[4];
+    pt[0] <== value;
+    pt[1] <== asset_id;
+    pt[2] <== rho;
+    pt[3] <== r_note;
+    component ks[4];
+    for (var i = 0; i < 4; i++) {
+        ks[i] = PoseidonBLS(2);
+        ks[i].in[0] <== sh.out;
+        ks[i].in[1] <== i + 1;
+        c_recipient[i + 1] === pt[i] + ks[i].out;
     }
-    acc_sig <== acc + recipient_pk + asset_id + value + owner_pk + rho + enc_rand;
-    // PLACEHOLDER — no binding constraint yet (TODO).
 }

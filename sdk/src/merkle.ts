@@ -51,6 +51,23 @@ export function imtLeafHash(value: Fr, nextIndex: Fr, nextValue: Fr): Fr {
 }
 
 /**
+ * Authorized-assets registry leaf hash (invariant #17):
+ * `Poseidon(asset_id, sac_address, decimals, per_tx_limit_raw, 0)`. The single
+ * `0` pad lifts the 4-field leaf to a supported Poseidon arity (5 → t=6; the
+ * param set only covers t ∈ {2,3,6}). MUST match `AssetsMembership`'s `leafH` in
+ * circuits/lib/assets.circom (parity gate scripts/test-assets-parity.ts). Raw
+ * units only — `decimals` is bound into the hash but never rescales (invariant #16).
+ */
+export function assetsLeafHash(
+  assetId: Fr,
+  sacAddress: Fr,
+  decimals: Fr,
+  perTxLimitRaw: Fr,
+): Fr {
+  return poseidonBLS([assetId, sacAddress, decimals, perTxLimitRaw, 0n]);
+}
+
+/**
  * Empty-subtree hashes: `zeros[i]` = root of an all-empty subtree of height `i`.
  * Returns `depth + 1` elements; `zeros[0] = EMPTY_LEAF`, `zeros[depth]` is the
  * empty-tree root. Must match `circuits/lib/merkle.circom`'s in-circuit zeros and

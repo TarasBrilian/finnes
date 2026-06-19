@@ -6,8 +6,11 @@
  * note encryption, wallet scanning, and ordered public-input assembly that
  * mirrors docs/PUBLIC_IO.md.
  *
- * SCAFFOLD: cryptographic bodies are `// TODO:` stubs that THROW. Nothing here
- * performs real crypto yet. See each module header for the TODOs.
+ * STATUS: Poseidon-BLS (FIN-002), note + Merkle gadgets (FIN-003), and note
+ * encryption + scanning (FIN-004, additive Poseidon keystream) are implemented
+ * and circuit↔SDK parity-tested. Asset-binding helpers that need the SAC-address
+ * encoding (`sacAddressToField`/`deriveAssetId`) still throw until that encoding
+ * is fixed.
  *
  * SECURITY (invariant #8): secrets (owner_sk, rho, r_note, plaintext values,
  * auditor_sk) live only in the client trust zone — never logged or persisted.
@@ -39,14 +42,27 @@ export {
   IncrementalMerkleTree,
   TREE_DEPTH,
   applyFrontierTransition,
+  assetsLeafHash,
   emptyTreeZeros,
   hashNode,
   imtLeafHash,
   verifyInclusionPath,
 } from './merkle.js';
 
-export type { EncryptionRandomness } from './encrypt.js';
-export { encryptToAuditor, encryptToRecipient } from './encrypt.js';
+export type {
+  AuditorPlaintext,
+  EncryptionRandomness,
+  RecipientPlaintext,
+} from './encrypt.js';
+export {
+  K_A,
+  K_R,
+  auditorPkFromKey,
+  decryptAuditor,
+  decryptRecipient,
+  encryptToAuditor,
+  encryptToRecipient,
+} from './encrypt.js';
 
 export type { DiscoveredNote, OnChainCiphertext, ViewingContext } from './scan.js';
 export { scanForOwnedNotes, tryDecryptNote } from './scan.js';
