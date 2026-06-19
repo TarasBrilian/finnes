@@ -8,18 +8,18 @@
  * in turn mirrored by each `circuits/*.circom` `main`, the contract's
  * `PublicInputs::to_vec()`, and the prover. A mismatch surfaces as a bogus
  * "invalid proof" (CLAUDE.md → "When adding a new circuit..."). Do not reorder
- * casually — reordering requires a fresh phase-2 ceremony and a new VK.
+ * casually - reordering requires a fresh phase-2 ceremony and a new VK.
  *
  * Layout notes carried verbatim from docs/PUBLIC_IO.md:
- *   - Tree depth D (frontier length) — TODO confirm; default 32 (see merkle.ts).
- *   - Ciphertext packing lengths K_a / K_r — TODO (scheme not fixed). The
+ *   - Tree depth D (frontier length) - TODO confirm; default 32 (see merkle.ts).
+ *   - Ciphertext packing lengths K_a / K_r - TODO (scheme not fixed). The
  *     builders append `c*.fields` in document order; correctness of K_a/K_r is
  *     enforced once the scheme lands.
- *   - `auditor_pk` is a single field placeholder (may expand to _x/_y — TODO).
+ *   - `auditor_pk` is a single field placeholder (may expand to _x/_y - TODO).
  *   - `fee` is per-asset and 0 in the demo (invariant #3) but always present.
  *   - All amounts are raw SAC units (invariant #16); never rescaled here.
  *
- * These builders assemble PUBLIC values only — they never touch secrets
+ * These builders assemble PUBLIC values only - they never touch secrets
  * (invariant #8).
  * ============================================================================
  */
@@ -49,7 +49,7 @@ function checkFrontier(name: string, frontier: Frontier, expectedDepth: number):
 }
 
 /**
- * transfer.circom — 2-in / 2-out, single asset.
+ * transfer.circom - 2-in / 2-out, single asset.
  * Order (docs/PUBLIC_IO.md §transfer.circom):
  *   0 anchor_root, 1 kyc_root, 2 sanction_root, 3 assets_root, 4 frozen_root,
  *   5 auditor_pk, 6 nf_in_0, 7 nf_in_1, 8 cm_out_0, 9 cm_out_1, 10 new_root,
@@ -92,13 +92,13 @@ export function buildTransferPublicInputs(args: {
 }
 
 /**
- * shield.circom — transparent → shielded (0 shielded inputs, 1 transparent in).
+ * shield.circom - transparent → shielded (0 shielded inputs, 1 transparent in).
  * Order (docs/PUBLIC_IO.md §shield.circom):
  *   0 asset_id, 1 amount, 2 kyc_root, 3 assets_root, 4 auditor_pk, 5 cm_out_0,
  *   6 new_root, 7 fee, 8.. old_frontier[D], ..new_frontier[D], ..c_auditor[K_a],
  *   ..c_recipient[K_r].
  *
- * NOTE: shield exposes only kyc_root + assets_root (no anchor/sanction/frozen —
+ * NOTE: shield exposes only kyc_root + assets_root (no anchor/sanction/frozen -
  * there are no shielded inputs to anchor or freeze-check).
  */
 export function buildShieldPublicInputs(args: {
@@ -135,7 +135,7 @@ export function buildShieldPublicInputs(args: {
 }
 
 /**
- * unshield.circom — shielded → transparent (1+ shielded inputs, transparent out).
+ * unshield.circom - shielded → transparent (1+ shielded inputs, transparent out).
  * Order (docs/PUBLIC_IO.md §unshield.circom):
  *   0 anchor_root, 1 kyc_root, 2 sanction_root, 3 assets_root, 4 frozen_root,
  *   5 auditor_pk, 6 nf_in_0, 7 asset_id, 8 amount, 9 recipient, 10 cm_change_0,
@@ -143,7 +143,7 @@ export function buildShieldPublicInputs(args: {
  *   ..c_auditor[K_a] (for the change note, if any).
  *
  * `recipient` is the transparent Stellar address encoded as a field element
- * (encoding TODO — must match the circuit / contract). `cmChange0` is 0/null if
+ * (encoding TODO - must match the circuit / contract). `cmChange0` is 0/null if
  * there is no change note.
  */
 export function buildUnshieldPublicInputs(args: {
@@ -184,7 +184,7 @@ export function buildUnshieldPublicInputs(args: {
 }
 
 /**
- * dvp.circom — atomic two-asset settlement (demo: single combined proof).
+ * dvp.circom - atomic two-asset settlement (demo: single combined proof).
  * Order (docs/PUBLIC_IO.md §dvp.circom):
  *   0 anchor_root, 1 kyc_root, 2 sanction_root, 3 assets_root, 4 frozen_root,
  *   5 auditor_pk, 6 nf_legX_0, 7 nf_legY_0, 8 cm_out_X, 9 cm_out_Y, 10 new_root,

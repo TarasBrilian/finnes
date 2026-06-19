@@ -1,5 +1,5 @@
 /**
- * demo.ts — end-to-end Finnes demo orchestration (SCAFFOLD).
+ * demo.ts - end-to-end Finnes demo orchestration (SCAFFOLD).
  *
  * Narrates the headline flow from README "Demo flow":
  *
@@ -73,7 +73,7 @@ const config: DemoConfig = {
 };
 
 // ---------------------------------------------------------------------------
-// Step implementations — all stubbed.
+// Step implementations - all stubbed.
 // ---------------------------------------------------------------------------
 
 /** Bootstrap demo identities (institution A, institution B, regulator/auditor). */
@@ -87,9 +87,9 @@ async function setupActors(): Promise<void> {
   );
 }
 
-/** Step 1: shield — transparent RWA token -> confidential note for A. */
+/** Step 1: shield - transparent RWA token -> confidential note for A. */
 async function shield(): Promise<void> {
-  step("shield — deposit transparent RWA into a confidential note (owner: A)");
+  step("shield - deposit transparent RWA into a confidential note (owner: A)");
   info(`asset: ${config.assetIdLabel}, amount(raw): ${config.amountRaw} (PUBLIC on shield)`);
   info("Public inputs reveal (asset_id, amount); (owner, rho, r_note) stay hidden.");
   todo("Build the shield witness via @finnes/sdk (note opening + auditor encryption).");
@@ -98,9 +98,9 @@ async function shield(): Promise<void> {
   info("After this, A owns one shielded note; the public sees only its commitment.");
 }
 
-/** Step 2: confidential_transfer — A -> B, amounts/parties hidden. */
+/** Step 2: confidential_transfer - A -> B, amounts/parties hidden. */
 async function confidentialTransfer(): Promise<void> {
-  step("confidential_transfer — move value A -> B (2-in / 2-out, single asset)");
+  step("confidential_transfer - move value A -> B (2-in / 2-out, single asset)");
   info("Public sees only: nullifier(s), output commitment(s), ciphertexts, new root.");
   info("In-circuit: per-asset conservation, 64-bit range checks, KYC membership,");
   info("            sanctions + frozen non-membership, assets membership + per-tx limit,");
@@ -112,23 +112,23 @@ async function confidentialTransfer(): Promise<void> {
   info("B can now scan ciphertexts and discover the incoming note.");
 }
 
-/** Step 3: regulator disclosure — auditor view key decrypts the mandatory ciphertext. */
+/** Step 3: regulator disclosure - auditor view key decrypts the mandatory ciphertext. */
 async function regulatorDisclosure(): Promise<void> {
-  step("regulator disclosure — auditor decrypts the mandatory c_auditor");
+  step("regulator disclosure - auditor decrypts the mandatory c_auditor");
   info("Auditor encryption is mandatory and circuit-enforced (invariant #5), so every");
   info("output note carries a c_auditor bound to the proof as a public input.");
   todo("Decrypt c_auditor with the auditor view key via @finnes/sdk (auditor zone).");
   todo(
     "Display the disclosed transaction (amount, parties) to the regulator ONLY. In a " +
-      "real run this prints real values to the auditor's screen — never to shared logs " +
+      "real run this prints real values to the auditor's screen - never to shared logs " +
       "and never persisted by this script (invariant #8).",
   );
   info("Narrative: public saw a valid compliant transfer; only the regulator sees details.");
 }
 
-/** Stretch: settle_dvp — atomic two-asset settlement (demo: single combined proof). */
+/** Stretch: settle_dvp - atomic two-asset settlement (demo: single combined proof). */
 async function settleDvp(): Promise<void> {
-  step("(stretch) settle_dvp — atomic two-asset DvP");
+  step("(stretch) settle_dvp - atomic two-asset DvP");
   info("DEMO MODEL: one combined proof holds both parties' secrets (one pairing).");
   info("This is acceptable ONLY because a test harness controls both keypairs; it is");
   info("NOT the production model (production = escrow / two-phase). See ARCHITECTURE.md.");
@@ -142,12 +142,12 @@ async function settleDvp(): Promise<void> {
 
 async function main(): Promise<void> {
   console.log("=".repeat(78));
-  console.log("Finnes end-to-end demo (SCAFFOLD — does not run end-to-end yet)");
+  console.log("Finnes end-to-end demo (SCAFFOLD - does not run end-to-end yet)");
   console.log(`network=${config.network} contract=${config.contractId ?? "<unset>"}`);
   console.log("=".repeat(78));
 
   if (config.contractId === null) {
-    info("No FINNES_CONTRACT_ID set — run 'npm run deploy' first, then export it.");
+    info("No FINNES_CONTRACT_ID set - run 'npm run deploy' first, then export it.");
     info("Continuing in narration-only mode.");
   }
 

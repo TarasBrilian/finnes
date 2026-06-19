@@ -1,7 +1,7 @@
 {
   "name": "@finnes/prover",
   "version": "0.0.0",
-  "description": "Off-chain Groth16 prover for Finnes (SnarkJS, BLS12-381). Runs INSIDE the client/institution trust zone — single-tenant, never a shared backend service. Never leaks the witness.",
+  "description": "Off-chain Groth16 prover for Finnes (SnarkJS, BLS12-381). Runs INSIDE the client/institution trust zone - single-tenant, never a shared backend service. Never leaks the witness.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",

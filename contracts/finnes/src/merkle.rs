@@ -1,4 +1,4 @@
-//! Commitment-tree storage helpers — frontier/root bookkeeping and the
+//! Commitment-tree storage helpers - frontier/root bookkeeping and the
 //! recent-roots ring buffer.
 //!
 //! # NO HASHING HERE (invariant #11 / #12)
@@ -12,7 +12,7 @@
 //!      a slightly-stale root still validate (windowed acceptance).
 //!
 //! All hashing (commitments, nullifiers, Merkle path) lives in the circuit and
-//! the JS/TS SDK — never in this Rust contract.
+//! the JS/TS SDK - never in this Rust contract.
 
 use soroban_sdk::{Env, Vec};
 
@@ -27,7 +27,7 @@ use crate::types::{Root, Scalar, TREE_DEPTH};
 /// the new frontier/root is a sound successor of the current tree.
 ///
 /// Length must be exactly `TREE_DEPTH`. On any mismatch returns
-/// `Error::MalformedPublicInputs` (wrong length) — the equality failure itself
+/// `Error::MalformedPublicInputs` (wrong length) - the equality failure itself
 /// is surfaced as `false`/error by the caller's flow. We do not `unwrap`.
 pub fn check_old_frontier(env: &Env, old_frontier: &Vec<Scalar>) -> Result<bool, Error> {
     if old_frontier.len() != TREE_DEPTH {
@@ -63,7 +63,7 @@ pub fn apply_transition(
     if new_frontier.len() != TREE_DEPTH {
         return Err(Error::MalformedPublicInputs);
     }
-    // Store verbatim — NO hashing.
+    // Store verbatim - NO hashing.
     state::set_frontier(env, new_frontier);
     state::set_tree_root(env, new_root);
     push_recent_root(env, new_root);

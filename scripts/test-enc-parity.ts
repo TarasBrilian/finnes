@@ -3,7 +3,7 @@
 // Asserts the SDK encryptor (sdk/src/encrypt.ts) and the in-circuit binding
 // (circuits/lib/enc_check.circom) agree: a ciphertext produced by the SDK
 // satisfies the circuit constraints (witness calculation succeeds), and any
-// tampering — a flipped ciphertext slot or a wrong key — is rejected. This is the
+// tampering - a flipped ciphertext slot or a wrong key - is rejected. This is the
 // property behind invariant #5: the prover cannot ship a value-correct commitment
 // with a disagreeing/undecryptable auditor ciphertext.
 // Run: `npx tsx scripts/test-enc-parity.ts`.
@@ -127,7 +127,7 @@ expect(
 }
 
 if (failed) {
-  console.error('\nENC PARITY FAILED — SDK encryptor and circuit binding disagree.');
+  console.error('\nENC PARITY FAILED - SDK encryptor and circuit binding disagree.');
   process.exit(1);
 }
-console.log('\nENC PARITY OK — SDK ciphertexts satisfy the in-circuit binding; tampering rejected.');
+console.log('\nENC PARITY OK - SDK ciphertexts satisfy the in-circuit binding; tampering rejected.');

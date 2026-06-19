@@ -20,7 +20,7 @@ declare module "snarkjs" {
     curve: string;
   }
 
-  /** Ordered public signals (decimal strings). Order is normative — see docs/PUBLIC_IO.md. */
+  /** Ordered public signals (decimal strings). Order is normative - see docs/PUBLIC_IO.md. */
   export type PublicSignals = string[];
 
   /** Circuit input: flat map of signal-name → value(s). Carries the (secret) witness. */

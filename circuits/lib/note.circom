@@ -1,12 +1,12 @@
 pragma circom 2.1.6;
 
 // =============================================================================
-// note.circom — note commitment & nullifier derivation (Poseidon-BLS)
+// note.circom - note commitment & nullifier derivation (Poseidon-BLS)
 // =============================================================================
 //
 // Concrete (FIN-003). Hash bodies delegate to PoseidonBLS, which is implemented
 // and circuit↔SDK parity-verified (FIN-002, invariant #13). All hashing here is
-// Poseidon over the BLS12-381 scalar field — mirrored 1:1 by sdk/src/note.ts.
+// Poseidon over the BLS12-381 scalar field - mirrored 1:1 by sdk/src/note.ts.
 //
 // Compile with `--prime bls12381` (compiler flag, not pragma).
 //
@@ -17,14 +17,14 @@ pragma circom 2.1.6;
 //   commitment cm = Poseidon(asset_id, value, owner_pk, rho, r_note)
 //   nullifier  nf = Poseidon(rho, owner_sk)
 //
-// Only `cm` is public on-chain. Raw SAC units only — the circuit NEVER rescales
+// Only `cm` is public on-chain. Raw SAC units only - the circuit NEVER rescales
 // by decimals (Security invariant #16).
 // =============================================================================
 
 include "poseidon_bls.circom";
 
 // -----------------------------------------------------------------------------
-// AssetId — asset_id = Poseidon(sac_address)
+// AssetId - asset_id = Poseidon(sac_address)
 // Self-binding asset identity; computed in-circuit, never on-chain.
 // -----------------------------------------------------------------------------
 template AssetId() {
@@ -37,7 +37,7 @@ template AssetId() {
 }
 
 // -----------------------------------------------------------------------------
-// OwnerPk — owner_pk = Poseidon(owner_sk)
+// OwnerPk - owner_pk = Poseidon(owner_sk)
 // -----------------------------------------------------------------------------
 template OwnerPk() {
     signal input owner_sk;
@@ -49,7 +49,7 @@ template OwnerPk() {
 }
 
 // -----------------------------------------------------------------------------
-// NoteCommitment — cm = Poseidon(asset_id, value, owner_pk, rho, r_note)
+// NoteCommitment - cm = Poseidon(asset_id, value, owner_pk, rho, r_note)
 // -----------------------------------------------------------------------------
 template NoteCommitment() {
     signal input asset_id;
@@ -69,7 +69,7 @@ template NoteCommitment() {
 }
 
 // -----------------------------------------------------------------------------
-// Nullifier — nf = Poseidon(rho, owner_sk)
+// Nullifier - nf = Poseidon(rho, owner_sk)
 // Spend authority is bound by owner_sk; reveals nothing about which note spent.
 // -----------------------------------------------------------------------------
 template Nullifier() {
@@ -84,7 +84,7 @@ template Nullifier() {
 }
 
 // -----------------------------------------------------------------------------
-// SpentNote — full opening + ownership of an input note.
+// SpentNote - full opening + ownership of an input note.
 //
 // Given the note plaintext and owner_sk, this:
 //   (a) re-derives owner_pk = Poseidon(owner_sk) and CHECKS it equals the note's
@@ -110,7 +110,7 @@ template SpentNote() {
     signal output nf;
 
     // (a) ownership: owner_pk must equal Poseidon(owner_sk). This equality IS the
-    //     spend-authority constraint — without it anyone could spend any note.
+    //     spend-authority constraint - without it anyone could spend any note.
     component opk = OwnerPk();
     opk.owner_sk <== owner_sk;
     owner_pk === opk.owner_pk;
@@ -132,7 +132,7 @@ template SpentNote() {
 }
 
 // -----------------------------------------------------------------------------
-// OutputNote — commitment for a freshly-minted output note.
+// OutputNote - commitment for a freshly-minted output note.
 // owner_pk is supplied directly (the recipient's pk; no owner_sk in witness for
 // an output). value range-checked by the caller.
 // -----------------------------------------------------------------------------

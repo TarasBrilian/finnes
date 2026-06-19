@@ -1,7 +1,7 @@
 pragma circom 2.1.6;
 
 // =============================================================================
-// shield.circom — transparent -> shielded (0 shielded inputs, 1 transparent in)
+// shield.circom - transparent -> shielded (0 shielded inputs, 1 transparent in)
 // =============================================================================
 //
 // SCAFFOLD. Composition & public-signal ordering are concrete and normative;
@@ -12,10 +12,10 @@ pragma circom 2.1.6;
 //   (`--prime bls12381` is a COMPILER flag, not a pragma.)
 //
 // -----------------------------------------------------------------------------
-// PUBLIC INPUT ORDER — COPIED VERBATIM FROM docs/PUBLIC_IO.md
+// PUBLIC INPUT ORDER - COPIED VERBATIM FROM docs/PUBLIC_IO.md
 // -----------------------------------------------------------------------------
-//  0  asset_id            (public — derived from deposited SAC; circuit proves = Poseidon(sac_address))
-//  1  amount              (public — deposited raw SAC units)
+//  0  asset_id            (public - derived from deposited SAC; circuit proves = Poseidon(sac_address))
+//  1  amount              (public - deposited raw SAC units)
 //  2  kyc_root            (depositor/owner KYC membership)
 //  3  assets_root
 //  4  auditor_pk          (TODO)
@@ -30,10 +30,10 @@ pragma circom 2.1.6;
 //
 // KEY CONSTRAINT (Security invariant #18): the output cm opens to the PUBLIC
 // (asset_id, amount) WITHOUT revealing (owner_pk, rho, r_note). Never a full
-// opening — that would de-anonymize the note at birth and a depositor could
+// opening - that would de-anonymize the note at birth and a depositor could
 // otherwise mint a note labelled as a different/more-valuable asset.
 //
-// RAW SAC UNITS only — no rescaling (Security invariant #16).
+// RAW SAC UNITS only - no rescaling (Security invariant #16).
 // =============================================================================
 
 include "lib/poseidon_bls.circom";
@@ -85,7 +85,7 @@ template Shield(D, K_a, K_r) {
     amtRange.in <== amount;
 
     // =========================================================================
-    // 2. OUTPUT NOTE binds to PUBLIC (asset_id, amount) — invariant #18.
+    // 2. OUTPUT NOTE binds to PUBLIC (asset_id, amount) - invariant #18.
     //    cm = Poseidon(asset_id, amount, owner_pk, rho, r_note); only owner/rho/r
     //    are hidden.
     // =========================================================================
@@ -165,7 +165,7 @@ template Shield(D, K_a, K_r) {
 }
 
 // -----------------------------------------------------------------------------
-// main — order MUST match docs/PUBLIC_IO.md. D=32; K_a/K_r TODO placeholders (4).
+// main - order MUST match docs/PUBLIC_IO.md. D=32; K_a/K_r TODO placeholders (4).
 // -----------------------------------------------------------------------------
 component main { public [
     asset_id,

@@ -2,7 +2,7 @@
 //
 // Compiles the Merkle parity circuits with `circom --prime bls12381`, computes a
 // witness, and asserts the circuit's outputs equal the SDK's
-// (sdk/src/merkle.ts) outputs for the same inputs — proving inclusion-root and
+// (sdk/src/merkle.ts) outputs for the same inputs - proving inclusion-root and
 // the `old_frontier → (new_frontier, new_root)` transition agree across surfaces
 // (invariant #12). Run: `npx tsx scripts/test-merkle-parity.ts`.
 
@@ -94,7 +94,7 @@ function check(label: string, ok: boolean, detail = ''): void {
 }
 
 if (failed) {
-  console.error('\nMERKLE PARITY FAILED — circuit and SDK disagree.');
+  console.error('\nMERKLE PARITY FAILED - circuit and SDK disagree.');
   process.exit(1);
 }
-console.log('\nMERKLE PARITY OK — circuit and SDK agree on inclusion root + frontier transition.');
+console.log('\nMERKLE PARITY OK - circuit and SDK agree on inclusion root + frontier transition.');

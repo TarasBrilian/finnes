@@ -18,7 +18,7 @@ import assert from 'node:assert/strict';
 import { POSEIDON_BLS_TEST_VECTOR, poseidonBLS, FR_MODULUS } from '../src/poseidon.js';
 
 // Locked digests, verified against the circuit (do not edit without regenerating
-// params + re-running the ceremony — a parity-breaking event).
+// params + re-running the ceremony - a parity-breaking event).
 const LOCKED: ReadonlyArray<{ inputs: bigint[]; expected: bigint }> = [
   { inputs: [1n], expected: 34917507619340176517384719106072291112335569024831212256807722082447975477987n },
   { inputs: [1n, 2n], expected: 1539466174953200397849885941806203218514759356197876052928772286378091849564n },

@@ -2,7 +2,7 @@
 //
 // Compiles the parity circuits with `circom --prime bls12381`, computes a witness
 // for fixed inputs, and asserts the circuit's digest equals the SDK's
-// poseidonBLS() output — proving the circuit and the SDK use identical params and
+// poseidonBLS() output - proving the circuit and the SDK use identical params and
 // permutation. Run: `npx tsx scripts/test-poseidon-parity.ts`.
 
 import { execSync } from 'node:child_process';
@@ -54,10 +54,10 @@ for (const c of CASES) {
 }
 
 if (failed) {
-  console.error('\nPARITY FAILED — circuit and SDK disagree.');
+  console.error('\nPARITY FAILED - circuit and SDK disagree.');
   process.exit(1);
 }
-console.log('\nPARITY OK — circuit and SDK produce identical digests.');
+console.log('\nPARITY OK - circuit and SDK produce identical digests.');
 // Print the t=3 vector so it can be locked into POSEIDON_BLS_TEST_VECTOR.
 console.log(`\nLock this in sdk/src/poseidon.ts POSEIDON_BLS_TEST_VECTOR.expected:`);
 console.log(`  inputs [1n, 2n] -> ${poseidonBLS([1n, 2n])}n`);

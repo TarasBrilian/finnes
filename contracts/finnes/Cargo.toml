@@ -3,7 +3,7 @@ name = "finnes"
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-description = "Finnes — confidential RWA settlement contract for Soroban (Groth16 over BLS12-381)."
+description = "Finnes - confidential RWA settlement contract for Soroban (Groth16 over BLS12-381)."
 publish = false
 
 [lib]

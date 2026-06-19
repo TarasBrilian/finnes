@@ -4,7 +4,7 @@
 // circuits/lib/merkle.circom MerkleNonMembership and asserts:
 //   - a value in a GAP is provably absent (witness succeeds),
 //   - the tail/maximum branch (low_next_value == 0) works,
-//   - a value that IS in the set CANNOT be proven absent (witness fails) — this is
+//   - a value that IS in the set CANNOT be proven absent (witness fails) - this is
 //     the property that keeps a frozen note unspendable.
 // Run: `npx tsx scripts/test-nonmembership-parity.ts`.
 
@@ -88,4 +88,4 @@ if (failed) {
   console.error('\nIMT NON-MEMBERSHIP FAILED.');
   process.exit(1);
 }
-console.log('\nIMT NON-MEMBERSHIP OK — gaps/tail accepted, members + forged low leaves rejected.');
+console.log('\nIMT NON-MEMBERSHIP OK - gaps/tail accepted, members + forged low leaves rejected.');

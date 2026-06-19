@@ -1,13 +1,13 @@
 /**
  * Wallet scanning: trial-decrypt on-chain recipient ciphertexts to discover
  * owned notes (ARCHITECTURE.md → Frontend "Local key & note management"). Runs
- * only inside the client/institution trust zone — it requires the spending and
+ * only inside the client/institution trust zone - it requires the spending and
  * pairwise-viewing secrets.
  *
  * Trial-decryption uses the recipient keystream (sdk/src/encrypt.ts), then
  * RE-DERIVES `owner_pk = Poseidon(owner_sk)` (the recipient ciphertext does not
  * carry owner_pk) and RE-COMPUTES the commitment to confirm a real match. A note
- * is accepted only when the recomputed commitment equals the on-chain one — a
+ * is accepted only when the recomputed commitment equals the on-chain one - a
  * ciphertext that is not ours decrypts to garbage and is rejected.
  *
  * SECURITY (invariant #8): the spending key, the pairwise key, and any recovered
@@ -36,7 +36,7 @@ export interface DiscoveredNote {
   readonly leafIndex?: number;
 }
 
-/** The secrets needed to trial-decrypt. SECRET — see invariant #8. */
+/** The secrets needed to trial-decrypt. SECRET - see invariant #8. */
 export interface ViewingContext {
   /** Spending secret; `owner_pk = Poseidon(owner_sk)` is re-derived for matching. */
   readonly ownerSk: OwnerSk;
@@ -57,7 +57,7 @@ export interface ViewingContext {
  *   3. Re-compute the commitment and CHECK it equals `obs.commitment`.
  *   4. Return the note only on commitment match; otherwise `undefined`.
  *
- * Never returns a note whose commitment does not re-derive — a foreign or garbled
+ * Never returns a note whose commitment does not re-derive - a foreign or garbled
  * ciphertext (recovered `value` out of 64-bit range, or commitment mismatch) is
  * silently skipped.
  */

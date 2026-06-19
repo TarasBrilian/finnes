@@ -1,7 +1,7 @@
 pragma circom 2.1.6;
 
 // =============================================================================
-// bits.circom — vendored field-agnostic bit / comparator gadgets.
+// bits.circom - vendored field-agnostic bit / comparator gadgets.
 // =============================================================================
 //
 // Standard constructions (cf. circomlib bitify/comparators), VENDORED so the
@@ -9,13 +9,13 @@ pragma circom 2.1.6;
 // default Poseidon uses BN254 constants and must never be pulled in; vendoring the
 // handful of field-agnostic helpers we need keeps the circuit tree self-contained
 // and BN254-free. These templates contain NO hardcoded field constants and NO
-// Poseidon — they are sound under `--prime bls12381`.
+// Poseidon - they are sound under `--prime bls12381`.
 //
 // SOUNDNESS NOTE: `LessThan(n)` / `LessEqThan(n)` assume both operands lie in
 // `[0, 2^n)` and require `n + 1` bits to decompose alias-free, so `n <= 252` over
 // the BLS12-381 scalar field `r` (2^253 < r < 2^255). Comparing FULL-FIELD values
 // (e.g. a raw Poseidon output, which can exceed 2^252) needs a dedicated
-// r-aware comparator — see merkle.circom non-membership.
+// r-aware comparator - see merkle.circom non-membership.
 // =============================================================================
 
 // Decompose `in` into `n` little-endian bits (out[0] = LSB). Constrains each bit
@@ -117,7 +117,7 @@ template AliasCheckBLS() {
 
 // Canonical 255-bit little-endian decomposition of a field element (out[0]=LSB).
 // Unlike Num2Bits(255) (which would admit the non-canonical `in + r` alias),
-// this binds the bits to be < r via AliasCheckBLS — sound over the full field.
+// this binds the bits to be < r via AliasCheckBLS - sound over the full field.
 template Num2BitsBLS() {
     signal input in;
     signal output bits[255];
@@ -135,7 +135,7 @@ template Num2BitsBLS() {
 }
 
 // out = 1 iff A < B, where A,B are given as n-bit little-endian arrays (index n-1
-// is the MSB). Pure bit comparison — sound when the bit arrays are canonical.
+// is the MSB). Pure bit comparison - sound when the bit arrays are canonical.
 template CompareBitsLT(n) {
     signal input a[n];
     signal input b[n];

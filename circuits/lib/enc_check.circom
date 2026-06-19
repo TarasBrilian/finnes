@@ -1,22 +1,22 @@
 pragma circom 2.1.6;
 
 // =============================================================================
-// enc_check.circom — auditor/recipient encryption well-formedness (FIN-004)
+// enc_check.circom - auditor/recipient encryption well-formedness (FIN-004)
 // =============================================================================
 //
 // CONCRETE (FIN-001 scheme A, LOCKED in docs/PUBLIC_IO.md "Ciphertext binding").
 // The auditor ciphertext is MANDATORY and bound to the proof as public inputs
 // (Security invariant #5). This gadget proves the published ciphertext slots are
-// the correct additive-Poseidon-keystream encryption of THIS note's plaintext —
+// the correct additive-Poseidon-keystream encryption of THIS note's plaintext -
 // the prover cannot ship a value-correct commitment alongside an undecryptable or
 // disagreeing ciphertext ("encrypt a zero" is impossible).
 //
 // Compile with `--prime bls12381`. Mirrors sdk/src/encrypt.ts EXACTLY (the
 // keystream, the slot layout, and the domain separation). Any divergence is a
-// parity break — guarded by scripts/test-enc-parity.ts.
+// parity break - guarded by scripts/test-enc-parity.ts.
 //
 // -----------------------------------------------------------------------------
-// SCHEME (no embedded curve — invariant #1; asymmetry lives off-circuit):
+// SCHEME (no embedded curve - invariant #1; asymmetry lives off-circuit):
 // -----------------------------------------------------------------------------
 //   auditor_pk = Poseidon(k_view)                         (bound in-circuit)
 //   shared     = Poseidon(k_view, rho_enc)                (rho_enc published)
@@ -31,16 +31,16 @@ pragma circom 2.1.6;
 // commitment opens to upstream (the caller wires `outNote.value` etc. into both),
 // so the ciphertext cannot disagree with the committed note. For the auditor
 // ciphertext the key is bound (`Poseidon(k_view) == auditor_pk`), so the prover
-// must encrypt to a key the auditor authorized — no griefing gap. The recipient
+// must encrypt to a key the auditor authorized - no griefing gap. The recipient
 // ciphertext is NON-mandatory (invariant #5 requires only the auditor one) and is
 // keyed by a sender↔recipient pairwise secret (demo: out-of-band), so it carries
-// no in-circuit key-authorization constraint — only well-formedness, for scanning.
+// no in-circuit key-authorization constraint - only well-formedness, for scanning.
 // =============================================================================
 
 include "poseidon_bls.circom";
 
 // -----------------------------------------------------------------------------
-// AuditorEncCheck — mandatory auditor ciphertext (K_a = 5).
+// AuditorEncCheck - mandatory auditor ciphertext (K_a = 5).
 //
 //   c_auditor = [ rho_enc,
 //                 value    + ks_1,
@@ -90,7 +90,7 @@ template AuditorEncCheck() {
 }
 
 // -----------------------------------------------------------------------------
-// RecipientEncCheck — optional recipient ciphertext (K_r = 5).
+// RecipientEncCheck - optional recipient ciphertext (K_r = 5).
 //
 //   c_recipient = [ rho_enc,
 //                   value    + ks_1,

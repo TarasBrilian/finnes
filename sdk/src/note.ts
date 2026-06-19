@@ -7,7 +7,7 @@
  *   nullifier  nf = Poseidon(rho, owner_sk)
  *
  * All hashing is Poseidon over the BLS12-381 scalar field (see poseidon.ts).
- * Performed only in the SDK and the circuit — never on-chain (invariant #11).
+ * Performed only in the SDK and the circuit - never on-chain (invariant #11).
  *
  * SECURITY (invariant #8): `owner_sk`, `rho`, `r_note`, and plaintext `value`
  * are secrets. NEVER log/persist/transmit them. The helpers here never emit
@@ -35,7 +35,7 @@ export const MAX_NOTE_VALUE: bigint = (1n << 64n) - 1n;
  * TODO(crypto): define the canonical, circuit-matching encoding of an SAC
  * address (a Stellar contract `C...` / StrKey) into one or more `Fr` elements
  * and feed it to Poseidon exactly as `circuits/lib/note.circom` does. Throws
- * until fixed — must not guess an encoding that disagrees with the circuit.
+ * until fixed - must not guess an encoding that disagrees with the circuit.
  */
 export function sacAddressToField(_sacAddress: string): Fr {
   throw new Error(

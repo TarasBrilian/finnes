@@ -1,7 +1,7 @@
 pragma circom 2.1.6;
 
 // =============================================================================
-// unshield.circom — shielded -> transparent (1+ shielded inputs, transparent out)
+// unshield.circom - shielded -> transparent (1+ shielded inputs, transparent out)
 // =============================================================================
 //
 // SCAFFOLD. Composition & public-signal ordering are concrete and normative;
@@ -11,7 +11,7 @@ pragma circom 2.1.6;
 //   (`--prime bls12381` is a COMPILER flag, not a pragma.)
 //
 // -----------------------------------------------------------------------------
-// PUBLIC INPUT ORDER — COPIED VERBATIM FROM docs/PUBLIC_IO.md
+// PUBLIC INPUT ORDER - COPIED VERBATIM FROM docs/PUBLIC_IO.md
 // -----------------------------------------------------------------------------
 //  0  anchor_root
 //  1  kyc_root            (transparent recipient compliance)
@@ -20,9 +20,9 @@ pragma circom 2.1.6;
 //  4  frozen_root
 //  5  auditor_pk          (TODO)
 //  6  nf_in_0
-//  7  asset_id            (public — for the SAC transfer)
-//  8  amount              (public — raw SAC units leaving)
-//  9  recipient           (public — transparent Stellar address)
+//  7  asset_id            (public - for the SAC transfer)
+//  8  amount              (public - raw SAC units leaving)
+//  9  recipient           (public - transparent Stellar address)
 // 10  cm_change_0         (optional change note; 0/null if none)
 // 11  new_root
 // 12  fee
@@ -35,7 +35,7 @@ pragma circom 2.1.6;
 // NON-MEMBERSHIP of the spent commitment (escape-hatch closure), transparent
 // `recipient` KYC/non-sanctioned, conservation `amount + change == input`.
 //
-// RAW SAC UNITS only — no rescaling (Security invariant #16).
+// RAW SAC UNITS only - no rescaling (Security invariant #16).
 // =============================================================================
 
 include "lib/poseidon_bls.circom";
@@ -131,7 +131,7 @@ template Unshield(D, K_a) {
     }
     incl.root <== anchor_root;
 
-    // FROZEN non-membership of the spent commitment — fund-critical (invariant #19).
+    // FROZEN non-membership of the spent commitment - fund-critical (invariant #19).
     component frozenNM = MerkleNonMembership(D);
     frozenNM.target <== spent.cm;
     frozenNM.lo <== frozen_lo;
@@ -219,7 +219,7 @@ template Unshield(D, K_a) {
     sanctionNM.root <== sanction_root;
 
     // =========================================================================
-    // 6. MANDATORY auditor encryption — binds the CHANGE note plaintext.
+    // 6. MANDATORY auditor encryption - binds the CHANGE note plaintext.
     //    (The transparent leg is already public; the change note must still be
     //     auditable.) Security invariant #5.
     // =========================================================================
@@ -248,8 +248,8 @@ template Unshield(D, K_a) {
 }
 
 // -----------------------------------------------------------------------------
-// main — order MUST match docs/PUBLIC_IO.md. D=32; K_a TODO placeholder (4).
-// (No c_recipient for unshield — transparent recipient has no shielded note.)
+// main - order MUST match docs/PUBLIC_IO.md. D=32; K_a TODO placeholder (4).
+// (No c_recipient for unshield - transparent recipient has no shielded note.)
 // -----------------------------------------------------------------------------
 component main { public [
     anchor_root,

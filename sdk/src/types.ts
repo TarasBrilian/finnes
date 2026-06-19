@@ -5,7 +5,7 @@
  *   - All field-native quantities are represented off-chain as `bigint`
  *     (decimal-string-able for readability; hex/bytes only at the contract
  *     boundary). Every such value is an element of the BLS12-381 scalar field
- *     `r` — callers must keep values reduced mod `r`.
+ *     `r` - callers must keep values reduced mod `r`.
  *   - All token amounts are RAW SAC units as `bigint`. They are NEVER rescaled
  *     by decimals anywhere in the ZK layer (CLAUDE.md invariant #16). Decimals
  *     live only in the assets registry and the SDK display layer.
@@ -24,7 +24,7 @@ export type RawAmount = bigint;
 
 /**
  * Asset identity, self-binding: `asset_id = Poseidon(sac_address)`.
- * Computed in-circuit and in the SDK — never on-chain (invariant #11).
+ * Computed in-circuit and in the SDK - never on-chain (invariant #11).
  */
 export type AssetId = Fr;
 
@@ -41,7 +41,7 @@ export type MerkleRoot = Fr;
 export type OwnerPk = Fr;
 
 /**
- * A spending secret key. SECRET — see invariant #8. Never log/persist/transmit.
+ * A spending secret key. SECRET - see invariant #8. Never log/persist/transmit.
  * Branded so it cannot be accidentally passed where a public value is expected.
  */
 export type OwnerSk = Fr & { readonly __brand: 'OwnerSk' };
@@ -84,7 +84,7 @@ export interface Ciphertext {
 
 /** A note paired with the ciphertexts produced for it (auditor mandatory). */
 export interface NoteCiphertexts {
-  /** Mandatory regulator/auditor ciphertext (invariant #5 — never optional). */
+  /** Mandatory regulator/auditor ciphertext (invariant #5 - never optional). */
   readonly cAuditor: Ciphertext;
   /** Recipient ciphertext (so the recipient can discover the note via scan). */
   readonly cRecipient?: Ciphertext;
@@ -100,7 +100,7 @@ export interface AssetRegistryLeaf {
   readonly assetId: AssetId;
   /** Stellar Asset Contract address (the self-binding preimage of `asset_id`). */
   readonly sacAddress: string;
-  /** Display decimals — SDK/registry only; NEVER enters the ZK layer. */
+  /** Display decimals - SDK/registry only; NEVER enters the ZK layer. */
   readonly decimals: number;
   /** Per-asset transfer limit in raw SAC units (witness; enforced via membership). */
   readonly perTxLimitRaw: RawAmount;
@@ -133,7 +133,7 @@ export interface StateRoots {
   readonly sanctionRoot: MerkleRoot;
   /** Authorized-assets registry root (windowed). */
   readonly assetsRoot: MerkleRoot;
-  /** Issuer-managed frozen-commitment set, non-membership (STRICT — invariant #6). */
+  /** Issuer-managed frozen-commitment set, non-membership (STRICT - invariant #6). */
   readonly frozenRoot: MerkleRoot;
 }
 

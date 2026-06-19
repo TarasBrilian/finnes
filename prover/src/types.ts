@@ -1,11 +1,11 @@
 /**
  * Core prover types for Finnes.
  *
- * SECURITY (CLAUDE.md invariant #8 — "Never log or persist secrets"):
+ * SECURITY (CLAUDE.md invariant #8 - "Never log or persist secrets"):
  *   `Witness` carries `owner_sk`, `rho`, `r_note`, plaintext note `value`, and
  *   encryption randomness. NONE of these may ever be logged, serialised to disk,
  *   or sent over the network. The prover runs INSIDE the client/institution trust
- *   zone (single-tenant — never a shared multi-tenant service). See `prove.ts`.
+ *   zone (single-tenant - never a shared multi-tenant service). See `prove.ts`.
  */
 
 import type { Groth16Proof, PublicSignals } from "snarkjs";
@@ -30,7 +30,7 @@ export type CircuitName = "shield" | "transfer" | "unshield" | "dvp";
  *   nullifier  nf = Poseidon(rho, owner_sk)
  *
  * SECRET FIELDS: `value`, `rho`, `r_note` (and the derived/raw `owner_sk` held
- * elsewhere). Treat the whole object as secret — never log it.
+ * elsewhere). Treat the whole object as secret - never log it.
  */
 export interface Note {
   /** Poseidon(sac_address); raw SAC asset identity (self-binding). */
@@ -39,9 +39,9 @@ export interface Note {
   value: FieldElement;
   /** Poseidon(owner_sk). */
   owner_pk: FieldElement;
-  /** Per-note nullifier seed. SECRET — NEVER log. */
+  /** Per-note nullifier seed. SECRET - NEVER log. */
   rho: FieldElement;
-  /** Commitment blinding randomness. SECRET — NEVER log. */
+  /** Commitment blinding randomness. SECRET - NEVER log. */
   r_note: FieldElement;
 }
 
@@ -71,7 +71,7 @@ export interface Witness {
 
 /**
  * The output of a successful proof: exactly what the relayer/frontend submits to
- * the Soroban contract. `publicSignals` ordering is normative — it MUST match
+ * the Soroban contract. `publicSignals` ordering is normative - it MUST match
  * docs/PUBLIC_IO.md for the circuit (see witness.ts).
  *
  * Contains NO secrets: only commitments, nullifiers, roots, ciphertexts, and the

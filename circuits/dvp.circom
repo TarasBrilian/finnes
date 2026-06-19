@@ -1,7 +1,7 @@
 pragma circom 2.1.6;
 
 // =============================================================================
-// dvp.circom — atomic two-asset settlement (DEMO: single combined proof)
+// dvp.circom - atomic two-asset settlement (DEMO: single combined proof)
 // =============================================================================
 //
 // SCAFFOLD. Composition & public-signal ordering are concrete and normative;
@@ -16,14 +16,14 @@ pragma circom 2.1.6;
 // pairing). That is acceptable ONLY because a test harness controls both
 // keypairs; it does NOT demonstrate the no-key-sharing property. PRODUCTION DvP
 // is the escrow / two-phase flow (ARCHITECTURE.md -> "Settlement (DvP)") built
-// from transfer/shield variants — NOT this circuit. Counterparty consent is
+// from transfer/shield variants - NOT this circuit. Counterparty consent is
 // on-chain via require_auth (Ed25519), NEVER an in-circuit signature.
 // -----------------------------------------------------------------------------
 //
 // Two legs: asset X (A -> B) and asset Y (B -> A).
 //
 // -----------------------------------------------------------------------------
-// PUBLIC INPUT ORDER — COPIED VERBATIM FROM docs/PUBLIC_IO.md
+// PUBLIC INPUT ORDER - COPIED VERBATIM FROM docs/PUBLIC_IO.md
 // -----------------------------------------------------------------------------
 //  0  anchor_root
 //  1  kyc_root
@@ -155,7 +155,7 @@ template Dvp(D, K_a, K_r) {
     signal input nextIndex;
 
     // =========================================================================
-    // LEG X — A spends asset X to B
+    // LEG X - A spends asset X to B
     // =========================================================================
     component X_inRange = Num2Bits(64);  X_inRange.in <== X_in_value;
     component X_outRange = Num2Bits(64); X_outRange.in <== X_out_value;
@@ -195,7 +195,7 @@ template Dvp(D, K_a, K_r) {
     X_out.r_note   <== X_out_r_note;
     cm_out_X === X_out.cm;
 
-    // per-asset conservation for leg X (no cross-asset sum — invariant #3)
+    // per-asset conservation for leg X (no cross-asset sum - invariant #3)
     X_in_value === X_out_value + fee_X;
 
     component X_assets = AssetsMembership(D);
@@ -248,7 +248,7 @@ template Dvp(D, K_a, K_r) {
     X_recipEnc.enc_rand <== X_enc_rand_recipient;
 
     // =========================================================================
-    // LEG Y — B spends asset Y to A
+    // LEG Y - B spends asset Y to A
     // =========================================================================
     component Y_inRange = Num2Bits(64);  Y_inRange.in <== Y_in_value;
     component Y_outRange = Num2Bits(64); Y_outRange.in <== Y_out_value;
@@ -351,7 +351,7 @@ template Dvp(D, K_a, K_r) {
 }
 
 // -----------------------------------------------------------------------------
-// main — order MUST match docs/PUBLIC_IO.md. D=32; K_a/K_r TODO placeholders (4).
+// main - order MUST match docs/PUBLIC_IO.md. D=32; K_a/K_r TODO placeholders (4).
 // -----------------------------------------------------------------------------
 component main { public [
     anchor_root,

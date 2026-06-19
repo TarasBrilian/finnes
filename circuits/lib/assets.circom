@@ -1,11 +1,11 @@
 pragma circom 2.1.6;
 
 // =============================================================================
-// assets.circom — authorized-assets registry membership + per-tx limit (FIN-005)
+// assets.circom - authorized-assets registry membership + per-tx limit (FIN-005)
 // =============================================================================
 //
 // CONCRETE. Composition + binding are real; all hashing is Poseidon-BLS and all
-// comparisons use the VENDORED field-agnostic gadgets (bits.circom) — NO circomlib
+// comparisons use the VENDORED field-agnostic gadgets (bits.circom) - NO circomlib
 // (invariant #1; circomlib is BN254-pinned and is not installed).
 //
 // Compile with `--prime bls12381`.
@@ -18,15 +18,15 @@ pragma circom 2.1.6;
 // committed as `assets_root`. asset_id = Poseidon(sac_address) (self-binding,
 // computed in-circuit, never on-chain). Per-asset limits flow through MEMBERSHIP
 // and are checked as `value <= per_tx_limit_raw`. The limit is a WITNESS, never
-// a per-asset public input — exposing it would fingerprint the otherwise-hidden
+// a per-asset public input - exposing it would fingerprint the otherwise-hidden
 // asset (Security invariant #17).
 //
-// RAW UNITS ONLY — `decimals` is carried in the leaf for binding/parity but the
+// RAW UNITS ONLY - `decimals` is carried in the leaf for binding/parity but the
 // circuit NEVER rescales by it (Security invariant #16). It exists only so the
 // leaf hash matches the registry; display scaling lives in the SDK.
 //
 // LEAF HASH ARITY: the leaf has 4 fields, but the Poseidon-BLS parameter set is
-// only generated for widths t ∈ {2,3,6} (arities 1, 2, 5 — see poseidon.ts
+// only generated for widths t ∈ {2,3,6} (arities 1, 2, 5 - see poseidon.ts
 // `widthsInUse`). So the leaf is hashed at arity 5 (t=6) with a single 0 pad:
 //   leaf = Poseidon(asset_id, sac_address, decimals, per_tx_limit_raw, 0)
 // This MUST match sdk/src/merkle.ts `assetsLeafHash` (parity gate
@@ -69,7 +69,7 @@ template AssetsMembership(depth) {
     asset_id === aid.asset_id;
 
     // (2) leaf = Poseidon(asset_id, sac_address, decimals, per_tx_limit_raw, 0)
-    //     (arity 5 / t=6, single 0 pad — see header note).
+    //     (arity 5 / t=6, single 0 pad - see header note).
     component leafH = PoseidonBLS(5);
     leafH.in[0] <== asset_id;
     leafH.in[1] <== sac_address;

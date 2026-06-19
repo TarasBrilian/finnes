@@ -8,7 +8,7 @@
  * and the contract stores the outputs verbatim. This SDK tree MIRRORS the exact
  * hashing of `circuits/lib/merkle.circom` so the SDK/prover, the circuit, and the
  * indexer agree on roots/paths/frontiers. The node hash is Poseidon over the
- * BLS12-381 scalar field (poseidon.ts) — the same one the circuit uses.
+ * BLS12-381 scalar field (poseidon.ts) - the same one the circuit uses.
  *
  * CANONICAL CONVENTIONS (must match circuit + contract genesis + indexer):
  *   - Binary tree, node = Poseidon(left, right)  (hashNode).
@@ -56,7 +56,7 @@ export function imtLeafHash(value: Fr, nextIndex: Fr, nextValue: Fr): Fr {
  * `0` pad lifts the 4-field leaf to a supported Poseidon arity (5 → t=6; the
  * param set only covers t ∈ {2,3,6}). MUST match `AssetsMembership`'s `leafH` in
  * circuits/lib/assets.circom (parity gate scripts/test-assets-parity.ts). Raw
- * units only — `decimals` is bound into the hash but never rescales (invariant #16).
+ * units only - `decimals` is bound into the hash but never rescales (invariant #16).
  */
 export function assetsLeafHash(
   assetId: Fr,
@@ -185,7 +185,7 @@ export class IncrementalMerkleTree {
   }
 
   /**
-   * Current frontier (filled subtrees), `depth` field elements — the public
+   * Current frontier (filled subtrees), `depth` field elements - the public
    * input `old_frontier` (invariant #12). Empty tree → zeros[0..depth-1].
    */
   frontier(): Frontier {

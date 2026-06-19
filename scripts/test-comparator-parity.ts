@@ -4,7 +4,7 @@
 // raw Poseidon outputs that span the whole scalar field. These tests prove the
 // vendored r-aware gadgets (circuits/lib/bits.circom) are SOUND over [0, r):
 //   - AliasCheckBLS accepts canonical (< r) bit reps and REJECTS r, r+k, and the
-//     all-ones 255-bit value — including the exact r/r-1 boundary tied to the
+//     all-ones 255-bit value - including the exact r/r-1 boundary tied to the
 //     SDK modulus, so a malicious non-canonical witness cannot pass.
 //   - LessThanField matches integer `<` for values that exceed 2^252.
 // Run: `npx tsx scripts/test-comparator-parity.ts`.
@@ -74,7 +74,7 @@ for (const c of aliasCases) {
 
 // --- LessThanField: matches integer < across the full field --------------------
 compile('lessfield');
-const BIG = 1n << 253n; // exceeds 2^252 — the vendored LessThan would be unsound here
+const BIG = 1n << 253n; // exceeds 2^252 - the vendored LessThan would be unsound here
 const cmpCases: ReadonlyArray<[bigint, bigint]> = [
   [3n, 7n],
   [7n, 3n],
@@ -99,4 +99,4 @@ if (failed) {
   console.error('\nCOMPARATOR SOUNDNESS FAILED.');
   process.exit(1);
 }
-console.log('\nCOMPARATOR SOUNDNESS OK — r-aware alias check + full-field LessThan are sound.');
+console.log('\nCOMPARATOR SOUNDNESS OK - r-aware alias check + full-field LessThan are sound.');

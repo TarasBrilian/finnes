@@ -1,7 +1,7 @@
 // Note gadget parity gate (FIN-003).
 //
 // Asserts the circuit's note commitment / nullifier (circuits/lib/note.circom)
-// equal the SDK's (sdk/src/note.ts) for shared inputs — catching any
+// equal the SDK's (sdk/src/note.ts) for shared inputs - catching any
 // input-ORDERING drift between the two surfaces (the most common integration
 // bug, CLAUDE.md). Run: `npx tsx scripts/test-note-parity.ts`.
 
@@ -73,7 +73,7 @@ function check(label: string, ok: boolean, detail = ''): void {
 }
 
 if (failed) {
-  console.error('\nNOTE PARITY FAILED — circuit and SDK disagree (check input ordering).');
+  console.error('\nNOTE PARITY FAILED - circuit and SDK disagree (check input ordering).');
   process.exit(1);
 }
-console.log('\nNOTE PARITY OK — circuit and SDK agree on commitment + nullifier.');
+console.log('\nNOTE PARITY OK - circuit and SDK agree on commitment + nullifier.');

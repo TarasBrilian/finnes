@@ -1,5 +1,5 @@
 /**
- * @finnes/sdk — public surface.
+ * @finnes/sdk - public surface.
  *
  * Client SDK for the Finnes confidential RWA settlement protocol: shielded-note
  * management, Poseidon-BLS commitments/nullifiers, off-chain Merkle helpers,
@@ -13,7 +13,7 @@
  * is fixed.
  *
  * SECURITY (invariant #8): secrets (owner_sk, rho, r_note, plaintext values,
- * auditor_sk) live only in the client trust zone — never logged or persisted.
+ * auditor_sk) live only in the client trust zone - never logged or persisted.
  */
 
 export * from './types.js';

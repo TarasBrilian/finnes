@@ -85,7 +85,7 @@ expect('forged asset_id rejected', witnessOk(inputFor(0, 5_000_000n, { asset_id:
 expect('tampered assets_root rejected', witnessOk(inputFor(0, 5_000_000n, { assets_root: (assetsRoot + 1n).toString() })) === false);
 
 if (failed) {
-  console.error('\nASSETS PARITY FAILED — circuit and SDK disagree, or a constraint is missing.');
+  console.error('\nASSETS PARITY FAILED - circuit and SDK disagree, or a constraint is missing.');
   process.exit(1);
 }
-console.log('\nASSETS PARITY OK — membership + self-binding + per-tx limit enforced; forgeries rejected.');
+console.log('\nASSETS PARITY OK - membership + self-binding + per-tx limit enforced; forgeries rejected.');

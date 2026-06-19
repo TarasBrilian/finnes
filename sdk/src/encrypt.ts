@@ -3,8 +3,8 @@
  *
  * Implements FIN-001 scheme A (LOCKED, docs/PUBLIC_IO.md "Ciphertext binding"):
  * an additive Poseidon keystream over the BLS12-381 scalar field. This mirrors
- * `circuits/lib/enc_check.circom` EXACTLY — same shared-secret derivation, same
- * per-slot domain separation, same packing — so an SDK-produced ciphertext
+ * `circuits/lib/enc_check.circom` EXACTLY - same shared-secret derivation, same
+ * per-slot domain separation, same packing - so an SDK-produced ciphertext
  * satisfies the in-circuit binding (parity gate: scripts/test-enc-parity.ts).
  *
  *   auditor_pk = Poseidon(k_view)
@@ -29,7 +29,7 @@ import { poseidonBLS, toField } from './poseidon.js';
 export const K_A = 5 as const;
 export const K_R = 5 as const;
 
-/** Randomness used to encrypt a note. SECRET — see invariant #8. */
+/** Randomness used to encrypt a note. SECRET - see invariant #8. */
 export interface EncryptionRandomness {
   /** Published per-note nonce `rho_enc` in `[0, r)`; occupies ciphertext slot 0. */
   readonly rhoEnc: Fr;
@@ -112,7 +112,7 @@ export function decryptAuditor(c: Ciphertext, kView: Fr): AuditorPlaintext {
  * sender↔recipient pairwise secret (demo: OOB-shared).
  *
  * Layout: [rho_enc, value+ks1, asset_id+ks2, rho+ks3, r_note+ks4]. `owner_pk` is
- * NOT packed — the recipient re-derives it from its own `owner_sk`.
+ * NOT packed - the recipient re-derives it from its own `owner_sk`.
  */
 export function encryptToRecipient(
   note: Note,

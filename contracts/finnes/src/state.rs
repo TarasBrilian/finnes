@@ -2,8 +2,8 @@
 //!
 //! ## Storage durability (Protocol 23 note)
 //!
-//! Fund-critical state — the nullifier set and the commitment-tree
-//! frontier/root — lives in **persistent** storage. On Soroban, persistent
+//! Fund-critical state - the nullifier set and the commitment-tree
+//! frontier/root - lives in **persistent** storage. On Soroban, persistent
 //! entries can expire (TTL), but under Protocol 23 archived persistent entries
 //! are **auto-restored** on access (no manual `RestoreFootprint` for the common
 //! path). We still bump TTL on every mutation so live state does not drift into
@@ -41,9 +41,9 @@ pub enum DataKey {
     // --- instance (config; small, loaded with the contract) ---
     /// Admin / deployer address (calls `init` and root-update admin fns).
     Admin,
-    /// Auditor (regulator) view-key public key — the **read** authority.
+    /// Auditor (regulator) view-key public key - the **read** authority.
     AuditorPk,
-    /// Issuer authority — the **write** authority (freeze/clawback, root updates).
+    /// Issuer authority - the **write** authority (freeze/clawback, root updates).
     IssuerAuthority,
     /// KYC-approved set root (membership). Windowed.
     KycRoot,

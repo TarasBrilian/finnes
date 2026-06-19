@@ -1,5 +1,5 @@
 #![no_std]
-//! Finnes — confidential RWA settlement contract for Soroban.
+//! Finnes - confidential RWA settlement contract for Soroban.
 //!
 //! Shielded-note (UTXO) settlement: RWA value moves as Poseidon commitments
 //! (hidden amount/asset/owner) with nullifiers preventing double-spend. The
@@ -8,14 +8,14 @@
 //! hashing** (invariant #11): the circuit proves the Merkle transition and the
 //! contract stores the output `(new_frontier, new_root)` verbatim.
 //!
-//! See README.md, ARCHITECTURE.md, CLAUDE.md (Security invariants — binding),
+//! See README.md, ARCHITECTURE.md, CLAUDE.md (Security invariants - binding),
 //! and docs/PUBLIC_IO.md (canonical public-input ordering) at the repo root.
 //!
 //! ## Canonical ordering of checks in every transfer entrypoint (invariant #9)
 //!
 //! 1. validate the anchor root (recent-roots window),
 //! 2. check nullifiers are unused,
-//! 3. check compliance roots match state — `frozen_root` **strict**;
+//! 3. check compliance roots match state - `frozen_root` **strict**;
 //!    `kyc_root`/`sanction_root`/`assets_root` **windowed**; `auditor_pk` exact,
 //! 4. verify the Groth16 proof (binds ciphertexts + frozen non-membership),
 //! 5. only then mutate state: store new frontier/root, insert nullifiers and
@@ -48,7 +48,7 @@ pub struct FinnesContract;
 #[contractimpl]
 impl FinnesContract {
     // -----------------------------------------------------------------------
-    // init — admin setup. Idempotent guard; sets config + seeds the tree.
+    // init - admin setup. Idempotent guard; sets config + seeds the tree.
     // -----------------------------------------------------------------------
     /// Initialise the contract. Stores the admin, the auditor (read) key, the
     /// issuer authority (write) key, the initial compliance roots, the seed
@@ -106,17 +106,17 @@ impl FinnesContract {
     }
 
     // -----------------------------------------------------------------------
-    // shield — transparent → shielded.
+    // shield - transparent → shielded.
     // -----------------------------------------------------------------------
     /// Deposit a transparent RWA token, minting one confidential output note.
     ///
     /// `(asset_id, amount)` are public; the proof shows the new commitment opens
-    /// to them without revealing `(owner, rho, r)` (invariant #18 — prevents
+    /// to them without revealing `(owner, rho, r)` (invariant #18 - prevents
     /// minting a note labelled as a more-valuable asset). No shielded inputs,
     /// hence no nullifiers and no anchor root.
     ///
     /// NOTE: the actual SAC `transfer` of the deposited token into the contract
-    /// (and `depositor.require_auth()`) is a TODO — see step 0 below.
+    /// (and `depositor.require_auth()`) is a TODO - see step 0 below.
     pub fn shield(env: Env, depositor: Address, proof: Proof, pi: ShieldPublicInputs) -> Result<(), Error> {
         ensure_initialized(&env)?;
 
@@ -136,7 +136,7 @@ impl FinnesContract {
             return Err(Error::UnknownAnchorRoot);
         }
 
-        // 4. Verify Groth16 (binds c_auditor — mandatory, invariant #5).
+        // 4. Verify Groth16 (binds c_auditor - mandatory, invariant #5).
         let vk = state::get_vk(&env, Circuit::Shield).ok_or(Error::VerifyingKeyMissing)?;
         verifier::verify_groth16(&env, &vk, &proof, &pi.to_scalars(&env))?;
 
@@ -149,7 +149,7 @@ impl FinnesContract {
     }
 
     // -----------------------------------------------------------------------
-    // confidential_transfer — shielded → shielded (2-in / 2-out).
+    // confidential_transfer - shielded → shielded (2-in / 2-out).
     // -----------------------------------------------------------------------
     /// Move value confidentially. The public sees only opaque commitments,
     /// nullifiers, and ciphertexts. Enforces the canonical ordered checks.
@@ -203,7 +203,7 @@ impl FinnesContract {
     }
 
     // -----------------------------------------------------------------------
-    // settle_dvp — atomic two-asset settlement.
+    // settle_dvp - atomic two-asset settlement.
     // -----------------------------------------------------------------------
     /// Settle a two-asset DvP.
     ///
@@ -254,7 +254,7 @@ impl FinnesContract {
             return Err(Error::UnknownAnchorRoot);
         }
 
-        // 4. ONE Groth16 proof for both legs (invariant #7 — never two).
+        // 4. ONE Groth16 proof for both legs (invariant #7 - never two).
         let vk = state::get_vk(&env, Circuit::Dvp).ok_or(Error::VerifyingKeyMissing)?;
         verifier::verify_groth16(&env, &vk, &proof, &pi.to_scalars(&env))?;
 
@@ -268,7 +268,7 @@ impl FinnesContract {
     }
 
     // -----------------------------------------------------------------------
-    // unshield — shielded → transparent.
+    // unshield - shielded → transparent.
     // -----------------------------------------------------------------------
     /// Exit the shielded domain: reveal `(asset_id, amount, recipient)` and
     /// `transfer` the SAC token to the transparent recipient.
@@ -337,7 +337,7 @@ impl FinnesContract {
     // Admin: root updates (write authority = issuer_authority).
     // -----------------------------------------------------------------------
     /// Update `kyc_root`, pushing the prior value out of the window naturally
-    /// (windowed acceptance is per-root; KYC change is benign — invariant #6).
+    /// (windowed acceptance is per-root; KYC change is benign - invariant #6).
     pub fn update_kyc_root(env: Env, new_root: Root) -> Result<(), Error> {
         require_issuer(&env)?;
         state::set_kyc_root(&env, &new_root);
@@ -362,7 +362,7 @@ impl FinnesContract {
     }
 
     // -----------------------------------------------------------------------
-    // Admin: freeze / clawback (two-phase, two-key — invariant #14).
+    // Admin: freeze / clawback (two-phase, two-key - invariant #14).
     // -----------------------------------------------------------------------
     /// Phase 2 (write): add `cm_target` to the frozen set and advance
     /// `frozen_root` to `new_frozen_root` (the issuer-set root the circuits will
@@ -381,7 +381,7 @@ impl FinnesContract {
         }
         state::insert_frozen(&env, &cm_target);
         // Advance the strict frozen root verbatim (computed off-chain by the
-        // issuer; the contract performs NO hashing — invariant #11).
+        // issuer; the contract performs NO hashing - invariant #11).
         state::set_frozen_root(&env, &new_frozen_root);
         state::bump_instance_ttl(&env);
         // TODO: emit Freeze event (cm_target, new_frozen_root).
@@ -390,10 +390,10 @@ impl FinnesContract {
 
     /// Mint a recovery note for a clawed-back commitment (issuer write
     /// authority). The recovery is a normal output note whose commitment is
-    /// folded into the tree via a proof — so this reuses the `shield`-style
+    /// folded into the tree via a proof - so this reuses the `shield`-style
     /// transition. Frozen notes are unspendable by their owner (non-membership
     /// in every spend), and clawback cannot be done by computing a nullifier
-    /// (that needs the owner's spending key, which no authority holds —
+    /// (that needs the owner's spending key, which no authority holds -
     /// invariant #14).
     pub fn mint_recovery(env: Env, proof: Proof, pi: ShieldPublicInputs) -> Result<(), Error> {
         require_issuer(&env)?;
@@ -454,7 +454,7 @@ fn require_issuer(env: &Env) -> Result<(), Error> {
     Ok(())
 }
 
-/// `frozen_root` is matched STRICTLY against current state (invariant #6 — the
+/// `frozen_root` is matched STRICTLY against current state (invariant #6 - the
 /// immediacy of clawback). Never accept a stale frozen root.
 fn check_frozen_root_strict(env: &Env, supplied: &Root) -> Result<(), Error> {
     let current = state::get_frozen_root(env).ok_or(Error::NotInitialized)?;
@@ -468,7 +468,7 @@ fn check_frozen_root_strict(env: &Env, supplied: &Root) -> Result<(), Error> {
 // The windowed compliance roots change rarely and benignly. For this scaffold a
 // single current value is stored; we accept an exact match. A future revision
 // can replace each with a per-root recent-window (like the commitment-root ring)
-// without touching the entrypoint flow — that is the intent of the windowed
+// without touching the entrypoint flow - that is the intent of the windowed
 // policy in invariant #6. TODO: widen to a windowed match if root churn during
 // proving latency becomes an issue.
 fn check_kyc_root(env: &Env, supplied: &Root) -> Result<(), Error> {
@@ -503,7 +503,7 @@ fn check_auditor_pk(env: &Env, supplied: &Scalar) -> Result<(), Error> {
     }
 }
 
-/// True if a scalar is the all-zero (null) sentinel — used for the
+/// True if a scalar is the all-zero (null) sentinel - used for the
 /// "no recipient"/"no change note" cases.
 fn is_zero_scalar(s: &Scalar) -> bool {
     let zero = [0u8; 32];

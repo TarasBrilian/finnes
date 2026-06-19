@@ -1,7 +1,7 @@
 /**
  * Local sanity verification (optional).
  *
- * This is NOT the production verification path — on-chain, the Soroban contract
+ * This is NOT the production verification path - on-chain, the Soroban contract
  * verifies the Groth16 proof via BLS12-381 host functions against the embedded VK
  * (CLAUDE.md invariant #9). This helper exists purely so a prover can locally
  * confirm "the proof I just produced actually verifies against the exported VK"

@@ -2,7 +2,7 @@
 //!
 //! Based on `stellar/soroban-examples/groth16_verifier` (CLAUDE.md →
 //! "Base the Soroban verifier on …"). This is the **only** module that touches
-//! the crypto host functions — `env.crypto().bls12_381()` (Conventions: keep
+//! the crypto host functions - `env.crypto().bls12_381()` (Conventions: keep
 //! host-fn calls in verifier.rs).
 //!
 //! ## What Groth16 verification is
@@ -14,7 +14,7 @@
 //!   e(A, B) == e(alpha, beta) · e(vk_x, gamma) · e(C, delta)
 //! ```
 //!
-//! where `vk_x = IC_0 + Σ_i x_i · IC_i` (one G1 scalar-mul per public input —
+//! where `vk_x = IC_0 + Σ_i x_i · IC_i` (one G1 scalar-mul per public input -
 //! this is why PUBLIC_IO keeps the input set tight). Rearranged into a single
 //! multi-pairing product that must equal the identity in `GT`, which the host
 //! `pairing_check` evaluates.
@@ -24,7 +24,7 @@
 //!   - #5: public inputs (incl. ciphertext field elements) are bound by the
 //!     verify; the contract never hashes ciphertext blobs.
 //!   - #7: exactly one pairing-check per transaction.
-//!   - No `unwrap()` on untrusted bytes — decoding failures return `Error`.
+//!   - No `unwrap()` on untrusted bytes - decoding failures return `Error`.
 
 use soroban_sdk::{Env, Vec};
 
@@ -66,16 +66,16 @@ pub fn verify_groth16(
     //       each `vk.ic[i]`, and `proof.a/.b/.c` into the SDK's `G1Affine` /
     //       `G2Affine` wrappers (e.g. `G1Affine::from_bytes(BytesN<96>)` /
     //       `G2Affine::from_bytes(BytesN<192>)` for uncompressed, or the
-    //       compressed variants — fix the encoding to match the snarkjs/VK
+    //       compressed variants - fix the encoding to match the snarkjs/VK
     //       export and the prover). On any decode failure return
     //       `Error::MalformedProof` (proof side) or `Error::MalformedPublicInputs`
-    //       (VK/ic side). DO NOT `unwrap()` — these bytes are untrusted.
+    //       (VK/ic side). DO NOT `unwrap()` - these bytes are untrusted.
 
     // --- 2. Accumulate the public-input linear combination vk_x. ---
     //   vk_x = IC_0 + Σ_{i=1..n} public_inputs[i-1] · IC_i
     // TODO: start the accumulator at the decoded `vk.ic[0]`, then for each
     //       public input scalar, parse it into the host `Fr` scalar type
-    //       (`Fr::from_bytes` — reject out-of-field encodings) and use
+    //       (`Fr::from_bytes` - reject out-of-field encodings) and use
     //       `bls.g1_mul(ic_i, x_i)` + `bls.g1_add(acc, term)` to fold it in.
     //       Iterate `public_inputs` paired with `vk.ic[1..]`.
     for _x in public_inputs.iter() {

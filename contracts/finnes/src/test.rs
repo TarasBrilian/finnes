@@ -157,27 +157,27 @@ fn admin_can_update_kyc_root() {
 // Transfer-flow tests (BLOCKED on real proof verification).
 // ---------------------------------------------------------------------------
 
-// TODO: positive `confidential_transfer` — needs (a) a real Transfer VK, (b) a
+// TODO: positive `confidential_transfer` - needs (a) a real Transfer VK, (b) a
 //       proof + public inputs from the prover for a 2-in/2-out witness, (c)
 //       `verifier::verify_groth16` implemented. Until then this path returns
 //       Error::InvalidProof by construction (the verifier placeholder refuses).
 //
-// TODO: negative — double-spend: submit a transfer reusing a nullifier already
+// TODO: negative - double-spend: submit a transfer reusing a nullifier already
 //       inserted; expect Error::NullifierAlreadyUsed (this check runs BEFORE the
 //       proof, so it is testable without real proof math once we can insert a
 //       nullifier via a successful prior transfer or a test seam).
 //
-// TODO: negative — stale frozen_root: supply a frozen_root != state; expect
+// TODO: negative - stale frozen_root: supply a frozen_root != state; expect
 //       Error::StaleFrozenRoot (also pre-proof; testable now with a test seam to
 //       set public inputs).
 //
-// TODO: negative — unknown anchor root: supply an anchor_root not in the window;
+// TODO: negative - unknown anchor root: supply an anchor_root not in the window;
 //       expect Error::UnknownAnchorRoot.
 //
-// TODO: unshield — assert frozen_root strict + zero-recipient rejection
+// TODO: unshield - assert frozen_root strict + zero-recipient rejection
 //       (Error::RecipientNotAuthorised), then the full happy path once proofs land.
 //
-// TODO: settle_dvp — assert both `require_auth`s are demanded and a single proof
+// TODO: settle_dvp - assert both `require_auth`s are demanded and a single proof
 //       path is taken (invariant #7).
 //
-// TODO: freeze — assert AlreadyFrozen on a repeat, and that frozen_root advances.
+// TODO: freeze - assert AlreadyFrozen on a repeat, and that frozen_root advances.

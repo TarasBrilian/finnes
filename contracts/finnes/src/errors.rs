@@ -1,7 +1,7 @@
 //! Contract error codes.
 //!
 //! Every fallible entrypoint returns `Result<T, Error>`. We never `unwrap()` or
-//! `panic!` on untrusted input (proofs, public inputs, roots, ciphertexts) —
+//! `panic!` on untrusted input (proofs, public inputs, roots, ciphertexts) -
 //! that path must produce an `Error` variant so callers get a typed failure and
 //! the transaction reverts cleanly. See CLAUDE.md → Conventions.
 
