@@ -11,6 +11,19 @@ import { OpResultPanel } from './OpResultPanel';
  * submit the proof + public inputs + ciphertexts to the contract. Where wiring
  * is missing, the result panel shows 'TODO · not wired' — never a fake success.
  */
+/**
+ * A transparent Stellar address: 'G' + 55 base32 chars (A–Z, 2–7). Accepting one
+ * here would de-anonymise the recipient — a confidential transfer commits to the
+ * recipient's SHIELDED key (owner_addr = Poseidon(owner_pk)), never a G… address.
+ */
+function looksLikeStellarAddress(s: string): boolean {
+  return /^G[A-Z2-7]{55}$/.test(s.trim());
+}
+
+const RECIPIENT_ADDRESS_ERROR =
+  "That's a transparent Stellar address (G…). A confidential transfer needs the " +
+  "recipient's shielded key (owner_pk) — ask them for it from their “Generate key” panel.";
+
 export function TransferForm({ spending }: { spending: SpendingKeypair | null }) {
   const [assetLabel, setAssetLabel] = useState('TBOND-2031 (tokenized bond)');
   const [recipientPk, setRecipientPk] = useState('');
@@ -18,11 +31,13 @@ export function TransferForm({ spending }: { spending: SpendingKeypair | null })
   const [result, setResult] = useState<OpResult | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const disabled = !spending || !recipientPk || !amount || busy;
+  const recipientError =
+    recipientPk && looksLikeStellarAddress(recipientPk) ? RECIPIENT_ADDRESS_ERROR : null;
+  const disabled = !spending || !recipientPk || !amount || !!recipientError || busy;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!spending) return;
+    if (!spending || recipientError) return;
     setBusy(true);
     setResult(null);
     try {
@@ -73,15 +88,21 @@ export function TransferForm({ spending }: { spending: SpendingKeypair | null })
         </div>
         <div>
           <label className="label" htmlFor="t-recipient">
-            Recipient (owner_pk or address)
+            Recipient shielded key (owner_pk)
           </label>
           <input
             id="t-recipient"
             className="input font-mono"
-            placeholder="0x… recipient owner public key"
+            placeholder="zk… recipient shielded public key — not a G… address"
             value={recipientPk}
             onChange={(e) => setRecipientPk(e.target.value)}
+            aria-invalid={!!recipientError}
           />
+          {recipientError && (
+            <p className="mt-1.5 rounded-lg bg-rose-50 p-2 text-[11px] leading-relaxed text-rose-700">
+              {recipientError}
+            </p>
+          )}
         </div>
         <div>
           <label className="label" htmlFor="t-amount">

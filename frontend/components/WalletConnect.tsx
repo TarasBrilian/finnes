@@ -54,6 +54,12 @@ export function WalletConnect({
         (await (freighter as any).getPublicKey?.());
       const net = (await (freighter as any).getNetwork?.())?.network ?? 'TESTNET';
 
+      // Finnes settles on Stellar Testnet only — refuse a wallet pointed at
+      // mainnet (Freighter reports it as the "PUBLIC" network).
+      if (String(net).toUpperCase() !== 'TESTNET') {
+        throw new Error(`Wrong network (${net}). Switch Freighter to Testnet and reconnect.`);
+      }
+
       if (!addr) throw new Error('Freighter returned no address. Is it installed and unlocked?');
       update({ connected: true, publicKey: String(addr), network: String(net) });
     } catch (e) {
@@ -89,23 +95,15 @@ export function WalletConnect({
 
   return (
     <div className="card">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h3 className="text-base font-bold text-ink">Stellar wallet</h3>
-          <p className="mt-0.5 text-xs text-ink-muted">
-            Freighter — transparent side only. Never sees shielded keys.
-          </p>
-        </div>
-        {state.connected ? (
-          <button type="button" className="btn-ghost" onClick={disconnect}>
-            Disconnect
-          </button>
-        ) : (
-          <button type="button" className="btn-primary" onClick={connect} disabled={busy}>
-            {busy ? 'Connecting…' : 'Connect Freighter'}
-          </button>
-        )}
-      </div>
+      {state.connected ? (
+        <button type="button" className="btn-ghost w-full" onClick={disconnect}>
+          Disconnect wallet
+        </button>
+      ) : (
+        <button type="button" className="btn-primary w-full" onClick={connect} disabled={busy}>
+          {busy ? 'Connecting to Freighter…' : 'Connect Freighter wallet (Stellar Testnet)'}
+        </button>
+      )}
 
       {state.connected && (
         <div className="mt-3 rounded-xl bg-blue-50/70 p-3 text-xs">

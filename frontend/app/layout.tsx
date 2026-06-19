@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
-import { TrustBoundaryBanner } from '@/components/TrustBoundaryBanner';
+import { HeaderWalletButton } from '@/components/HeaderWalletButton';
 
 export const metadata: Metadata = {
   title: 'Finnes — Confidential RWA Settlement',
@@ -23,7 +23,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         />
       </head>
       <body className="min-h-screen">
-        <TrustBoundaryBanner />
         <header className="sticky top-0 z-20 border-b border-blue-100 bg-white/80 backdrop-blur-md">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5">
             <a href="/" className="group flex items-center gap-3">
@@ -45,12 +44,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                   Regulator
                 </a>
               </nav>
-              <span
-                className="badge border border-blue-200 bg-blue-50 text-blue-700"
-                title="This is a scaffold UI"
-              >
-                SCAFFOLD · demo
-              </span>
+              <HeaderWalletButton />
             </div>
           </div>
         </header>

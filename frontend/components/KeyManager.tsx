@@ -15,6 +15,21 @@ function shortFr(f: bigint): string {
 }
 
 /**
+ * The recipient's shielded key as the sender pastes it into the transfer form.
+ * Prefixed `zk` so it can never be mistaken for a transparent Stellar address
+ * (G…) or an Ethereum-style 0x… address. The transfer form labels its field
+ * "Recipient shielded key (owner_pk)" to match this exactly.
+ */
+function shieldedKeyString(f: bigint): string {
+  return `zk${f.toString(16)}`;
+}
+
+function shortShieldedKey(f: bigint): string {
+  const s = shieldedKeyString(f);
+  return s.length <= 14 ? s : `${s.slice(0, 8)}…${s.slice(-6)}`;
+}
+
+/**
  * Generates and holds the institution's shielded spending/viewing key in memory
  * (lib/keys.ts). NEVER persisted to a server (invariant #8). The secret
  * `owner_sk` is intentionally NOT displayed in full — only a short public
@@ -23,6 +38,18 @@ function shortFr(f: bigint): string {
 export function KeyManager() {
   const kp = useSpendingKeypair();
   const [revealed, setRevealed] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function copyShieldedKey() {
+    if (!kp) return;
+    try {
+      await navigator.clipboard.writeText(shieldedKeyString(kp.ownerPk));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable; user can still read the value */
+    }
+  }
 
   return (
     <div className="card">
@@ -50,10 +77,23 @@ export function KeyManager() {
 
       {kp && (
         <div className="mt-3 space-y-2 rounded-xl bg-blue-50/70 p-3 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="text-ink-muted">owner_pk</span>
-            <span className="mono">{shortFr(kp.ownerPk)}</span>
-            {kp.isMock && <MockBadge label="mock derivation" />}
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-ink-muted">shielded key</span>
+              <span className="mono">{shortShieldedKey(kp.ownerPk)}</span>
+              {kp.isMock && <MockBadge label="mock derivation" />}
+              <button
+                type="button"
+                className="ml-auto font-medium text-blue-600 hover:underline"
+                onClick={copyShieldedKey}
+              >
+                {copied ? 'copied ✓' : 'copy'}
+              </button>
+            </div>
+            <p className="mt-0.5 text-[11px] text-ink-faint">
+              Share this with the sender (owner_pk) — this is what they paste into a confidential
+              transfer. It is public; safe to share.
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-ink-muted">owner_sk</span>
