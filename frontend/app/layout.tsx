@@ -7,6 +7,11 @@ export const metadata: Metadata = {
   title: 'Finnes - Confidential RWA Settlement',
   description:
     'Institution- and regulator-facing UI for the Finnes confidential settlement layer on Stellar/Soroban. Private from the public, fully auditable by regulators.',
+  icons: {
+    icon: '/seal.svg',
+    shortcut: '/seal.svg',
+    apple: '/seal.svg',
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
