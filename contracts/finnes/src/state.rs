@@ -74,6 +74,16 @@ pub enum DataKey {
     /// Complements `FrozenRoot`: the contract stores the verbatim issuer-set root
     /// strictly, and also records which `cm`s were frozen for auditability.
     Frozen(Commitment),
+    /// SAC contract `Address` for an `asset_id` (FIN-010). The contract performs
+    /// no hashing (invariant #11), so it cannot recompute `Poseidon(sac_address)`
+    /// to resolve the concrete token; instead the admin registers an
+    /// `asset_id -> Address` mirror of the authorized-assets registry, and
+    /// shield/unshield move the real SAC token through it.
+    SacAddr(Scalar),
+    /// Concrete Stellar `Address` for a transparent `recipient` field (FIN-010).
+    /// The demo account registry: the unshield circuit binds compliance to the
+    /// field-encoded `recipient`; the contract maps it to the real payout address.
+    TransparentAddr(Scalar),
 }
 
 // ---------------------------------------------------------------------------
@@ -207,6 +217,40 @@ pub fn insert_frozen(env: &Env, cm: &Commitment) {
     env.storage()
         .persistent()
         .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND);
+}
+
+// ---------------------------------------------------------------------------
+// Asset / transparent-recipient registries (persistent; admin-managed mirror of
+// the assets registry + demo account registry, FIN-010). Keyed entries so the
+// always-loaded instance config does not grow with the asset/account count.
+// ---------------------------------------------------------------------------
+
+pub fn set_asset_sac(env: &Env, asset_id: &Scalar, sac: &Address) {
+    let key = DataKey::SacAddr(asset_id.clone());
+    env.storage().persistent().set(&key, sac);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND);
+}
+
+pub fn get_asset_sac(env: &Env, asset_id: &Scalar) -> Option<Address> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::SacAddr(asset_id.clone()))
+}
+
+pub fn set_transparent_addr(env: &Env, recipient: &Scalar, addr: &Address) {
+    let key = DataKey::TransparentAddr(recipient.clone());
+    env.storage().persistent().set(&key, addr);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND);
+}
+
+pub fn get_transparent_addr(env: &Env, recipient: &Scalar) -> Option<Address> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::TransparentAddr(recipient.clone()))
 }
 
 // ---------------------------------------------------------------------------

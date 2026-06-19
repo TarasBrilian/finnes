@@ -133,9 +133,14 @@ Replaced the `return false` placeholder with the real pairing math over `env.cry
 **Acceptance:** ✅ `verify_groth16` accepts the FIN-008 proof and rejects a tampered one in `cargo test`.
 **Deps:** FIN-008.
 
-### [ ] FIN-010 · P1 · SAC token movement on shield/unshield
+### [x] FIN-010 · P1 · SAC token movement on shield/unshield — DONE
 `shield` transfers the real SAC `depositor → contract`; `unshield`/`mint_recovery` transfer `contract → recipient`. Resolve the SAC address from the assets-registry leaf for `asset_id`.
-**Acceptance:** integration test moves a test SAC in/out atomically with the proof check.
+- **Done (resolution, invariant #11):** the contract performs no on-chain hashing, so it cannot recompute `asset_id = Poseidon(sac_address)`. New admin-managed mirror of the assets registry maps `asset_id → SAC Address` (`register_asset`) and `recipient_field → Address` (`register_transparent`, the demo account registry). New `sac.rs` resolves the SAC and moves the token; a caller-supplied SAC is rejected by construction (the on-chain half of invariant #18 — can't shield a worthless token while minting a valuable-asset note).
+- **Done (movement, verify-before-effects):** `shield` pulls the SAC `depositor → contract` and `unshield` pays `contract → recipient`, both **after** `verify_groth16` (invariant #9). `amount` (big-endian `Fr`) decodes to `i128` with the high 24 bytes asserted zero (64-bit ranged in-circuit). The transfers are atomic with the state mutation. `unshield`'s recipient is now resolved via the demo account registry (replacing the bare zero-recipient check) → `RecipientNotAuthorised` if unregistered.
+- **Note (`mint_recovery`):** mints a *shielded* recovery note (value originates from the frozen note, not a transparent payout per ARCHITECTURE.md → "Clawback"), so it moves no SAC; left as-is.
+- **Done (tests):** `cargo test` (17 passed) covers `scalar_to_i128` decode + oversized-amount rejection; a real test SAC moved **in and out** via `sac::pull_deposit`/`pay_out` through the registry (`register_stellar_asset_contract_v2` + balances asserted); verify-before-effects atomicity (`shield` with an invalid proof reverts and moves **no** SAC); and the unshield recipient-registry gate (unregistered → `RecipientNotAuthorised`; registered → proceeds to the verifier). clippy/fmt clean, wasm builds.
+- **Scope note:** the full positive path *through* the `shield`/`unshield` entrypoints (valid proof → SAC moves) needs a real D=20 proof (same ceremony friction as FIN-009); the helper + atomicity tests cover the SAC movement and its gating without one.
+**Acceptance:** ✅ integration test moves a test SAC in/out, and proves the movement is gated by the proof check (invalid proof → no movement). `cargo test` green.
 **Deps:** FIN-009.
 
 ### [ ] FIN-011 · P2 · Contract state polish

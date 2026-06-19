@@ -26,6 +26,7 @@
 
 mod errors;
 mod merkle;
+mod sac;
 mod state;
 mod types;
 mod verifier;
@@ -106,8 +107,9 @@ impl FinnesContract {
     /// minting a note labelled as a more-valuable asset). No shielded inputs,
     /// hence no nullifiers and no anchor root.
     ///
-    /// NOTE: the actual SAC `transfer` of the deposited token into the contract
-    /// (and `depositor.require_auth()`) is a TODO - see step 0 below.
+    /// After verifying the proof, the real SAC token is pulled
+    /// `depositor -> contract` (FIN-010), resolving the SAC from the admin asset
+    /// registry; the transfer is atomic with the state mutation.
     pub fn shield(
         env: Env,
         depositor: Address,
@@ -116,9 +118,8 @@ impl FinnesContract {
     ) -> Result<(), Error> {
         ensure_initialized(&env)?;
 
-        // 0. Authorise + pull funds. TODO: `depositor.require_auth()` and call the
-        //    asset's SAC `transfer(depositor -> contract, pi.amount)`; the SAC
-        //    address comes from the assets registry leaf for `pi.asset_id`.
+        // 0. Authorise. The actual SAC pull (depositor -> contract) is an EFFECT
+        //    and happens only after the proof verifies (step 5, FIN-010).
         depositor.require_auth();
 
         // 3. Compliance roots match state (shield uses kyc + assets + auditor_pk;
@@ -139,9 +140,12 @@ impl FinnesContract {
         let vk = state::get_vk(&env, Circuit::Shield).ok_or(Error::VerifyingKeyMissing)?;
         verifier::verify_groth16(&env, &vk, &proof, &pi.to_scalars(&env))?;
 
-        // 5. Effects: store new frontier/root + the new commitment (as the new
-        //    leaf is already folded into new_root/new_frontier by the circuit).
-        //    One output note => advance the leaf count by 1.
+        // 5. Effects (verify-before-effects). Pull the real SAC token
+        //    depositor -> contract for the deposited (asset_id, amount), then fold
+        //    the new commitment into the tree. If the SAC transfer fails (e.g.
+        //    insufficient balance) the whole tx reverts atomically - no note is
+        //    minted for value that never arrived (FIN-010).
+        sac::pull_deposit(&env, &pi.asset_id, &depositor, &pi.amount)?;
         merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root, 1)?;
         state::bump_instance_ttl(&env);
         // TODO: emit event (cm_out_0, c_auditor, c_recipient) for the indexer.
@@ -307,15 +311,14 @@ impl FinnesContract {
         check_assets_root(&env, &pi.assets_root)?;
         check_auditor_pk(&env, &pi.auditor_pk)?;
 
-        // 3'. Recipient authorisation (invariant #19 (a)). The KYC/non-sanctioned
-        //     check is proven in-circuit via kyc_root/sanction_root membership of
-        //     `pi.recipient`; this guard is the on-chain belt-and-suspenders.
-        //     TODO: map `pi.recipient` (field-encoded) to a Stellar Address and
-        //     validate it against an allow policy if one exists; for now we rely
-        //     on the in-circuit membership proof and reject the null recipient.
-        if is_zero_scalar(&pi.recipient) {
-            return Err(Error::RecipientNotAuthorised);
-        }
+        // 3'. Recipient authorisation (invariant #19 (a)). KYC/non-sanctioned is
+        //     proven in-circuit via kyc_root/sanction_root membership of
+        //     `pi.recipient`; on-chain we resolve the field-encoded recipient to a
+        //     concrete Stellar `Address` via the demo account registry. A missing
+        //     entry (incl. the zero sentinel, which is never registered) means the
+        //     recipient is not an authorised transparent payout target (FIN-010).
+        let recipient_addr = state::get_transparent_addr(&env, &pi.recipient)
+            .ok_or(Error::RecipientNotAuthorised)?;
 
         // 1'. Tree transition input: old_frontier == state, and next_index ==
         //     leaf count (the in-circuit FrontierTransition anchors the change
@@ -342,8 +345,9 @@ impl FinnesContract {
             1
         };
         merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root, n_inserts)?;
-        // TODO: call the SAC `transfer(contract -> recipient, pi.amount)` for the
-        //       asset identified by `pi.asset_id` (SAC address from the registry).
+        // Transparent payout: move the real SAC token contract -> recipient for the
+        // revealed (asset_id, amount). Atomic with the rest of the tx (FIN-010).
+        sac::pay_out(&env, &pi.asset_id, &recipient_addr, &pi.amount)?;
         state::bump_instance_ttl(&env);
         // TODO: emit event (nf_in_0, asset_id, amount, recipient, cm_change_0).
         Ok(())
@@ -373,6 +377,32 @@ impl FinnesContract {
     pub fn update_assets_root(env: Env, new_root: Root) -> Result<(), Error> {
         require_issuer(&env)?;
         state::set_assets_root(&env, &new_root);
+        state::bump_instance_ttl(&env);
+        Ok(())
+    }
+
+    /// Register (or update) the concrete SAC `Address` for an `asset_id` (FIN-010).
+    ///
+    /// The contract performs no on-chain hashing (invariant #11), so it cannot
+    /// recompute `asset_id = Poseidon(sac_address)`; this admin-managed mirror of
+    /// the authorized-assets registry is how shield/unshield resolve the real
+    /// token to move. The admin MUST keep it in lockstep with `assets_root` (the
+    /// same `(asset_id, sac_address, …)` leaf), so an `asset_id` resolves to the
+    /// SAC whose Poseidon hash it is.
+    pub fn register_asset(env: Env, asset_id: Scalar, sac: Address) -> Result<(), Error> {
+        require_issuer(&env)?;
+        state::set_asset_sac(&env, &asset_id, &sac);
+        state::bump_instance_ttl(&env);
+        Ok(())
+    }
+
+    /// Register (or update) the concrete Stellar `Address` for a transparent
+    /// `recipient` field (FIN-010, the demo account registry). `unshield` resolves
+    /// `pi.recipient` to this address for the SAC payout; the in-circuit proof
+    /// binds the recipient's KYC/non-sanction to the same field.
+    pub fn register_transparent(env: Env, recipient: Scalar, addr: Address) -> Result<(), Error> {
+        require_issuer(&env)?;
+        state::set_transparent_addr(&env, &recipient, &addr);
         state::bump_instance_ttl(&env);
         Ok(())
     }

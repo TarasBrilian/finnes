@@ -14,11 +14,14 @@
 extern crate std;
 
 use soroban_sdk::testutils::Address as _;
+use soroban_sdk::token::{StellarAssetClient, TokenClient};
 use soroban_sdk::{Address, BytesN, Env, Vec};
 
 use crate::errors::Error;
+use crate::sac;
 use crate::types::{
-    InitConfig, Proof, Root, Scalar, TransferPublicInputs, VerifyingKey, TREE_DEPTH,
+    InitConfig, Proof, Root, Scalar, ShieldPublicInputs, TransferPublicInputs,
+    UnshieldPublicInputs, VerifyingKey, TREE_DEPTH,
 };
 use crate::{FinnesContract, FinnesContractClient};
 
@@ -366,4 +369,206 @@ fn verifier_rejects_malformed_proof_point() {
         verifier::verify_groth16(&env, &vk, &proof, &pi),
         Err(Error::MalformedProof)
     );
+}
+
+// ---------------------------------------------------------------------------
+// SAC token movement on the shield / unshield boundary (FIN-010).
+//
+// The full positive path *through the entrypoints* needs a real D=20 proof
+// (same ceremony friction as FIN-009), so we test the two halves that ARE
+// reachable without one:
+//   1. the SAC pull/push helpers move a real test SAC in/out via the admin
+//      registry + amount decoding (run inside `as_contract`), and
+//   2. the entrypoints gate those effects: an invalid proof reverts before any
+//      SAC moves (verify-before-effects), and an unregistered transparent
+//      recipient is rejected.
+// ---------------------------------------------------------------------------
+
+/// A 64-bit raw SAC amount as a big-endian `Fr` scalar (low 8 bytes).
+fn amount_scalar(env: &Env, v: u64) -> Scalar {
+    let mut b = [0u8; 32];
+    b[24..32].copy_from_slice(&v.to_be_bytes());
+    BytesN::from_array(env, &b)
+}
+
+/// Five zero ciphertext slots (K_a = K_r = 5).
+fn zero_ct(env: &Env) -> Vec<Scalar> {
+    let mut v: Vec<Scalar> = Vec::new(env);
+    for _ in 0..5u32 {
+        v.push_back(zero32(env));
+    }
+    v
+}
+
+/// A `ShieldPublicInputs` whose roots match `setup` state, reaching the verifier.
+fn shield_pi(
+    env: &Env,
+    asset_id: Scalar,
+    amount: Scalar,
+    next_index: Scalar,
+) -> ShieldPublicInputs {
+    ShieldPublicInputs {
+        asset_id,
+        amount,
+        kyc_root: tagged32(env, 0x01),
+        assets_root: tagged32(env, 0x03),
+        auditor_pk: tagged32(env, 0xAA),
+        cm_out_0: tagged32(env, 0x60),
+        new_root: tagged32(env, 0x11),
+        fee: zero32(env),
+        next_index,
+        old_frontier: empty_frontier(env),
+        new_frontier: empty_frontier(env),
+        c_auditor: zero_ct(env),
+        c_recipient: zero_ct(env),
+    }
+}
+
+/// An `UnshieldPublicInputs` whose roots match `setup` state.
+fn unshield_pi(
+    env: &Env,
+    asset_id: Scalar,
+    amount: Scalar,
+    recipient: Scalar,
+) -> UnshieldPublicInputs {
+    UnshieldPublicInputs {
+        anchor_root: tagged32(env, 0x10),
+        kyc_root: tagged32(env, 0x01),
+        sanction_root: tagged32(env, 0x02),
+        assets_root: tagged32(env, 0x03),
+        frozen_root: tagged32(env, 0x04),
+        auditor_pk: tagged32(env, 0xAA),
+        nf_in_0: tagged32(env, 0x55),
+        asset_id,
+        amount,
+        recipient,
+        cm_change_0: zero32(env), // exact spend, no change note
+        new_root: tagged32(env, 0x11),
+        fee: zero32(env),
+        next_index: zero32(env),
+        old_frontier: empty_frontier(env),
+        new_frontier: empty_frontier(env),
+        c_auditor: zero_ct(env),
+        c_recipient: zero_ct(env),
+    }
+}
+
+#[test]
+fn scalar_to_i128_decodes_64bit_amount() {
+    let env = Env::default();
+    assert_eq!(sac::scalar_to_i128(&amount_scalar(&env, 700)), Ok(700i128));
+    assert_eq!(sac::scalar_to_i128(&zero32(&env)), Ok(0i128));
+    assert_eq!(
+        sac::scalar_to_i128(&amount_scalar(&env, u64::MAX)),
+        Ok(u64::MAX as i128)
+    );
+}
+
+#[test]
+fn scalar_to_i128_rejects_oversized_amount() {
+    let env = Env::default();
+    // A byte just above the low 8 means value >= 2^64 -> not a valid raw amount.
+    let mut b = [0u8; 32];
+    b[23] = 1;
+    let s: Scalar = BytesN::from_array(&env, &b);
+    assert_eq!(sac::scalar_to_i128(&s), Err(Error::MalformedPublicInputs));
+}
+
+#[test]
+fn sac_moves_in_and_out_through_registry() {
+    let env = Env::default();
+    let (client, admin, _issuer) = setup(&env); // setup mocks all auths
+                                                // The SAC `transfer(depositor, ...)` runs INSIDE `as_contract` (a sub-contract
+                                                // call not tied to a root invocation), so allow non-root authorization.
+    env.mock_all_auths_allowing_non_root_auth();
+    let contract_id = client.address.clone();
+
+    let depositor = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let sac_contract = env.register_stellar_asset_contract_v2(admin.clone());
+    let sac_addr = sac_contract.address();
+    StellarAssetClient::new(&env, &sac_addr).mint(&depositor, &1000);
+    let token = TokenClient::new(&env, &sac_addr);
+
+    // Mirror the registry: asset_id -> SAC address.
+    let asset_id: Scalar = tagged32(&env, 0x77);
+    client.register_asset(&asset_id, &sac_addr);
+
+    // shield: pull 700 depositor -> contract.
+    env.as_contract(&contract_id, || {
+        sac::pull_deposit(&env, &asset_id, &depositor, &amount_scalar(&env, 700)).unwrap();
+    });
+    assert_eq!(token.balance(&depositor), 300);
+    assert_eq!(token.balance(&contract_id), 700);
+
+    // unshield: pay 700 contract -> recipient.
+    env.as_contract(&contract_id, || {
+        sac::pay_out(&env, &asset_id, &recipient, &amount_scalar(&env, 700)).unwrap();
+    });
+    assert_eq!(token.balance(&contract_id), 0);
+    assert_eq!(token.balance(&recipient), 700);
+}
+
+#[test]
+fn pull_deposit_unregistered_asset_errors() {
+    let env = Env::default();
+    let (client, _admin, _issuer) = setup(&env);
+    let contract_id = client.address.clone();
+    let depositor = Address::generate(&env);
+    let asset_id: Scalar = tagged32(&env, 0x78); // never registered
+    let res = env.as_contract(&contract_id, || {
+        sac::pull_deposit(&env, &asset_id, &depositor, &amount_scalar(&env, 100))
+    });
+    assert_eq!(res, Err(Error::AssetNotRegistered));
+}
+
+#[test]
+fn shield_reverts_before_moving_sac_on_invalid_proof() {
+    let env = Env::default();
+    let (client, admin, _issuer) = setup(&env);
+    let contract_id = client.address.clone();
+
+    let depositor = Address::generate(&env);
+    let sac_contract = env.register_stellar_asset_contract_v2(admin.clone());
+    let sac_addr = sac_contract.address();
+    StellarAssetClient::new(&env, &sac_addr).mint(&depositor, &1000);
+    let token = TokenClient::new(&env, &sac_addr);
+
+    let asset_id: Scalar = tagged32(&env, 0x77);
+    client.register_asset(&asset_id, &sac_addr);
+
+    // The dummy VK has 0 IC points, so verify fails (arity mismatch) BEFORE the
+    // SAC pull. Verify-before-effects => no token moves.
+    let pi = shield_pi(&env, asset_id, amount_scalar(&env, 700), zero32(&env));
+    let res = client.try_shield(&depositor, &dummy_proof(&env), &pi);
+    assert_eq!(res, Err(Ok(Error::VerifyingKeyArityMismatch)));
+    assert_eq!(token.balance(&depositor), 1000);
+    assert_eq!(token.balance(&contract_id), 0);
+}
+
+#[test]
+fn unshield_unregistered_recipient_rejected() {
+    let env = Env::default();
+    let (client, _admin, _issuer) = setup(&env);
+    let asset_id: Scalar = tagged32(&env, 0x77);
+    let recipient: Scalar = tagged32(&env, 0x90); // not in the demo account registry
+    let pi = unshield_pi(&env, asset_id, amount_scalar(&env, 700), recipient);
+    let res = client.try_unshield(&dummy_proof(&env), &pi);
+    assert_eq!(res, Err(Ok(Error::RecipientNotAuthorised)));
+}
+
+#[test]
+fn unshield_registered_recipient_passes_gate_then_hits_verifier() {
+    let env = Env::default();
+    let (client, _admin, _issuer) = setup(&env);
+    let asset_id: Scalar = tagged32(&env, 0x77);
+    let recipient_field: Scalar = tagged32(&env, 0x90);
+    let recipient_addr = Address::generate(&env);
+    // Register the demo account; the recipient gate now resolves and the flow
+    // proceeds to the verifier (dummy VK -> arity mismatch), proving the gate
+    // accepts a registered recipient and only fails open at the proof step.
+    client.register_transparent(&recipient_field, &recipient_addr);
+    let pi = unshield_pi(&env, asset_id, amount_scalar(&env, 700), recipient_field);
+    let res = client.try_unshield(&dummy_proof(&env), &pi);
+    assert_eq!(res, Err(Ok(Error::VerifyingKeyArityMismatch)));
 }

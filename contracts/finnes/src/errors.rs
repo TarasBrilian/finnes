@@ -66,4 +66,11 @@ pub enum Error {
     AlreadyFrozen = 40,
     /// Both auditor and issuer signatures are required for this operation.
     DualAuthRequired = 41,
+
+    // --- SAC token movement (FIN-010) ---
+    /// No SAC contract address is registered for the proof's `asset_id`. The
+    /// contract cannot hash on-chain (invariant #11), so it resolves the SAC for
+    /// an `asset_id` from an admin-registered mirror of the assets registry; a
+    /// missing entry means the asset was never `register_asset`'d.
+    AssetNotRegistered = 50,
 }
