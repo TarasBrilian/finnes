@@ -67,6 +67,15 @@ export {
 export type { DiscoveredNote, OnChainCiphertext, ViewingContext } from './scan.js';
 export { scanForOwnedNotes, tryDecryptNote } from './scan.js';
 
+export type {
+  CircomWitness,
+  ImtLowLeaf,
+  TransferWitnessDerived,
+  TransferWitnessInput,
+  TransferWitnessResult,
+} from './witness.js';
+export { buildTransferWitness } from './witness.js';
+
 export type { PublicInputVector } from './publicInputs.js';
 export {
   buildDvpPublicInputs,

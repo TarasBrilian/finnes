@@ -8,21 +8,22 @@ layout and the project root `CLAUDE.md` for the binding security invariants.
 **Status:** `[ ]` todo · `[~]` in progress · `[x]` done
 **Priority:** P0 = blocks everything · P1 = on critical path · P2 = needed for demo · P3 = deferred/backlog
 
-> **FIN-001, FIN-002, FIN-003, FIN-004, FIN-005 are DONE; FIN-006 is wired +
-> compiling.** FIN-001 locked D=20, the auditor-encryption scheme (A),
-> K_a=K_r=5, recipient/sentinel encodings. FIN-002 hashes identically
-> circuit↔SDK. FIN-003 implemented the note + Merkle gadgets (incl. vendored
-> r-aware comparator + IMT non-membership), all circuit↔SDK parity-verified.
-> FIN-004 (`enc_check.circom` + `sdk/src/encrypt.ts`) and FIN-005
+> **FIN-001 through FIN-006 are DONE.** FIN-001 locked D=20, the
+> auditor-encryption scheme (A), K_a=K_r=5, recipient/sentinel encodings. FIN-002
+> hashes identically circuit↔SDK. FIN-003 implemented the note + Merkle gadgets
+> (incl. vendored r-aware comparator + IMT non-membership), all circuit↔SDK
+> parity-verified. FIN-004 (`enc_check.circom` + `sdk/src/encrypt.ts`) and FIN-005
 > (`assets.circom`) are implemented and parity-tested. **FIN-006**:
-> `transfer.circom` now binds BOTH output notes' mandatory ciphertexts (inv #5,
-> the prior version under-bound output 1) and wires `next_index` as a public
-> input the contract pins to its leaf count (closing the `nextIndex<==0`
-> soundness hole, inv #11/#12); it compiles to **73 public signals**. The
-> contract gained `leaf_count` state + a `next_index` gate (`cargo test` green).
-> **Remaining on the critical path:** FIN-006 witness fixtures
-> (`circuits/test/transfer/`, positive + per-constraint negatives) which need the
-> SDK witness builders, then **FIN-007** (demo ceremony + `vk_transfer.json`).
+> `transfer.circom` binds BOTH output notes' mandatory ciphertexts (inv #5) and
+> wires `next_index` as a public input the contract pins to its leaf count
+> (closing the `nextIndex<==0` soundness hole, inv #11/#12); it compiles to **73
+> public signals**. The `Transfer` template was hoisted to
+> `circuits/lib/transfer.circom`; `sdk/src/witness.ts` builds the full witness and
+> `npm run transfer:witness` machine-verifies a valid witness is accepted and one
+> failing witness per constraint class is rejected. The contract gained
+> `leaf_count` state + a `next_index` gate (`cargo test` green).
+> **Next on the critical path:** **FIN-007** (demo ceremony + `vk_transfer.json`),
+> then **FIN-008** (wire `prover/` to import the SDK witness builder + prove).
 
 ---
 
@@ -75,11 +76,11 @@ Filled `circuits/lib/assets.circom`: membership of `(asset_id, sac_address, deci
 **Acceptance:** ✅ limit comes from the leaf (witness, not a public input); parity gate `npm run assets:parity`.
 **Deps:** FIN-002.
 
-### [~] FIN-006 · P1 · Complete `transfer.circom` (2-in/2-out)
+### [x] FIN-006 · P1 · Complete `transfer.circom` (2-in/2-out) — DONE
 Wired FIN-003/004/005 into `transfer.circom`: inclusion + ownership, nullifier derivation, **per-asset conservation** `Σin = Σout + fee`, 64-bit range checks, KYC membership, sanctions + **frozen** non-membership, assets membership, tree transition.
 - **Done:** BOTH output notes carry a mandatory `c_auditor` + a `c_recipient` (inv #5; the scaffold under-bound output 1 — fixed). `next_index` is now a **public input** wired to `FrontierTransition` (was `<==0`, a soundness hole); the contract pins it to `leaf_count` (new state) and gates it in `confidential_transfer` (inv #11/#12). Compiles to **73 public signals**; `PUBLIC_IO.md` + `types.rs` + `publicInputs.ts` + `witness.ts` de-drifted. `init` bundled into `InitConfig` (Soroban 10-arg cap — the contract previously did not compile). `cargo test` green incl. `next_index` accept/reject tests.
-- **Remaining:** witness fixtures under `circuits/test/transfer/` — a satisfying witness + ≥1 failing witness per constraint class (unbalanced value, bad Merkle path, missing auditor ct, frozen note, over-limit). These need the SDK witness builders (full commitment/ciphertext/frontier computation), which overlap with FIN-008; do them together.
-**Acceptance:** a valid witness produces a satisfying R1CS; ≥1 failing witness per constraint class is rejected (CLAUDE.md test rule).
+- **Done (witness builder + fixtures):** the `Transfer(D,K_a,K_r)` template was extracted to `circuits/lib/transfer.circom` so it can be instantiated at a small depth for tests (the D=20 `main` in `circuits/transfer.circom` is unchanged: 73 public signals). `sdk/src/witness.ts` `buildTransferWitness()` does the full commitment/nullifier/ciphertext/frontier computation and emits the complete circom signal record (depth-parametric; reused by FIN-008). `scripts/test-transfer-witness.ts` (`npm run transfer:witness`) drives `circuits/test/transfer/transfer_test.circom` (`Transfer(6,5,5)`): a valid witness is **accepted**, and one failing witness per constraint class is **rejected** — unbalanced value (#3), bad Merkle path, missing auditor ct (#5), frozen note (#14), over-limit (#17), tampered `new_root` (#12), wrong spending key (#4). Gate green; `npm run typecheck` + SDK tests green.
+**Acceptance:** ✅ valid witness produces a satisfying R1CS; ≥1 failing witness per constraint class is rejected (CLAUDE.md test rule), machine-verified by `npm run transfer:witness`.
 **Deps:** FIN-003, FIN-004, FIN-005.
 
 ---

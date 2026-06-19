@@ -20,6 +20,7 @@
     "nonmembership:parity": "tsx scripts/test-nonmembership-parity.ts",
     "enc:parity": "tsx scripts/test-enc-parity.ts",
     "assets:parity": "tsx scripts/test-assets-parity.ts",
+    "transfer:witness": "tsx scripts/test-transfer-witness.ts",
     "setup:ceremony": "bash scripts/setup-ceremony.sh",
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
