@@ -25,7 +25,7 @@ export default function RegulatorPage() {
   }, []);
 
   return (
-    <div className="space-y-8">
+    <div className="mx-auto max-w-6xl space-y-8 px-6 py-10">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-1.5">
           <span className="eyebrow">Regulator console</span>
