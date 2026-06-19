@@ -22,6 +22,7 @@
     "assets:parity": "tsx scripts/test-assets-parity.ts",
     "transfer:witness": "tsx scripts/test-transfer-witness.ts",
     "transfer:prove": "tsx scripts/test-prove-transfer.ts",
+    "verifier:fixture": "tsx scripts/gen-verifier-fixture.ts",
     "setup:ceremony": "bash scripts/setup-ceremony.sh",
     "setup:demo": "bash scripts/setup-demo-ceremony.sh",
     "build": "npm run build --workspaces --if-present",

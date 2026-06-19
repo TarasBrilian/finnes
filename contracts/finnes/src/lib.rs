@@ -33,6 +33,9 @@ mod verifier;
 #[cfg(test)]
 mod test;
 
+#[cfg(test)]
+mod test_vectors;
+
 use soroban_sdk::{contract, contractimpl, Address, Env};
 
 use crate::errors::Error;

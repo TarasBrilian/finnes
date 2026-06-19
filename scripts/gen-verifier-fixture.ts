@@ -1,0 +1,153 @@
+// Generate a Rust test fixture for the on-chain Groth16 verifier (FIN-009).
+//
+// Proves the DEPTH-4 transfer harness (`transfer_test4`, same gadgets and
+// public-IO STRUCTURE as production `Transfer(20,5,5)`), then converts the
+// snarkjs verifying key + proof + public signals into the EXACT byte encoding
+// the Soroban BLS12-381 host functions consume, and writes them as a Rust source
+// file (`contracts/finnes/src/test_vectors.rs`) so `cargo test` can feed real
+// vectors into `verifier::verify_groth16`.
+//
+// Host serialization (see soroban_sdk::crypto::bls12_381 docs):
+//   - G1 (96 bytes):  be(X,48) ‖ be(Y,48)
+//   - G2 (192 bytes): be(X_c1,48) ‖ be(X_c0,48) ‖ be(Y_c1,48) ‖ be(Y_c0,48)
+//     snarkjs stores Fp2 as [c0, c1]; the host wants c1 FIRST, so we swap.
+//   - Fr (32 bytes):  be(scalar,32)
+//
+// Everything emitted here is PUBLIC (verifying key, proof, public signals) - no
+// secrets (invariant #8). The witness is built and consumed in-process; only its
+// public proof outputs are serialized.
+//
+// Run: `npx tsx scripts/gen-verifier-fixture.ts` (npm run verifier:fixture).
+
+import { existsSync, writeFileSync, readFileSync } from 'node:fs';
+
+import { buildTransferScenario } from './lib/transfer-scenario.js';
+import { prove } from '../prover/src/prove.js';
+import type { Witness } from '../prover/src/types.js';
+
+const DEPTH = 4;
+const EXPECTED_PUBLIC_SIGNALS = 41; // 13 + 2*4 + 2*5 + 2*5
+
+const wasmPath = 'circuits/build/transfer_test4/transfer_test4_js/transfer_test4.wasm';
+const zkeyPath = 'setup/build/transfer_test4/transfer_test4.zkey';
+const vkeyPath = 'setup/build/transfer_test4/vk_transfer_test4.json';
+const outPath = 'contracts/finnes/src/test_vectors.rs';
+
+for (const p of [wasmPath, zkeyPath, vkeyPath]) {
+  if (!existsSync(p)) {
+    console.error(`MISSING ${p}. Run the depth-4 demo ceremony first (npm run setup:demo).`);
+    process.exit(1);
+  }
+}
+
+// --- byte-encoding helpers --------------------------------------------------
+
+/** Big-endian fixed-width bytes of a decimal/bigint string. */
+function be(dec: string | bigint, len: number): Uint8Array {
+  let hex = BigInt(dec).toString(16);
+  if (hex.length > len * 2) throw new Error(`value 0x${hex} exceeds ${len} bytes`);
+  hex = hex.padStart(len * 2, '0');
+  return Uint8Array.from(Buffer.from(hex, 'hex'));
+}
+
+function cat(...parts: Uint8Array[]): Uint8Array {
+  return Uint8Array.from(Buffer.concat(parts.map((p) => Buffer.from(p))));
+}
+
+/** snarkjs G1 `[x, y, "1"]` → 96-byte host encoding. */
+function g1(p: [string, string, string]): Uint8Array {
+  return cat(be(p[0], 48), be(p[1], 48));
+}
+
+/** snarkjs G2 `[[x_c0, x_c1], [y_c0, y_c1], ["1","0"]]` → 192-byte host encoding (c1 ‖ c0). */
+function g2(p: [[string, string], [string, string], [string, string]]): Uint8Array {
+  return cat(be(p[0][1], 48), be(p[0][0], 48), be(p[1][1], 48), be(p[1][0], 48));
+}
+
+/** Fr scalar (decimal) → 32-byte big-endian. */
+function fr(dec: string): Uint8Array {
+  return be(dec, 32);
+}
+
+// --- Rust literal formatting ------------------------------------------------
+
+function rustBytes(name: string, bytes: Uint8Array): string {
+  const body = Array.from(bytes)
+    .map((b) => `0x${b.toString(16).padStart(2, '0')}`)
+    .join(', ');
+  return `pub const ${name}: &[u8] = &[${body}];`;
+}
+
+function rustScalarArray(name: string, scalars: Uint8Array[]): string {
+  const rows = scalars
+    .map((s) => '    [' + Array.from(s).map((b) => `0x${b.toString(16).padStart(2, '0')}`).join(', ') + ']')
+    .join(',\n');
+  return `pub const ${name}: [[u8; 32]; ${scalars.length}] = [\n${rows},\n];`;
+}
+
+function rustIcArray(name: string, points: Uint8Array[]): string {
+  const idents = points.map((_, i) => `IC_${i}`).join(', ');
+  const decls = points.map((p, i) => rustBytes(`IC_${i}`, p)).join('\n');
+  return `${decls}\npub const ${name}: [&[u8]; ${points.length}] = [${idents}];`;
+}
+
+// --- main -------------------------------------------------------------------
+
+console.log(`Building depth-${DEPTH} transfer witness + proving (BLS12-381) ...`);
+const { witness } = buildTransferScenario(DEPTH);
+const { proof, publicSignals } = await prove(witness as Witness, { wasmPath, zkeyPath, vkeyPath });
+
+if (publicSignals.length !== EXPECTED_PUBLIC_SIGNALS) {
+  console.error(`expected ${EXPECTED_PUBLIC_SIGNALS} public signals, got ${publicSignals.length}`);
+  process.exit(1);
+}
+
+const vk = JSON.parse(readFileSync(vkeyPath, 'utf8'));
+if (vk.IC.length !== publicSignals.length + 1) {
+  console.error(`VK IC arity ${vk.IC.length} != nPublic+1 ${publicSignals.length + 1}`);
+  process.exit(1);
+}
+
+const alpha = g1(vk.vk_alpha_1);
+const beta = g2(vk.vk_beta_2);
+const gamma = g2(vk.vk_gamma_2);
+const delta = g2(vk.vk_delta_2);
+const ic = (vk.IC as [string, string, string][]).map(g1);
+
+const pa = g1(proof.pi_a);
+const pb = g2(proof.pi_b);
+const pc = g1(proof.pi_c);
+const sigs = publicSignals.map(fr);
+
+const header = `// @generated by scripts/gen-verifier-fixture.ts - DO NOT EDIT BY HAND.
+//
+// Real BLS12-381 Groth16 verifying key + proof + public signals for the DEPTH-4
+// \`transfer_test4\` demo circuit (FIN-007/008), encoded in the Soroban host's
+// uncompressed big-endian point serialization (see verifier.rs "Point encoding").
+// Consumed by the FIN-009 cargo tests that exercise \`verifier::verify_groth16\`.
+//
+// PUBLIC data only (verifying key + proof + public inputs). Regenerate with
+// \`npm run verifier:fixture\` after any change to the demo ceremony or circuit.
+// Gated to test builds by \`#[cfg(test)] mod test_vectors;\` in lib.rs.
+#![allow(clippy::all)]
+
+`;
+
+const out =
+  header +
+  [
+    rustBytes('VK_ALPHA_G1', alpha),
+    rustBytes('VK_BETA_G2', beta),
+    rustBytes('VK_GAMMA_G2', gamma),
+    rustBytes('VK_DELTA_G2', delta),
+    rustIcArray('VK_IC', ic),
+    rustBytes('PROOF_A', pa),
+    rustBytes('PROOF_B', pb),
+    rustBytes('PROOF_C', pc),
+    rustScalarArray('PUBLIC_SIGNALS', sigs),
+  ].join('\n\n') +
+  '\n';
+
+writeFileSync(outPath, out);
+console.log(`Wrote ${outPath} (${ic.length} IC points, ${sigs.length} public signals).`);
+console.log('Next: cargo test (FIN-009 verifier tests).');
