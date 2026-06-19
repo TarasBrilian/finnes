@@ -202,8 +202,9 @@ Total: **73** public signals (`13 + 2·D + 2·K_a + 2·K_r` = `13 + 40 + 10 + 10
 > never prover-controlled — otherwise a prover could compute a self-consistent
 > transition for a wrong index and corrupt the verbatim-stored tree
 > (invariants #11/#12). The FIN-003 heads-up flagged this; it is now wired.
-> `shield`/`unshield`/`dvp` need the same signal when their circuits are completed
-> (FIN-012/013/016) — their tables below are NOT yet amended.
+> `shield` is now amended (FIN-012: `next_index` at index 8, total 59).
+> `unshield`/`dvp` need the same signal when their circuits are completed
+> (FIN-013/016) — their tables below are NOT yet amended.
 
 Private witness: input notes `(asset_id, value, owner_pk, rho, r_note)×2`,
 `owner_sk`, Merkle paths for the two inputs, KYC path, sanctions non-membership
@@ -229,13 +230,22 @@ KYC membership, sanctions + frozen non-membership, assets membership +
  5       cm_out_0
  6       new_root
  7       fee                 (0 in demo)
- 8 .. 27 old_frontier[0..19] (D = 20)
-28 .. 47 new_frontier[0..19]
-48 .. 52 c_auditor_0[0..4]   (mandatory)
-53 .. 57 c_recipient_0[0..4]
+ 8       next_index          (current leaf count; checked == contract state. FIN-012)
+ 9 .. 28 old_frontier[0..19] (D = 20)
+29 .. 48 new_frontier[0..19]
+49 .. 53 c_auditor_0[0..4]   (mandatory)
+54 .. 58 c_recipient_0[0..4]
 ```
 
-Total: **58** public signals (`8 + 2·D + K_a + K_r` = `8 + 40 + 5 + 5`).
+Total: **59** public signals (`9 + 2·D + K_a + K_r` = `9 + 40 + 5 + 5`).
+
+> **`next_index` (FIN-012 layout amendment).** Like `transfer` (FIN-006), shield's
+> `FrontierTransition` needs the append position pinned to real state. `next_index`
+> (the current leaf count) is a public input the **contract supplies from state**
+> (`pi.next_index == state.leaf_count`), never prover-controlled — otherwise a
+> prover could compute a self-consistent transition for index 0 every time and
+> corrupt the verbatim-stored tree after tx #1 (invariants #11/#12). The same
+> applies to `mint_recovery`, which reuses the shield circuit/VK.
 
 Key constraint: the output `cm` opens to `(asset_id, amount, owner_pk, rho, r_note)`
 for the **public** `(asset_id, amount)` without revealing `(owner_pk, rho, r_note)`.

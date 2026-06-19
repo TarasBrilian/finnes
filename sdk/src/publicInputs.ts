@@ -102,13 +102,14 @@ export function buildTransferPublicInputs(args: {
 
 /**
  * shield.circom - transparent → shielded (0 shielded inputs, 1 transparent in).
- * Order (docs/PUBLIC_IO.md §shield.circom):
+ * Order (docs/PUBLIC_IO.md §shield.circom, 59 signals):
  *   0 asset_id, 1 amount, 2 kyc_root, 3 assets_root, 4 auditor_pk, 5 cm_out_0,
- *   6 new_root, 7 fee, 8.. old_frontier[D], ..new_frontier[D], ..c_auditor[K_a],
- *   ..c_recipient[K_r].
+ *   6 new_root, 7 fee, 8 next_index, 9.. old_frontier[D], ..new_frontier[D],
+ *   ..c_auditor[K_a], ..c_recipient[K_r].
  *
  * NOTE: shield exposes only kyc_root + assets_root (no anchor/sanction/frozen -
- * there are no shielded inputs to anchor or freeze-check).
+ * there are no shielded inputs to anchor or freeze-check). `nextIndex` is the
+ * current leaf count; the contract checks it equals state (FIN-012, inv #11/#12).
  */
 export function buildShieldPublicInputs(args: {
   assetId: Fr;
@@ -119,6 +120,7 @@ export function buildShieldPublicInputs(args: {
   cmOut0: Commitment;
   newRoot: MerkleRoot;
   fee: RawAmount;
+  nextIndex: Fr;
   oldFrontier: Frontier;
   newFrontier: Frontier;
   cAuditor: Ciphertext;
@@ -136,6 +138,7 @@ export function buildShieldPublicInputs(args: {
     args.cmOut0,
     args.newRoot,
     args.fee,
+    args.nextIndex,
     ...args.oldFrontier,
     ...args.newFrontier,
     ...args.cAuditor.fields,

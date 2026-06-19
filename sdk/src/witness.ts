@@ -225,3 +225,126 @@ export function buildTransferWitness(input: TransferWitnessInput): TransferWitne
     derived: { cmIn, cmOut, nf, newRoot, newFrontier },
   };
 }
+
+// ===========================================================================
+// shield.circom - transparent -> shielded (0 shielded inputs, 1 output) (FIN-012)
+// ===========================================================================
+
+/**
+ * Fully-resolved inputs for a shield (transparent -> shielded) witness.
+ *
+ * The output note value IS the publicly-deposited `amount` and its asset is the
+ * public `asset_id` (invariant #18 - the cm opens to the deposited
+ * `(asset_id, amount)`); both are taken from `outNote` so they cannot drift. All
+ * Merkle paths/roots are supplied by the caller; the builder computes the derived
+ * signals (commitment, ciphertexts, frontier transition).
+ */
+export interface ShieldWitnessInput {
+  /** The freshly-minted output note. `assetId`/`value` are the PUBLIC deposit. SECRET opening. */
+  readonly outNote: Note;
+  /** Depositor/owner KYC membership of `outNote.ownerPk` against `kycRoot`. */
+  readonly kycPath: MerklePath;
+  readonly kycRoot: Fr;
+  /** Authorized-assets registry leaf witness (invariant #17). */
+  readonly sacAddress: Fr;
+  readonly decimals: Fr;
+  readonly perTxLimitRaw: Fr;
+  readonly assetsPath: MerklePath;
+  readonly assetsRoot: Fr;
+  /** Tree transition: frontier before the insert + the current leaf count. */
+  readonly oldFrontier: readonly Fr[];
+  readonly nextIndex: number;
+  /** Per-asset fee (0 in the demo, invariant #3). */
+  readonly fee: Fr;
+  /** Auditor public key `= Poseidon(kView)`; checked against contract state. */
+  readonly auditorPk: Fr;
+  /** Sender↔auditor shared key. SECRET. */
+  readonly kView: Fr;
+  /** Sender↔recipient pairwise secret (demo: OOB). SECRET. */
+  readonly kPair: Fr;
+  /** Published auditor-ciphertext nonce. */
+  readonly rhoEncAuditor: Fr;
+  /** Published recipient-ciphertext nonce. */
+  readonly rhoEncRecipient: Fr;
+}
+
+/** The values the shield builder derived, handy for negative-fixture construction. */
+export interface ShieldWitnessDerived {
+  /** Output-note commitment folded into the tree. */
+  readonly cmOut: Fr;
+  readonly newRoot: Fr;
+  readonly newFrontier: readonly Fr[];
+}
+
+export interface ShieldWitnessResult {
+  readonly witness: CircomWitness;
+  readonly derived: ShieldWitnessDerived;
+}
+
+/**
+ * Assemble the complete `Shield(D, 5, 5)` witness from resolved inputs.
+ * Depth `D` is taken from `oldFrontier.length`. The single output commitment is
+ * inserted at `nextIndex` to derive `new_frontier`/`new_root` exactly as
+ * `FrontierTransition` proves in-circuit (invariant #12).
+ */
+export function buildShieldWitness(input: ShieldWitnessInput): ShieldWitnessResult {
+  const depth = input.oldFrontier.length;
+  const assetId = input.outNote.assetId;
+  const amount = input.outNote.value;
+
+  const cmOut = commitNote(input.outNote);
+  const cAud = encryptToAuditor(input.outNote, input.kView, {
+    rhoEnc: input.rhoEncAuditor,
+  }).fields;
+  const cRec = encryptToRecipient(input.outNote, input.kPair, {
+    rhoEnc: input.rhoEncRecipient,
+  }).fields;
+
+  const { newFrontier, newRoot } = applyFrontierTransition(
+    input.oldFrontier,
+    input.nextIndex,
+    [cmOut],
+    depth,
+  );
+
+  const witness: CircomWitness = {
+    // --- public inputs (declared on `main`; still witness inputs to wtns) ---
+    asset_id: S(assetId),
+    amount: S(amount),
+    kyc_root: S(input.kycRoot),
+    assets_root: S(input.assetsRoot),
+    auditor_pk: S(input.auditorPk),
+    cm_out_0: S(cmOut),
+    new_root: S(newRoot),
+    fee: S(input.fee),
+    next_index: String(input.nextIndex),
+    old_frontier: input.oldFrontier.map(String),
+    new_frontier: newFrontier.map(String),
+    c_auditor: cAud.map(String),
+    c_recipient: cRec.map(String),
+
+    // --- private witness: output note opening ---
+    out_owner_pk: S(input.outNote.ownerPk),
+    out_rho: S(input.outNote.rho),
+    out_r_note: S(input.outNote.rNote),
+
+    // --- assets registry membership + per-tx limit ---
+    sac_address: S(input.sacAddress),
+    decimals: S(input.decimals),
+    per_tx_limit_raw: S(input.perTxLimitRaw),
+    assets_path_elements: pe(input.assetsPath),
+    assets_path_indices: pi(input.assetsPath),
+
+    // --- depositor/owner KYC membership ---
+    kyc_path_elements: pe(input.kycPath),
+    kyc_path_indices: pi(input.kycPath),
+
+    // --- encryption keying ---
+    k_view: S(input.kView),
+    k_pair: S(input.kPair),
+    rho_enc_auditor: S(input.rhoEncAuditor),
+    rho_enc_recipient: S(input.rhoEncRecipient),
+  };
+
+  return { witness, derived: { cmOut, newRoot, newFrontier } };
+}

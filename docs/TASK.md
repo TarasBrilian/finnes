@@ -147,9 +147,13 @@ Wire windowed compliance roots (kyc/sanction/assets) vs strict `frozen_root`; em
 
 ## Phase 6 — Boundary circuits
 
-### [ ] FIN-012 · P1 · `shield.circom` + VK
+### [x] FIN-012 · P1 · `shield.circom` + VK — DONE
 Transfer variant: 0 shielded inputs, 1 transparent input; prove output `cm` opens to the **public** `(asset_id, amount)` without revealing `(owner, rho, r)` (anti-counterfeit, invariant #18). Run phase-2, export `vk_shield.json`.
-**Acceptance:** valid shield proof verifies; a note labelled with a different asset than deposited is rejected.
+- **Done:** the scaffold (broken: circomlib `Num2Bits` include, wrong `AuditorEncCheck`/`RecipientEncCheck` signatures, `D=32`/`K=4`) was rewritten. The `Shield(D,K_a,K_r)` template was hoisted to `circuits/lib/shield.circom` (mirrors `lib/transfer.circom`) and wired to the real FIN-003/004/005 gadgets; the top-level `circuits/shield.circom` fixes `D=20, K_a=K_r=5` and compiles to **59 public signals**.
+- **Done (soundness, inv #11/#12):** added `next_index` as a public input the contract pins to its leaf count (the scaffold's private `nextIndex` let a prover insert at index 0 every time — the same hole FIN-006 closed for transfer). De-drifted across all four surfaces: `docs/PUBLIC_IO.md` (58→**59**), `contracts/finnes/src/types.rs` `ShieldPublicInputs` + `to_scalars()`, `sdk/src/publicInputs.ts` `buildShieldPublicInputs`, and the `shield` + `mint_recovery` entrypoints (`check_next_index`).
+- **Done (witness builder + gates):** `sdk/src/witness.ts` `buildShieldWitness()` does the full commitment/ciphertext/frontier computation. `scripts/test-shield-witness.ts` (`npm run shield:witness`) drives `circuits/test/shield/shield_test.circom` (`Shield(6,5,5)`): a valid witness is **accepted**, and one failing witness per constraint class is **rejected** — tampered `cm_out_0` (#18), bad KYC path (#6), missing auditor ct (#5), over-limit (#17), wrong asset binding / self-binding (#18), tampered `new_root` (#12).
+- **Done (VK + end-to-end proof):** `scripts/setup-ceremony.sh` already iterates `shield`, so `npm run circuits:build` + `npm run setup:ceremony` export `setup/build/shield/vk_shield.json` (shield D=20 is ~99k constraints → fits 2^18, lighter than transfer). A real depth-4 demo VK (`vk_shield_test4.json`, groth16/bls12381/nPublic 27) was produced reusing the FIN-007 ptau, and `scripts/test-prove-shield.ts` (`npm run shield:prove`) builds an SDK witness, `groth16.fullProve`s it, and asserts 27 public signals, `groth16.verify` accepts, and a **tampered public signal is rejected** (anti-counterfeit, #18). `cargo test`/clippy/fmt + wasm build + `npm run typecheck` + SDK tests all green; `.zkey`/`.ptau` stay gitignored (inv #10).
+**Acceptance:** ✅ valid shield proof verifies; a tampered/counterfeit public input is rejected, machine-verified by `npm run shield:witness` + `npm run shield:prove`. (Demo at depth 4; production D=20 procedure identical — same `npm run setup:ceremony`.)
 **Deps:** FIN-006, FIN-007.
 
 ### [ ] FIN-013 · P1 · `unshield.circom` + VK

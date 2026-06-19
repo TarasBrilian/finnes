@@ -127,10 +127,13 @@ impl FinnesContract {
         check_assets_root(&env, &pi.assets_root)?;
         check_auditor_pk(&env, &pi.auditor_pk)?;
 
-        // 1'. Tree transition: old_frontier must equal state.
+        // 1'. Tree transition: old_frontier must equal state, and next_index must
+        //     equal the stored leaf count so the in-circuit FrontierTransition
+        //     inserts the new leaf at the true append position (#11/#12, FIN-012).
         if !merkle::check_old_frontier(&env, &pi.old_frontier)? {
             return Err(Error::UnknownAnchorRoot);
         }
+        check_next_index(&env, &pi.next_index)?;
 
         // 4. Verify Groth16 (binds c_auditor - mandatory, invariant #5).
         let vk = state::get_vk(&env, Circuit::Shield).ok_or(Error::VerifyingKeyMissing)?;
@@ -139,8 +142,6 @@ impl FinnesContract {
         // 5. Effects: store new frontier/root + the new commitment (as the new
         //    leaf is already folded into new_root/new_frontier by the circuit).
         //    One output note => advance the leaf count by 1.
-        // TODO(FIN-012): check pi.next_index == leaf_count once shield.circom
-        //    exposes the next_index public input (mirror confidential_transfer).
         merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root, 1)?;
         state::bump_instance_ttl(&env);
         // TODO: emit event (cm_out_0, c_auditor, c_recipient) for the indexer.
@@ -417,6 +418,9 @@ impl FinnesContract {
         if !merkle::check_old_frontier(&env, &pi.old_frontier)? {
             return Err(Error::UnknownAnchorRoot);
         }
+        // Pin the recovery mint's insert position to state (#11/#12, FIN-012);
+        // it reuses the shield circuit, which exposes `next_index`.
+        check_next_index(&env, &pi.next_index)?;
         let vk = state::get_vk(&env, Circuit::Shield).ok_or(Error::VerifyingKeyMissing)?;
         verifier::verify_groth16(&env, &vk, &proof, &pi.to_scalars(&env))?;
         // Recovery mints one note => advance leaf count by 1.

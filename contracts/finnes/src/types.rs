@@ -168,11 +168,11 @@ pub struct TransferPublicInputs {
 
 /// `shield.circom` - transparent → shielded (0 shielded inputs, 1 transparent).
 ///
-/// Index order (docs/PUBLIC_IO.md § shield.circom):
+/// Index order (docs/PUBLIC_IO.md § shield.circom, 59 signals):
 /// ```text
 ///  0 asset_id  1 amount  2 kyc_root  3 assets_root  4 auditor_pk
-///  5 cm_out_0  6 new_root  7 fee
-///  8..8+D-1   old_frontier[0..D-1]
+///  5 cm_out_0  6 new_root  7 fee     8 next_index
+///  9..9+D-1   old_frontier[0..D-1]
 ///    ..+D     new_frontier[0..D-1]
 ///    ..+K_a   c_auditor    ..+K_r c_recipient
 /// ```
@@ -187,7 +187,13 @@ pub struct ShieldPublicInputs {
     pub cm_out_0: Commitment,
     pub new_root: Root,
     pub fee: Scalar,
+    /// Current leaf count before insertion; the contract checks this equals the
+    /// stored `leaf_count` so the circuit's `FrontierTransition` inserts at the
+    /// true append index (invariants #11/#12). Never prover-controlled (FIN-012).
+    pub next_index: Scalar,
+    /// `old_frontier` - exactly `TREE_DEPTH` elements; checked equal to state.
     pub old_frontier: Vec<Scalar>,
+    /// `new_frontier` - exactly `TREE_DEPTH` elements; stored verbatim.
     pub new_frontier: Vec<Scalar>,
     pub c_auditor: Vec<Scalar>,
     pub c_recipient: Vec<Scalar>,
@@ -317,7 +323,8 @@ impl ShieldPublicInputs {
         v.push_back(self.cm_out_0.clone()); // 5
         v.push_back(self.new_root.clone()); // 6
         v.push_back(self.fee.clone()); // 7
-        extend(&mut v, &self.old_frontier); // 8 .. 8+D-1
+        v.push_back(self.next_index.clone()); // 8
+        extend(&mut v, &self.old_frontier); // 9 .. 9+D-1
         extend(&mut v, &self.new_frontier);
         extend(&mut v, &self.c_auditor);
         extend(&mut v, &self.c_recipient);

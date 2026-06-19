@@ -70,11 +70,14 @@ export { scanForOwnedNotes, tryDecryptNote } from './scan.js';
 export type {
   CircomWitness,
   ImtLowLeaf,
+  ShieldWitnessDerived,
+  ShieldWitnessInput,
+  ShieldWitnessResult,
   TransferWitnessDerived,
   TransferWitnessInput,
   TransferWitnessResult,
 } from './witness.js';
-export { buildTransferWitness } from './witness.js';
+export { buildShieldWitness, buildTransferWitness } from './witness.js';
 
 export type { PublicInputVector } from './publicInputs.js';
 export {
