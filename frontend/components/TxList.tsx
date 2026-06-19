@@ -1,7 +1,6 @@
 'use client';
 
 import type { OnChainTxSummary } from '@/lib/finnes-client';
-import { MockBadge } from './MockBadge';
 
 function shortCm(c: bigint): string {
   const hex = c.toString(16);
@@ -10,7 +9,7 @@ function shortCm(c: bigint): string {
 
 /**
  * Lists on-chain transactions as the PUBLIC sees them: opaque commitments,
- * nullifiers, and ciphertext references — no amounts, no parties. Selecting a
+ * nullifiers, and ciphertext references - no amounts, no parties. Selecting a
  * row feeds the DisclosurePanel, which (with the view key) reveals everything.
  */
 export function TxList({
@@ -26,10 +25,9 @@ export function TxList({
     <div className="card">
       <div className="mb-1 flex items-center justify-between gap-3">
         <h3 className="text-base font-bold text-ink">On-chain ledger</h3>
-        {txs.some((t) => t.isMock) && <MockBadge />}
       </div>
       <p className="mb-4 text-xs text-ink-muted">
-        Exactly what the public and competitors can see — opaque blobs only.
+        Exactly what the public and competitors can see - opaque blobs only.
       </p>
 
       <ul className="space-y-2">
@@ -61,7 +59,7 @@ export function TxList({
                       nullifiers
                     </dt>
                     <dd className="truncate font-mono">
-                      {tx.nullifiers.length ? tx.nullifiers.join(', ') : '—'}
+                      {tx.nullifiers.length ? tx.nullifiers.join(', ') : '-'}
                     </dd>
                   </div>
                   <div className="min-w-0">
@@ -83,7 +81,7 @@ export function TxList({
         <span aria-hidden="true" className="mt-px">
           🔒
         </span>
-        No amount, asset, or counterparty is observable here — only the regulator, holding the view
+        No amount, asset, or counterparty is observable here - only the regulator, holding the view
         key, can resolve it.
       </p>
     </div>

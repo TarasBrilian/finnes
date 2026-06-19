@@ -4,7 +4,7 @@ import './globals.css';
 import { HeaderWalletButton } from '@/components/HeaderWalletButton';
 
 export const metadata: Metadata = {
-  title: 'Finnes — Confidential RWA Settlement',
+  title: 'Finnes - Confidential RWA Settlement',
   description:
     'Institution- and regulator-facing UI for the Finnes confidential settlement layer on Stellar/Soroban. Private from the public, fully auditable by regulators.',
 };
@@ -26,7 +26,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <header className="sticky top-0 z-20 border-b border-blue-100 bg-white/80 backdrop-blur-md">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5">
             <a href="/" className="group flex items-center gap-3">
-              {/* Wordmark — Mega Mendung seal (asset) + the name. */}
+              {/* Wordmark - Mega Mendung seal (asset) + the name. */}
               <img src="/seal.svg" alt="" aria-hidden="true" className="h-9 w-9 shadow-sm" />
               <span className="flex flex-col leading-none">
                 <span className="text-[17px] font-extrabold tracking-tight text-ink">Finnes</span>
@@ -52,7 +52,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <footer className="mx-auto max-w-6xl px-6 pb-12 pt-8">
           <div className="mb-4 h-px w-full bg-blue-100" />
           <p className="max-w-3xl text-xs leading-relaxed text-ink-faint">
-            Finnes is not a mixer — auditability is enforced in-circuit by design. Secrets
+            Finnes is not a mixer - auditability is enforced in-circuit by design. Secrets
             (spending/viewing keys, witness, note plaintext) never leave the client trust zone.
           </p>
         </footer>

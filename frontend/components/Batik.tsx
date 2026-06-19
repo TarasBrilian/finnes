@@ -1,7 +1,7 @@
 /**
  * Mega Mendung (Cirebon cloud batik) presentation helpers.
  *
- * The motif is a real asset — `public/mega-mendung.svg` (refined line-art) and
+ * The motif is a real asset - `public/mega-mendung.svg` (refined line-art) and
  * `public/seal.svg` (the brand roundel). Used as a restrained brand signature on
  * navy surfaces, never a full-page wallpaper. Decorative: `aria-hidden`.
  */

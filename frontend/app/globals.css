@@ -27,7 +27,7 @@ h1, h2, h3 {
     @apply hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lift;
   }
 
-  /* Deep navy panel — the brand surface (hero, position panel). */
+  /* Deep navy panel - the brand surface (hero, position panel). */
   .panel-navy {
     @apply relative overflow-hidden rounded-3xl bg-navy-panel text-white shadow-lift;
   }
@@ -95,7 +95,7 @@ h1, h2, h3 {
   .badge {
     @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
   }
-  /* Compliance chip — pill with a status dot. */
+  /* Compliance chip - pill with a status dot. */
   .chip {
     @apply inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium;
   }

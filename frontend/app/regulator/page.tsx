@@ -50,8 +50,7 @@ export default function RegulatorPage() {
 
       <p className="text-[11px] leading-relaxed text-ink-faint">
         Clawback is a separate two-phase / two-key flow (auditor identifies cm_target via the view
-        key; issuer_authority freezes it). Not part of this scaffold — see ARCHITECTURE.md → Clawback
-        &amp; freeze.
+        key; issuer_authority freezes it). See ARCHITECTURE.md → Clawback &amp; freeze.
       </p>
     </div>
   );

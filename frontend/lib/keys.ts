@@ -2,10 +2,10 @@
 
 /**
  * Local key material: spending key (owner_sk), viewing key, and the auditor
- * view key — generated and held CLIENT-SIDE ONLY.
+ * view key - generated and held CLIENT-SIDE ONLY.
  *
  * ============================================================================
- * TRUST BOUNDARY (CLAUDE.md invariant #8 — fund/privacy-critical)
+ * TRUST BOUNDARY (CLAUDE.md invariant #8 - fund/privacy-critical)
  * ============================================================================
  * The frontend, with the prover, is the ONLY place private keys exist. The
  * spending key, the viewing key, the witness, owner_sk/rho/r_note, and the
@@ -18,7 +18,7 @@
  *
  * localStorage CAVEAT: a `persistToLocalStorage` flag is provided ONLY for
  * demo convenience so a key survives a page reload. It is DISABLED by default
- * and is NOT acceptable for production — browser localStorage is readable by
+ * and is NOT acceptable for production - browser localStorage is readable by
  * any script on the origin (XSS) and is unencrypted at rest. Real deployments
  * must use a hardware/OS keystore or a wallet-managed signer. See TODO(security).
  * ============================================================================
@@ -45,7 +45,7 @@ export interface SpendingKeypair {
   readonly isMock: boolean;
 }
 
-/** The auditor (regulator) view key. `sk` is SECRET — held in the auditor zone. */
+/** The auditor (regulator) view key. `sk` is SECRET - held in the auditor zone. */
 export interface AuditorKeypair {
   /** SECRET auditor view key. Never log/persist/transmit (invariant #8). */
   readonly sk: Fr;
@@ -67,7 +67,7 @@ function mockFieldElement(): Fr {
   if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
     crypto.getRandomValues(bytes);
   } else {
-    // Non-CSPRNG fallback — demo only, never security-relevant.
+    // Non-CSPRNG fallback - demo only, never security-relevant.
     for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
   }
   let acc = 0n;
@@ -89,7 +89,7 @@ export function generateSpendingKeypair(): SpendingKeypair {
     const ownerPk = deriveOwnerPk(ownerSk);
     return { ownerSk, ownerPk, isMock: false };
   } catch {
-    // SDK Poseidon not wired yet — see sdk/src/poseidon.ts.
+    // SDK Poseidon not wired yet - see sdk/src/poseidon.ts.
     return { ownerSk, ownerPk: mockFieldElement() as OwnerPk, isMock: true };
   }
 }
@@ -98,7 +98,7 @@ export function generateSpendingKeypair(): SpendingKeypair {
  * Generate / import an auditor view keypair.
  *
  * TODO(crypto): the auditor key uses the (BLS-native) KEM of the chosen
- * encryption scheme — see sdk/src/encrypt.ts and docs/PUBLIC_IO.md
+ * encryption scheme - see sdk/src/encrypt.ts and docs/PUBLIC_IO.md
  * §"Ciphertext binding". Until then this is a mock placeholder.
  */
 export function generateAuditorKeypair(): AuditorKeypair {
@@ -107,7 +107,7 @@ export function generateAuditorKeypair(): AuditorKeypair {
 
 /**
  * Parse a user-supplied auditor view key (regulator pastes their key).
- * Accepts a decimal or 0x-hex string. Throws on malformed input — we never
+ * Accepts a decimal or 0x-hex string. Throws on malformed input - we never
  * silently coerce a bad key.
  */
 export function importAuditorViewKey(raw: string): AuditorKeypair {
@@ -172,7 +172,7 @@ export function clearKeys(): void {
 }
 
 // ---------------------------------------------------------------------------
-// localStorage — DEMO ONLY, OFF BY DEFAULT. See the trust-boundary note above.
+// localStorage - DEMO ONLY, OFF BY DEFAULT. See the trust-boundary note above.
 // ---------------------------------------------------------------------------
 
 /**

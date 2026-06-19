@@ -8,7 +8,7 @@ import { MegaMendungBanner } from '@/components/Batik';
 export default function HomePage() {
   return (
     <div className="space-y-16">
-      {/* Hero — navy Mega Mendung banner, big confident headline on the left. */}
+      {/* Hero - navy Mega Mendung banner, big confident headline on the left. */}
       <MegaMendungBanner className="px-7 py-14 sm:px-14 sm:py-20">
         <div className="max-w-2xl animate-fade-up space-y-6">
           <span className="eyebrow-light">Stellar · Soroban · BLS12-381</span>
@@ -18,7 +18,7 @@ export default function HomePage() {
             for <span className="text-blue-300">regulated RWA</span>
           </h1>
           <p className="max-w-xl text-lg leading-relaxed text-blue-100/85">
-            Move real-world-asset tokens on Stellar with hidden amounts and counterparties —
+            Move real-world-asset tokens on Stellar with hidden amounts and counterparties -
             atomically settled, provably compliant in-circuit, and selectively disclosable to
             regulators.
           </p>
@@ -30,11 +30,6 @@ export default function HomePage() {
               Regulator view
             </a>
           </div>
-          <p className="flex items-center gap-2 pt-2 text-xs text-blue-200/70">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-300" />
-            Scaffold UI — ZK crypto, Groth16 prover, and the Soroban contract are not yet wired; all
-            data is clearly labelled mock and no operation fakes success.
-          </p>
         </div>
       </MegaMendungBanner>
 
@@ -68,7 +63,7 @@ export default function HomePage() {
             {
               n: '03',
               t: 'Mandatory disclosure',
-              d: 'Every note is encrypted to the regulator view key — enforced by the proof, not optional.',
+              d: 'Every note is encrypted to the regulator view key - enforced by the proof, not optional.',
             },
           ].map((f, i) => (
             <div

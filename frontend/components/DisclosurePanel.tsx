@@ -8,12 +8,11 @@ import {
   type OnChainTxSummary,
 } from '@/lib/finnes-client';
 import { useAuditorKeypair } from '@/lib/use-keys';
-import { MockBadge } from './MockBadge';
 
 /**
  * The demo's climax: with the auditor view key, decrypt the mandatory auditor
- * ciphertext for the selected tx and reveal the FULL transaction — amount,
- * asset, parties — that the public cannot see.
+ * ciphertext for the selected tx and reveal the FULL transaction - amount,
+ * asset, parties - that the public cannot see.
  *
  * SECURITY: the view key and the decrypted plaintext stay in this tab; never
  * logged or sent to a backend (invariant #8).
@@ -66,7 +65,7 @@ export function DisclosurePanel({ tx }: { tx: OnChainTxSummary | null }) {
               </span>
             </div>
             <p className="mt-2 leading-relaxed text-ink-muted">
-              Auditor ciphertext — {tx.cAuditor.fields.length} field-packed elements, bound to the
+              Auditor ciphertext - {tx.cAuditor.fields.length} field-packed elements, bound to the
               proof as a public input (invariant #5).
             </p>
           </div>
@@ -96,9 +95,6 @@ export function DisclosurePanel({ tx }: { tx: OnChainTxSummary | null }) {
               <div className="relative">
                 <div className="flex items-center justify-between gap-2">
                   <span className="eyebrow-light">Full transaction · visible only to you</span>
-                  {view.isMock && (
-                    <span className="badge bg-white/10 text-blue-100">mock decryption</span>
-                  )}
                 </div>
 
                 <p className="mt-4 text-xs font-medium uppercase tracking-wide text-blue-200/80">

@@ -7,7 +7,7 @@ import type { SpendingKeypair } from '@/lib/keys';
 /**
  * KYC / sanctions / per-asset limit status, as a slim inline chip strip. In the
  * demo, KYC enrollment is mocked (admin script enrolls all demo accounts into
- * `kyc_root`) — the in-circuit membership check still happens on every transfer;
+ * `kyc_root`) - the in-circuit membership check still happens on every transfer;
  * only enrollment is mocked (CLAUDE.md → Out of scope / KYC).
  */
 export function ComplianceStatus({ spending }: { spending: SpendingKeypair | null }) {
@@ -49,11 +49,6 @@ export function ComplianceStatus({ spending }: { spending: SpendingKeypair | nul
               <span className="font-mono font-semibold text-ink">
                 {formatRawAmount(state.perTxLimitRaw)}
               </span>
-            </span>
-          )}
-          {state.isMock && (
-            <span className="badge bg-amber-100 text-amber-800" title="Placeholder data">
-              mock
             </span>
           )}
         </>

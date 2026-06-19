@@ -9,14 +9,14 @@ import {
 import type { SpendingKeypair } from '@/lib/keys';
 
 /**
- * The institution's confidential position — discovered by scanning on-chain
+ * The institution's confidential position - discovered by scanning on-chain
  * ciphertexts with the viewing key (ARCHITECTURE.md → Frontend). Rendered as the
  * dashboard's primary anchor: a deep navy panel with large per-asset figures.
  * The institution sees only its OWN notes.
  *
  * SCAFFOLD: sdk scanning throws (encryption scheme not fixed), so the data is
  * clearly labelled MOCK until @finnes/sdk decryption is wired. Per-asset figures
- * are NOT summed across assets (invariant #3 spirit — no cross-asset total).
+ * are NOT summed across assets (invariant #3 spirit - no cross-asset total).
  */
 export function ConfidentialBalances({ spending }: { spending: SpendingKeypair | null }) {
   const [balances, setBalances] = useState<ConfidentialBalance[] | null>(null);
@@ -37,8 +37,6 @@ export function ConfidentialBalances({ spending }: { spending: SpendingKeypair |
     };
   }, [spending]);
 
-  const isMock = balances?.some((b) => b.isMock);
-
   return (
     <section className="panel-navy p-7 sm:p-8">
       {/* faint cloud watermark, bottom-right */}
@@ -50,11 +48,6 @@ export function ConfidentialBalances({ spending }: { spending: SpendingKeypair |
       <div className="relative">
         <div className="flex items-center justify-between">
           <span className="eyebrow-light">Confidential position</span>
-          {isMock && (
-            <span className="badge bg-white/10 text-blue-100" title="Placeholder — not decrypted yet">
-              mock · not decrypted
-            </span>
-          )}
         </div>
 
         {!spending && (

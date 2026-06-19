@@ -40,7 +40,7 @@ import type { ProofBundle, Witness } from '@finnes/prover';
 import type { SpendingKeypair, AuditorKeypair } from './keys.js';
 
 // ---------------------------------------------------------------------------
-// Result envelope — operations report a real, honest status.
+// Result envelope - operations report a real, honest status.
 // ---------------------------------------------------------------------------
 
 export type StepStatus = 'ok' | 'todo' | 'error';
@@ -86,7 +86,7 @@ function summarise(steps: OpStep[], txHash?: string): OpResult {
  * now returns clearly-labelled mock roots so the UI can render.
  */
 export async function fetchStateRoots(): Promise<{ roots: StateRoots; isMock: boolean }> {
-  // MOCK — not real chain state.
+  // MOCK - not real chain state.
   const z: Fr = 0n;
   return {
     isMock: true,
@@ -109,7 +109,7 @@ export async function fetchAuditorPublicKey(): Promise<{ pk: AuditorPublicKey; i
 }
 
 // ---------------------------------------------------------------------------
-// Scanning — discover owned notes by trial-decrypting on-chain ciphertexts.
+// Scanning - discover owned notes by trial-decrypting on-chain ciphertexts.
 // Runs client-side with the viewing secret (invariant #8).
 // ---------------------------------------------------------------------------
 
@@ -128,13 +128,13 @@ export interface ConfidentialBalance {
  *
  * TODO(sdk): call `scanForOwnedNotes` over indexer-served ciphertexts using the
  * viewing context. `tryDecryptNote` currently THROWS (encryption scheme not
- * fixed — sdk/src/scan.ts, encrypt.ts). Until then we return labelled MOCK
+ * fixed - sdk/src/scan.ts, encrypt.ts). Until then we return labelled MOCK
  * balances so the institution view is demo-credible without faking decryption.
  */
 export async function scanConfidentialBalances(
   _spending: SpendingKeypair,
 ): Promise<ConfidentialBalance[]> {
-  // MOCK display data — clearly labelled in the UI as not-yet-decrypted.
+  // MOCK display data - clearly labelled in the UI as not-yet-decrypted.
   return [
     {
       assetId: 1n,
@@ -225,7 +225,7 @@ export async function shield(
   steps.push(
     todo(
       'Encrypt note to auditor (mandatory) + recipient',
-      'sdk encryptToAuditor/encryptToRecipient throw — hybrid value-equality scheme not fixed. ' +
+      'sdk encryptToAuditor/encryptToRecipient throw - hybrid value-equality scheme not fixed. ' +
         'Auditor ciphertext is mandatory (invariant #5). TODO(sdk).',
     ),
   );
@@ -265,7 +265,7 @@ export async function confidentialTransfer(
   steps.push(
     todo(
       'Select input notes + build outputs',
-      'Requires decrypted owned notes (scan) — sdk scan/encrypt throw. TODO(sdk).',
+      'Requires decrypted owned notes (scan) - sdk scan/encrypt throw. TODO(sdk).',
     ),
   );
   steps.push(
@@ -283,7 +283,7 @@ export async function confidentialTransfer(
   steps.push(
     todo(
       'Assemble transfer witness (nullifiers, conservation, KYC, limits)',
-      'prover assembleTransferWitness — per-asset conservation, 64-bit range, KYC membership, ' +
+      'prover assembleTransferWitness - per-asset conservation, 64-bit range, KYC membership, ' +
         'sanctions/frozen non-membership, assets membership + value ≤ per_tx_limit. TODO(prover).',
     ),
   );
@@ -326,7 +326,7 @@ export async function unshield(
   steps.push(
     todo(
       'Assemble unshield witness (frozen non-membership + recipient KYC)',
-      'prover assembleUnshieldWitness — invariant #19: frozen-set non-membership of the spent ' +
+      'prover assembleUnshieldWitness - invariant #19: frozen-set non-membership of the spent ' +
         'commitment + KYC/non-sanctioned transparent recipient. TODO(prover).',
     ),
   );
@@ -379,7 +379,7 @@ export interface DecryptedAuditView {
 }
 
 /**
- * List on-chain transactions (regulator view). PUBLIC data only — the regulator
+ * List on-chain transactions (regulator view). PUBLIC data only - the regulator
  * sees the same opaque records as everyone else until they decrypt.
  *
  * TODO(backend): wire to the indexer. Returns clearly-labelled MOCK txs.
@@ -418,11 +418,11 @@ export async function listOnChainTransactions(): Promise<OnChainTxSummary[]> {
 }
 
 /**
- * Decrypt the auditor ciphertext for a selected tx — the demo's climax
+ * Decrypt the auditor ciphertext for a selected tx - the demo's climax
  * ("public sees nothing, regulator sees everything").
  *
  * TODO(sdk): the real path derives the auditor decryption key from `auditor.sk`
- * and decrypts `tx.cAuditor` (hybrid scheme — sdk/src/encrypt.ts, scan.ts both
+ * and decrypts `tx.cAuditor` (hybrid scheme - sdk/src/encrypt.ts, scan.ts both
  * THROW today). We DO NOT fabricate a decryption. We return a clearly-labelled
  * MOCK plaintext so the regulator flow is demo-credible, and we flag `isMock`.
  *

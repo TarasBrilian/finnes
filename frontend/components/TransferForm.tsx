@@ -9,11 +9,11 @@ import { OpResultPanel } from './OpResultPanel';
  * Confidential transfer A → B (2-in / 2-out, single asset). Building the intent
  * assembles a witness from LOCAL notes, calls the client-side prover, and would
  * submit the proof + public inputs + ciphertexts to the contract. Where wiring
- * is missing, the result panel shows 'TODO · not wired' — never a fake success.
+ * is missing, the result panel shows 'TODO · not wired' - never a fake success.
  */
 /**
  * A transparent Stellar address: 'G' + 55 base32 chars (A–Z, 2–7). Accepting one
- * here would de-anonymise the recipient — a confidential transfer commits to the
+ * here would de-anonymise the recipient - a confidential transfer commits to the
  * recipient's SHIELDED key (owner_addr = Poseidon(owner_pk)), never a G… address.
  */
 function looksLikeStellarAddress(s: string): boolean {
@@ -22,7 +22,7 @@ function looksLikeStellarAddress(s: string): boolean {
 
 const RECIPIENT_ADDRESS_ERROR =
   "That's a transparent Stellar address (G…). A confidential transfer needs the " +
-  "recipient's shielded key (owner_pk) — ask them for it from their “Generate key” panel.";
+  "recipient's shielded key (owner_pk) - ask them for it from their “Generate key” panel.";
 
 export function TransferForm({ spending }: { spending: SpendingKeypair | null }) {
   const [assetLabel, setAssetLabel] = useState('TBOND-2031 (tokenized bond)');
@@ -93,7 +93,7 @@ export function TransferForm({ spending }: { spending: SpendingKeypair | null })
           <input
             id="t-recipient"
             className="input font-mono"
-            placeholder="zk… recipient shielded public key — not a G… address"
+            placeholder="zk… recipient shielded public key - not a G… address"
             value={recipientPk}
             onChange={(e) => setRecipientPk(e.target.value)}
             aria-invalid={!!recipientError}

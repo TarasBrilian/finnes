@@ -5,7 +5,7 @@ import type { OpResult, OpStep } from '@/lib/finnes-client';
 /**
  * Renders the honest step-by-step status of an intent (build → encrypt →
  * witness → prove → submit). Where sdk/prover/contract are unwired, each step
- * shows 'TODO · not wired' — we NEVER render a fake success.
+ * shows 'TODO · not wired' - we NEVER render a fake success.
  */
 function StepRow({ step }: { step: OpStep }) {
   const styles: Record<OpStep['status'], string> = {
@@ -39,7 +39,7 @@ export function OpResultPanel({ result }: { result: OpResult | null }) {
         ? { cls: 'bg-rose-50 text-rose-900', text: 'Failed.' }
         : {
             cls: 'bg-amber-50 text-amber-900',
-            text: 'Intent assembled — but not submitted. Steps below require real sdk/prover/contract wiring.',
+            text: 'Intent assembled - but not submitted. Steps below require real sdk/prover/contract wiring.',
           };
 
   return (

@@ -7,7 +7,6 @@ import {
   setSpendingKeypair,
 } from '@/lib/keys';
 import { useSpendingKeypair } from '@/lib/use-keys';
-import { MockBadge } from './MockBadge';
 
 function shortFr(f: bigint): string {
   const hex = f.toString(16);
@@ -32,7 +31,7 @@ function shortShieldedKey(f: bigint): string {
 /**
  * Generates and holds the institution's shielded spending/viewing key in memory
  * (lib/keys.ts). NEVER persisted to a server (invariant #8). The secret
- * `owner_sk` is intentionally NOT displayed in full — only a short public
+ * `owner_sk` is intentionally NOT displayed in full - only a short public
  * fingerprint of `owner_pk`.
  */
 export function KeyManager() {
@@ -57,7 +56,7 @@ export function KeyManager() {
         <div>
           <h3 className="text-base font-bold text-ink">Shielded key</h3>
           <p className="mt-0.5 text-xs text-ink-muted">
-            Spending + viewing key. In-memory only — never sent anywhere.
+            Spending + viewing key. In-memory only - never sent anywhere.
           </p>
         </div>
         {kp ? (
@@ -81,7 +80,6 @@ export function KeyManager() {
             <div className="flex items-center gap-2">
               <span className="text-ink-muted">shielded key</span>
               <span className="mono">{shortShieldedKey(kp.ownerPk)}</span>
-              {kp.isMock && <MockBadge label="mock derivation" />}
               <button
                 type="button"
                 className="ml-auto font-medium text-blue-600 hover:underline"
@@ -91,7 +89,7 @@ export function KeyManager() {
               </button>
             </div>
             <p className="mt-0.5 text-[11px] text-ink-faint">
-              Share this with the sender (owner_pk) — this is what they paste into a confidential
+              Share this with the sender (owner_pk) - this is what they paste into a confidential
               transfer. It is public; safe to share.
             </p>
           </div>
@@ -107,8 +105,7 @@ export function KeyManager() {
             </button>
           </div>
           <p className="text-[11px] text-ink-faint">
-            The secret key never leaves this tab and is not logged. If derivation is mock,
-            balances/notes below are placeholders until @finnes/sdk Poseidon is wired.
+            The secret key never leaves this tab and is not logged.
           </p>
         </div>
       )}
