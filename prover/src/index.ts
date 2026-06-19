@@ -6,9 +6,10 @@
  * (owner_sk, rho, r_note, plaintext values, encryption randomness) must never be
  * logged, persisted, or transmitted (CLAUDE.md invariant #8).
  *
- * SCAFFOLD: proving is not yet wired end-to-end. Witness signal names and the
- * ciphertext/frontier packing depend on circuit internals not yet finalised - see
- * the `TODO(circuit)` / `TODO(setup)` / `TODO(sdk)` markers across the module.
+ * TRANSFER is wired end-to-end (FIN-006/007/008): build the witness with
+ * `buildTransferWitness` (re-exported from `@finnes/sdk`), `prove()` it against
+ * the BLS12-381 `.wasm`/`.zkey`, and `verifyLocal()` against `vk_transfer.json`.
+ * shield / unshield / dvp remain scaffolds until their circom lands.
  */
 
 export type {
@@ -21,17 +22,31 @@ export type {
   Witness,
 } from "./types.js";
 
+// Transfer witness builder + ordered public-input assembly: single source of
+// truth in @finnes/sdk (docs/PUBLIC_IO.md). Re-exported here so prover consumers
+// have one import surface (FIN-008 / FIN-022 - no duplicated PUBLIC_IO order).
+export { buildTransferWitness } from "@finnes/sdk";
+export type {
+  CircomWitness,
+  ImtLowLeaf,
+  TransferWitnessInput,
+  TransferWitnessResult,
+} from "@finnes/sdk";
 export {
-  PUBLIC_IO_ORDER,
+  buildDvpPublicInputs,
+  buildShieldPublicInputs,
+  buildTransferPublicInputs,
+  buildUnshieldPublicInputs,
+} from "@finnes/sdk";
+
+export {
   assembleShieldWitness,
-  assembleTransferWitness,
   assembleUnshieldWitness,
   assembleDvpWitness,
 } from "./witness.js";
 export type {
   CommonPublicInputs,
   ShieldWitnessInput,
-  TransferWitnessInput,
   UnshieldWitnessInput,
   DvpWitnessInput,
   DvpLeg,

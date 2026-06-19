@@ -26,22 +26,24 @@ import type {
 } from "./types.js";
 
 /**
- * Default artifact layout: `setup/build/<circuit>/<circuit>.{wasm,zkey}` and the
- * exported verifying key at `setup/build/<circuit>/vk_<circuit>.json`. Paths are
- * resolved relative to `baseDir` (defaults to `setup/build`).
+ * Default artifact layout, matching the repo's build + ceremony scripts:
+ *   - witness-generator WASM: `circuits/build/<circuit>/<circuit>_js/<circuit>.wasm`
+ *     (`npm run circuits:build`),
+ *   - proving key + exported VK: `setup/build/<circuit>/{<circuit>.zkey,
+ *     vk_<circuit>.json}` (`npm run setup:ceremony`).
  *
- * Configurable so a self-hosted institutional prover can point at its own
- * ceremony output without code changes.
+ * `circuitsDir` / `setupDir` are configurable so a self-hosted institutional
+ * prover can point at its own build + ceremony output without code changes.
  */
 export function defaultArtifacts(
   circuit: CircuitName,
-  baseDir = "setup/build",
+  setupDir = "setup/build",
+  circuitsDir = "circuits/build",
 ): CircuitArtifacts {
-  const dir = `${baseDir}/${circuit}`;
   return {
-    wasmPath: `${dir}/${circuit}.wasm`,
-    zkeyPath: `${dir}/${circuit}.zkey`,
-    vkeyPath: `${dir}/vk_${circuit}.json`,
+    wasmPath: `${circuitsDir}/${circuit}/${circuit}_js/${circuit}.wasm`,
+    zkeyPath: `${setupDir}/${circuit}/${circuit}.zkey`,
+    vkeyPath: `${setupDir}/${circuit}/vk_${circuit}.json`,
   };
 }
 

@@ -66,7 +66,7 @@ export interface MerklePath {
  * SECURITY: this object embeds every secret. It must never leave the client zone.
  */
 export interface Witness {
-  [signal: string]: FieldElement | FieldElement[] | number | number[];
+  [signal: string]: FieldElement | FieldElement[] | FieldElement[][] | number | number[];
 }
 
 /**

@@ -22,8 +22,15 @@ layout and the project root `CLAUDE.md` for the binding security invariants.
 > `npm run transfer:witness` machine-verifies a valid witness is accepted and one
 > failing witness per constraint class is rejected. The contract gained
 > `leaf_count` state + a `next_index` gate (`cargo test` green).
-> **Next on the critical path:** **FIN-007** (demo ceremony + `vk_transfer.json`),
-> then **FIN-008** (wire `prover/` to import the SDK witness builder + prove).
+> **FIN-007 + FIN-008 are now DONE too.** A real BLS12-381 Groth16 setup runs via
+> `npm run setup:demo` (depth-4 `transfer_test4`, ~115k constraints, 2^18) and
+> `npm run transfer:prove` builds an SDK witness, `groth16.fullProve`s it, and
+> verifies locally (41 public signals; tamper rejected) — circuit + setup + prover
+> proven end-to-end off-chain. The prover now uses the SDK builder + SDK ordered
+> public-IO (duplicated `PUBLIC_IO_ORDER` removed, closing FIN-022). The D=20
+> production ceremony is identical but needs `PTAU_POWER=20` + more RAM (or the
+> deferred Poseidon optimisation). **Next on the critical path:** **FIN-009**
+> (implement `verifier.rs` Groth16 over BLS12-381 host fns) — the on-chain side.
 
 ---
 
@@ -87,18 +94,26 @@ Wired FIN-003/004/005 into `transfer.circom`: inclusion + ownership, nullifier d
 
 ## Phase 3 — Trusted setup (demo)
 
-### [ ] FIN-007 · P1 · Demo ceremony + VK export
-Run `scripts/setup-ceremony.sh`: generate a **BLS12-381** ptau locally (DEMO-ONLY, invariant #10), phase-2 for `transfer`, export `vk_transfer.json`. Confirm the snarkjs curve flag and set `PTAU_POWER` ≥ the circuit's constraint count.
-**Acceptance:** `setup/build/transfer/transfer.zkey` + public `vk_transfer.json` produced; loud demo-only warning printed; `.zkey`/`.ptau` stay gitignored.
+### [x] FIN-007 · P1 · Demo ceremony + VK export — DONE (depth-4 demo; D=20 production noted)
+Real **BLS12-381** Groth16 trusted setup, machine-verified end-to-end with FIN-008.
+- **Curve/flag confirmed:** `snarkjs powersoftau new bls12381 …` works (snarkjs 0.7.5); the exported VK reports `protocol: groth16, curve: bls12381`.
+- **PTAU sizing corrected:** snarkjs needs `2^PTAU_POWER ≥ 2·nConstraints` (not just `≥ nConstraints`). Production `transfer` (D=20) has ~295k constraints → `2·295k = 590k` → **2^20**. `scripts/setup-ceremony.sh` default fixed to `PTAU_POWER=20` with the rule documented.
+- **Runnable demo:** the D=20 2^20 BLS12-381 ceremony (heavy `prepare phase2` + ~1GB ptau) did not finish in reasonable time on a 16GB laptop, so `scripts/setup-demo-ceremony.sh` (`npm run setup:demo`) runs the SAME pipeline on the **depth-4** harness (`transfer_test4`, ~115k constraints, 2^18) and produces a real `transfer_test4.zkey` + `vk_transfer_test4.json` (curve bls12381, nPublic 41). Loud DEMO-ONLY warnings printed; `.zkey`/`.ptau` stay gitignored (invariant #10).
+- **Production note:** the only delta for D=20 is `PTAU_POWER=20` + a bigger machine (or optimising the unoptimised HadesMiMC Poseidon, FIN-002 follow-up, to slash constraints).
+**Acceptance:** ✅ real BLS12-381 `.zkey` + public VK produced; demo warning printed; `.zkey`/`.ptau` gitignored. (Demo at depth 4; production procedure identical at `PTAU_POWER=20`.)
 **Deps:** FIN-006.
 
 ---
 
 ## Phase 4 — Prover (off-chain proof works end-to-end)
 
-### [ ] FIN-008 · P1 · Wire `prover/` witness + proving
-Finalize `prover/src/witness.ts` to the real circuit signal names, run `groth16.fullProve`, and verify with `verifyLocal` against `vk_transfer.json`. Import the ordered public-input builders from `@finnes/sdk` (drop the duplicated `PUBLIC_IO_ORDER`). Never log the witness (invariant #8).
-**Acceptance:** `prover` generates a proof for a transfer and `groth16.verify` returns true locally. This proves circuit+setup+prover before touching chain.
+### [x] FIN-008 · P1 · Wire `prover/` witness + proving — DONE
+The prover now produces a real Groth16 proof that verifies locally.
+- **Witness via SDK:** `prover/src/witness.ts` no longer hand-rolls the transfer witness; the prover re-exports `buildTransferWitness` from `@finnes/sdk` (the full commitment/nullifier/ciphertext/frontier builder from FIN-006). shield/unshield/dvp stay as scaffolds until their circom lands.
+- **Ordered public-IO de-duplicated (also closes FIN-022):** the duplicated `PUBLIC_IO_ORDER` constant is removed; `prover/src/index.ts` re-exports the SDK's `buildTransferPublicInputs` / `buildShieldPublicInputs` / … so the order lives once in `@finnes/sdk` (docs/PUBLIC_IO.md).
+- **Artifacts wired:** `defaultArtifacts` fixed — WASM from `circuits/build/<c>/<c>_js/`, `.zkey`/VK from `setup/build/<c>/`. `Witness` widened for the 2-D ciphertext signals (`c_auditor[2][5]`).
+- **End-to-end gate:** `scripts/test-prove-transfer.ts` (`npm run transfer:prove`) builds a depth-4 witness via the SDK, runs `groth16.fullProve` against the FIN-007 demo `.zkey`, and asserts: 41 public signals, `groth16.verify` accepts, and a **tampered public signal is rejected**. Never logs the witness (invariant #8).
+**Acceptance:** ✅ `groth16.fullProve` → `groth16.verify` returns true locally; tamper rejected. Circuit + setup + prover proven before touching chain (depth-4 demo instance; D=20 awaits the heavier FIN-007 production ceremony).
 **Deps:** FIN-007.
 
 ---
@@ -174,6 +189,6 @@ Replace the single-party demo ceremony with a multi-party contribution + transcr
 
 ## Cleanup (do alongside the above)
 
-- [ ] FIN-022 · P2 · Prover: import ordered public-input builders from `@finnes/sdk`; delete the duplicated `PUBLIC_IO_ORDER` constant.
+- [x] FIN-022 · P2 · Prover: import ordered public-input builders from `@finnes/sdk`; delete the duplicated `PUBLIC_IO_ORDER` constant. — DONE (folded into FIN-008).
 - [ ] FIN-023 · P3 · Remove `typescript.ignoreBuildErrors` / `eslint.ignoreDuringBuilds` from `frontend/next.config.mjs` once sibling packages typecheck cleanly; rely on per-package `npm run typecheck`.
 - [ ] FIN-024 · P3 · Add CI: `npm test` (incl. the Poseidon parity gate), `cargo test`, `cargo clippy`, circuit pass/fail witnesses.

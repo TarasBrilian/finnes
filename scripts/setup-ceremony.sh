@@ -33,10 +33,16 @@ PTAU_DIR="${SETUP_BUILD}/ptau"
 
 CIRCUITS=(shield transfer unshield dvp)
 
-# Powers of Tau size: 2^PTAU_POWER constraints. TODO: confirm against the largest
-# circuit's constraint count once circuits are finalised (transfer/dvp dominate;
-# tree depth D=32 per docs/PUBLIC_IO.md drives this). 16 is a placeholder.
-PTAU_POWER="${PTAU_POWER:-16}"
+# Powers of Tau size. snarkjs requires 2^PTAU_POWER >= 2 * nConstraints (the
+# Groth16 domain covers twice the constraint count). The D=20 `transfer` circuit
+# has ~295k R1CS constraints (`snarkjs r1cs info`), so 2*295k = 590k needs
+# 2^20 = 1048576; transfer/dvp dominate. NOTE: a 2^20 BLS12-381 ceremony is heavy
+# (the `prepare phase2` Lagrange step + ~1GB ptau) and may exceed a 16GB laptop -
+# run it on a larger machine, or optimise the unoptimised HadesMiMC Poseidon
+# (FIN-002 follow-up) to slash constraints first. A lighter, fully-runnable
+# depth-4 demo of the SAME pipeline is `npm run transfer:prove` (see that script).
+# Override with `PTAU_POWER=<n> npm run setup:ceremony`; check `r1cs info` first.
+PTAU_POWER="${PTAU_POWER:-20}"
 
 # --- loud demo-only banner --------------------------------------------------
 cat >&2 <<'BANNER'
@@ -83,10 +89,9 @@ if [[ -f "${PTAU_FINAL}" ]]; then
 else
   echo "==> Phase 1: powers of tau over BLS12-381 (2^${PTAU_POWER})"
 
-  # IMPORTANT: '-v ... bls12381' selects the BLS12-381 curve. snarkjs defaults to
-  # bn128 (BN254) — using the default here would violate invariant #1.
-  # TODO: verify the exact snarkjs flag/curve name for your snarkjs version
-  #       (recent versions accept 'bls12381'; some builds use 'bls12-381').
+  # IMPORTANT: the 'bls12381' curve argument selects BLS12-381. snarkjs defaults
+  # to bn128 (BN254) — using the default here would violate invariant #1.
+  # Confirmed working with snarkjs 0.7.x (curve name 'bls12381').
   snarkjs powersoftau new bls12381 "${PTAU_POWER}" "${PTAU_NEW}" -v
 
   echo "    contributing (demo entropy, NOT secret)"

@@ -1,121 +1,22 @@
 /**
- * Witness assembly for the four Finnes circuits.
+ * Witness assembly for the Finnes circuits whose circom is not yet finalised
+ * (shield / unshield / dvp). These remain scaffolds: their private-signal names
+ * depend on circuit internals not yet written.
  *
- * The public-signal ORDER produced here is normative and MUST match, byte-for-
- * field, all four surfaces (docs/PUBLIC_IO.md):
- *   - circuits/<circuit>.circom `main` public signal order,
- *   - contracts/finnes/src/types.rs `PublicInputs::to_vec()`,
- *   - this file (prover assembly),
- *   - sdk/src/ helpers.
- *
- * REUSE OVER DUPLICATION: the ordered public-input builders are intended to live
- * in `@finnes/sdk` (sdk/src/publicInputs.ts) so the order is defined exactly once
- * and shared between prover and SDK. That module does not exist yet, so the order
- * is encoded locally below behind a thin indirection.
- *   TODO(sdk): replace the local `PUBLIC_IO_ORDER` constants with imports from
- *   "@finnes/sdk" (e.g. `import { transferPublicInputs } from "@finnes/sdk"`)
- *   once sdk/src/publicInputs.ts lands. Until then, this constant is the
- *   duplicated source of truth and MUST be kept in sync with docs/PUBLIC_IO.md.
+ * TRANSFER is DONE and lives in `@finnes/sdk`: import `buildTransferWitness` from
+ * `@finnes/sdk` (re-exported by this package's index) for the full
+ * commitment/nullifier/ciphertext/frontier computation. The ordered public-input
+ * builders (`buildTransferPublicInputs`, `buildShieldPublicInputs`, …) also live
+ * in `@finnes/sdk` (sdk/src/publicInputs.ts), so the public-IO order is defined
+ * exactly ONCE (docs/PUBLIC_IO.md) and shared - the old duplicated
+ * `PUBLIC_IO_ORDER` constant has been removed (FIN-022).
  *
  * SECURITY (CLAUDE.md invariant #8): the returned `Witness` embeds secrets
  * (owner_sk, rho, r_note, plaintext value, encryption randomness). Callers must
  * never log it. The prover is single-tenant, runs in the client/institution zone.
  */
 
-import type { CircuitName, FieldElement, MerklePath, Note, Witness } from "./types.js";
-
-/**
- * Public-signal field NAMES per circuit, in canonical order (docs/PUBLIC_IO.md).
- * These are the *public* signals only; the private witness fields are added by
- * the per-circuit assemblers below.
- *
- * NOTE on variable-length tails: `old_frontier` / `new_frontier` are each `D`
- * elements (Tree depth D = 20, LOCKED FIN-001) and the ciphertexts `c_auditor` /
- * `c_recipient` are `K_a` / `K_r` = 5 packed field elements each (additive
- * Poseidon keystream, LOCKED FIN-001 / FIN-004). They occupy the documented
- * positions but are represented as named array signals in the SnarkJS input
- * object rather than flattened here.
- *
- * KEEP IN SYNC WITH docs/PUBLIC_IO.md AND the contract's PublicInputs::to_vec().
- */
-export const PUBLIC_IO_ORDER: Record<CircuitName, readonly string[]> = {
-  // docs/PUBLIC_IO.md → transfer.circom (2-in / 2-out, single asset)
-  transfer: [
-    "anchor_root", // 0
-    "kyc_root", // 1
-    "sanction_root", // 2
-    "assets_root", // 3
-    "frozen_root", // 4
-    "auditor_pk", // 5  (= Poseidon(k_view); single field, LOCKED FIN-001)
-    "nf_in_0", // 6
-    "nf_in_1", // 7
-    "cm_out_0", // 8
-    "cm_out_1", // 9
-    "new_root", // 10
-    "fee", // 11 (per-asset; 0 in demo)
-    "next_index", // 12 (current leaf count; contract checks == state)
-    "old_frontier", // 13 .. 13+D-1   (D elements)
-    "new_frontier", // .. +D          (D elements)
-    "c_auditor", // .. +2·K_a      ([2][K_a]: note 0 ‖ note 1; BOTH mandatory #5)
-    "c_recipient", // .. +2·K_r      ([2][K_r]: note 0 ‖ note 1)
-  ],
-  // docs/PUBLIC_IO.md → shield.circom (transparent → shielded)
-  shield: [
-    "asset_id", // 0 (public - circuit proves = Poseidon(sac_address))
-    "amount", // 1 (public - deposited raw SAC units)
-    "kyc_root", // 2
-    "assets_root", // 3
-    "auditor_pk", // 4 (TODO)
-    "cm_out_0", // 5
-    "new_root", // 6
-    "fee", // 7 (0 in demo)
-    "old_frontier", // 8 .. 8+D-1
-    "new_frontier", // .. +D
-    "c_auditor", // .. +K_a
-    "c_recipient", // .. +K_r
-  ],
-  // docs/PUBLIC_IO.md → unshield.circom (shielded → transparent)
-  unshield: [
-    "anchor_root", // 0
-    "kyc_root", // 1 (transparent recipient compliance)
-    "sanction_root", // 2
-    "assets_root", // 3
-    "frozen_root", // 4
-    "auditor_pk", // 5 (TODO)
-    "nf_in_0", // 6
-    "asset_id", // 7 (public - for the SAC transfer)
-    "amount", // 8 (public - raw SAC units leaving)
-    "recipient", // 9 (public - transparent Stellar address)
-    "cm_change_0", // 10 (optional change note; 0/null if none)
-    "new_root", // 11
-    "fee", // 12
-    "old_frontier", // 13 .. 13+D-1
-    "new_frontier", // .. +D
-    "c_auditor", // .. +K_a (for the change note, if any)
-  ],
-  // docs/PUBLIC_IO.md → dvp.circom (atomic two-asset; demo single combined proof)
-  dvp: [
-    "anchor_root", // 0
-    "kyc_root", // 1
-    "sanction_root", // 2
-    "assets_root", // 3
-    "frozen_root", // 4
-    "auditor_pk", // 5 (TODO)
-    "nf_legX_0", // 6
-    "nf_legY_0", // 7
-    "cm_out_X", // 8 (asset X → B)
-    "cm_out_Y", // 9 (asset Y → A)
-    "new_root", // 10
-    "fee_X", // 11
-    "fee_Y", // 12
-    "old_frontier", // 13 .. 13+D-1
-    "new_frontier", // .. +D
-    "c_auditor_X", // .. +K_a
-    "c_auditor_Y", // .. +K_a
-    "c_recipient_X", // .. +K_r
-    "c_recipient_Y", // .. +K_r
-  ],
-} as const;
+import type { FieldElement, MerklePath, Note, Witness } from "./types.js";
 
 /** Inputs common to every spend (anchor + compliance roots, auditor key). */
 export interface CommonPublicInputs {
@@ -167,7 +68,7 @@ export interface ShieldWitnessInput {
 export function assembleShieldWitness(input: ShieldWitnessInput): Witness {
   // NOTE: do NOT log `input` - it contains owner_sk, rho, r_note, value, randomness.
   const witness: Witness = {
-    // Public signals (PUBLIC_IO_ORDER.shield):
+    // Public signals (sdk buildShieldPublicInputs order):
     asset_id: input.asset_id,
     amount: input.amount,
     kyc_root: input.kyc_root,
@@ -190,90 +91,6 @@ export function assembleShieldWitness(input: ShieldWitnessInput): Witness {
     // TODO(circuit): cm_out_0 / new_root / new_frontier / c_auditor / c_recipient
     // are circuit OUTPUTS (computed by the witness generator), not inputs. No
     // assignment needed here, but the names above must match shield.circom.
-  };
-  return witness;
-}
-
-// --- transfer ---------------------------------------------------------------
-
-export interface TransferWitnessInput {
-  common: CommonPublicInputs;
-  /** Two input notes being spent. SECRET. */
-  inNotes: [Note, Note];
-  /** Spender spending key. SECRET. */
-  owner_sk: FieldElement;
-  /** Two output notes minted. SECRET. */
-  outNotes: [Note, Note];
-  old_frontier: FieldElement[];
-  /** Merkle inclusion paths for the two input notes. */
-  inInclusionPaths: [MerklePath, MerklePath];
-  /** KYC membership path (recipient). */
-  kycPath: MerklePath;
-  /** Sanctions non-membership path. */
-  sanctionPath: MerklePath;
-  /** Frozen-set non-membership path (per spent note). */
-  frozenPaths: [MerklePath, MerklePath];
-  /** Authorized-assets registry membership path. */
-  assetsPath: MerklePath;
-  /** Per-asset limit from the registry leaf (witness, never public). */
-  per_tx_limit_raw: FieldElement;
-  encRandomness: FieldElement;
-  fee?: FieldElement;
-}
-
-/**
- * Assemble the transfer (2-in / 2-out, single asset) witness.
- *
- * Invariants enforced in-circuit (not here): per-asset conservation
- * Σin == Σout + fee (#3), 64-bit range checks (#2), KYC membership, sanctions +
- * frozen non-membership (#6, #14), assets membership + value ≤ per_tx_limit_raw
- * (#17), auditor-encryption well-formedness (#5), tree transition (#12).
- *
- * TODO(circuit): private signal names depend on transfer.circom internals.
- */
-export function assembleTransferWitness(input: TransferWitnessInput): Witness {
-  // NOTE: do NOT log `input`.
-  const c = input.common;
-  const witness: Witness = {
-    // Public signals (PUBLIC_IO_ORDER.transfer), order documented in PUBLIC_IO.md:
-    anchor_root: c.anchor_root,
-    kyc_root: c.kyc_root,
-    sanction_root: c.sanction_root,
-    assets_root: c.assets_root,
-    frozen_root: c.frozen_root,
-    auditor_pk: c.auditor_pk,
-    fee: input.fee ?? "0",
-    old_frontier: input.old_frontier,
-    // Private witness:
-    owner_sk: input.owner_sk,
-    in_asset_id: [input.inNotes[0].asset_id, input.inNotes[1].asset_id],
-    in_value: [input.inNotes[0].value, input.inNotes[1].value],
-    in_owner_pk: [input.inNotes[0].owner_pk, input.inNotes[1].owner_pk],
-    in_rho: [input.inNotes[0].rho, input.inNotes[1].rho],
-    in_r_note: [input.inNotes[0].r_note, input.inNotes[1].r_note],
-    out_asset_id: [input.outNotes[0].asset_id, input.outNotes[1].asset_id],
-    out_value: [input.outNotes[0].value, input.outNotes[1].value],
-    out_owner_pk: [input.outNotes[0].owner_pk, input.outNotes[1].owner_pk],
-    out_rho: [input.outNotes[0].rho, input.outNotes[1].rho],
-    out_r_note: [input.outNotes[0].r_note, input.outNotes[1].r_note],
-    per_tx_limit_raw: input.per_tx_limit_raw,
-    in0_path_siblings: input.inInclusionPaths[0].siblings,
-    in0_path_indices: input.inInclusionPaths[0].pathIndices,
-    in1_path_siblings: input.inInclusionPaths[1].siblings,
-    in1_path_indices: input.inInclusionPaths[1].pathIndices,
-    kyc_path_siblings: input.kycPath.siblings,
-    kyc_path_indices: input.kycPath.pathIndices,
-    sanction_path_siblings: input.sanctionPath.siblings,
-    sanction_path_indices: input.sanctionPath.pathIndices,
-    frozen0_path_siblings: input.frozenPaths[0].siblings,
-    frozen0_path_indices: input.frozenPaths[0].pathIndices,
-    frozen1_path_siblings: input.frozenPaths[1].siblings,
-    frozen1_path_indices: input.frozenPaths[1].pathIndices,
-    assets_path_siblings: input.assetsPath.siblings,
-    assets_path_indices: input.assetsPath.pathIndices,
-    enc_randomness: input.encRandomness,
-    // TODO(circuit): nf_in_*, cm_out_*, new_root, new_frontier, c_auditor,
-    // c_recipient are circuit OUTPUTS.
   };
   return witness;
 }
@@ -318,7 +135,7 @@ export function assembleUnshieldWitness(input: UnshieldWitnessInput): Witness {
   // NOTE: do NOT log `input`.
   const c = input.common;
   const witness: Witness = {
-    // Public signals (PUBLIC_IO_ORDER.unshield):
+    // Public signals (sdk buildUnshieldPublicInputs order):
     anchor_root: c.anchor_root,
     kyc_root: c.kyc_root,
     sanction_root: c.sanction_root,
@@ -403,7 +220,7 @@ export function assembleDvpWitness(input: DvpWitnessInput): Witness {
   // NOTE: do NOT log `input` - holds BOTH parties' spending keys.
   const c = input.common;
   const witness: Witness = {
-    // Public signals (PUBLIC_IO_ORDER.dvp):
+    // Public signals (sdk buildDvpPublicInputs order):
     anchor_root: c.anchor_root,
     kyc_root: c.kyc_root,
     sanction_root: c.sanction_root,
