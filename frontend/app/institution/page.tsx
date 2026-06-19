@@ -17,7 +17,7 @@ export default function InstitutionPage() {
   const spending = useSpendingKeypair();
 
   return (
-    <div className="space-y-8">
+    <div className="mx-auto max-w-6xl space-y-8 px-6 py-10">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-1.5">
           <span className="eyebrow">Institution console</span>

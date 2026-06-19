@@ -16,6 +16,12 @@ h1, h2, h3 {
   letter-spacing: -0.015em;
 }
 
+/* Display headlines (Bricolage Grotesque) for the immersive landing. */
+.font-display {
+  font-family: theme('fontFamily.display');
+  letter-spacing: -0.03em;
+}
+
 @layer components {
   /* ---- Surfaces ---------------------------------------------------------- */
 
@@ -115,9 +121,68 @@ h1, h2, h3 {
   }
 }
 
+@layer components {
+  /* ---- Dark "vault" landing surfaces ------------------------------------ */
+
+  /* Glass tile that sits over the batik on midnight backgrounds. */
+  .glass {
+    @apply relative rounded-2xl border border-white/10 bg-white/[0.04] p-6
+      backdrop-blur-md transition duration-300;
+  }
+  .glass-hover {
+    @apply hover:-translate-y-1 hover:border-accent/40 hover:bg-white/[0.07] hover:shadow-glow;
+  }
+
+  /* Eyebrow tuned for dark surfaces, with an accent tick. */
+  .eyebrow-accent {
+    @apply inline-flex items-center gap-2 text-[11px] font-semibold uppercase
+      tracking-[0.24em] text-accent;
+  }
+  .eyebrow-accent::before {
+    content: '';
+    @apply h-px w-7 bg-accent/70;
+  }
+
+  /* Buttons for the dark hero. */
+  .btn-glow {
+    @apply btn bg-accent text-midnight shadow-glow
+      hover:bg-accent-soft focus:outline-none focus:ring-4 focus:ring-accent/30;
+  }
+  .btn-outline-light {
+    @apply btn border border-white/20 text-white
+      hover:border-white/40 hover:bg-white/[0.06] focus:outline-none focus:ring-4 focus:ring-white/10;
+  }
+}
+
 @layer utilities {
   .animate-fade-up {
     animation: theme('animation.fade-up');
+  }
+
+  /* Marquee track: duplicate the content, translate -50% for a seamless loop. */
+  .marquee-mask {
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  }
+
+  /* Scroll reveal: hidden until a Reveal wrapper toggles .is-visible. */
+  .reveal {
+    opacity: 0;
+    transform: translateY(26px);
+    transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: opacity, transform;
+  }
+  .reveal.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Full-bleed escape from a width-constrained parent (the landing breakout). */
+  .full-bleed {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
   }
 }
 
@@ -125,5 +190,10 @@ h1, h2, h3 {
   .animate-fade-up,
   [class*='animate-'] {
     animation: none !important;
+  }
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
   }
 }
