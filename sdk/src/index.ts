@@ -76,8 +76,11 @@ export type {
   TransferWitnessDerived,
   TransferWitnessInput,
   TransferWitnessResult,
+  UnshieldWitnessDerived,
+  UnshieldWitnessInput,
+  UnshieldWitnessResult,
 } from './witness.js';
-export { buildShieldWitness, buildTransferWitness } from './witness.js';
+export { buildShieldWitness, buildTransferWitness, buildUnshieldWitness } from './witness.js';
 
 export type { PublicInputVector } from './publicInputs.js';
 export {

@@ -317,24 +317,31 @@ impl FinnesContract {
             return Err(Error::RecipientNotAuthorised);
         }
 
-        // 1'. Tree transition input.
+        // 1'. Tree transition input: old_frontier == state, and next_index ==
+        //     leaf count (the in-circuit FrontierTransition anchors the change
+        //     insert - or the no-change no-op - at the true append index, #11/#12).
         if !merkle::check_old_frontier(&env, &pi.old_frontier)? {
             return Err(Error::UnknownAnchorRoot);
         }
+        check_next_index(&env, &pi.next_index)?;
 
         // 4. Verify the single Groth16 proof (binds change-note ciphertext +
         //    frozen non-membership + recipient compliance).
         let vk = state::get_vk(&env, Circuit::Unshield).ok_or(Error::VerifyingKeyMissing)?;
         verifier::verify_groth16(&env, &vk, &proof, &pi.to_scalars(&env))?;
 
-        // 5. Effects: record nullifier, apply tree transition (change note), then
-        //    perform the transparent payout.
+        // 5. Effects: record nullifier, apply tree transition, then perform the
+        //    transparent payout. The change-note sentinel decides how far the tree
+        //    advances: cm_change_0 == 0 means no change note, so 0 leaves were
+        //    inserted (the circuit's gated 0-leaf reproduces the current root and
+        //    leaves new_frontier == old_frontier); otherwise exactly 1.
         state::insert_nullifier(&env, &pi.nf_in_0);
-        // One change note when present => advance by 1.
-        // TODO(FIN-013): when cm_change_0 == 0 (no-change sentinel) the circuit
-        //    inserts 0 leaves; advance by 0 in that case and add the
-        //    pi.next_index == leaf_count check once unshield.circom exposes it.
-        merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root, 1)?;
+        let n_inserts: u32 = if is_zero_scalar(&pi.cm_change_0) {
+            0
+        } else {
+            1
+        };
+        merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root, n_inserts)?;
         // TODO: call the SAC `transfer(contract -> recipient, pi.amount)` for the
         //       asset identified by `pi.asset_id` (SAC address from the registry).
         state::bump_instance_ttl(&env);

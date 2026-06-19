@@ -201,15 +201,17 @@ pub struct ShieldPublicInputs {
 
 /// `unshield.circom` - shielded → transparent (1+ shielded inputs, transparent out).
 ///
-/// Index order (docs/PUBLIC_IO.md § unshield.circom):
+/// Index order (docs/PUBLIC_IO.md § unshield.circom, 64 signals):
 /// ```text
 ///  0 anchor_root  1 kyc_root  2 sanction_root  3 assets_root  4 frozen_root
 ///  5 auditor_pk   6 nf_in_0   7 asset_id       8 amount       9 recipient
-/// 10 cm_change_0 11 new_root 12 fee
-/// 13..13+D-1  old_frontier[0..D-1]
+/// 10 cm_change_0 11 new_root 12 fee           13 next_index
+/// 14..14+D-1  old_frontier[0..D-1]
 ///    ..+D     new_frontier[0..D-1]
-///    ..+K_a   c_auditor    (for change note, if any)
+///    ..+K_a   c_auditor    (change note; all-zero when cm_change_0 == 0)
+///    ..+K_r   c_recipient  (change note; all-zero when cm_change_0 == 0)
 /// ```
+/// Total 64 public signals.
 #[contracttype]
 #[derive(Clone)]
 pub struct UnshieldPublicInputs {
@@ -226,13 +228,22 @@ pub struct UnshieldPublicInputs {
     /// `transfer`. The contract additionally checks recipient authorisation
     /// (invariant #19) before performing effects.
     pub recipient: Scalar,
-    /// Optional change-note commitment; zero/null sentinel if none.
+    /// Optional change-note commitment; `0` sentinel if none. The contract uses
+    /// `cm_change_0 == 0` to decide whether the tree advances by 0 or 1 (FIN-013).
     pub cm_change_0: Commitment,
     pub new_root: Root,
     pub fee: Scalar,
+    /// Current leaf count before the (conditional) insert; checked == stored
+    /// `leaf_count` so the in-circuit FrontierTransition is sound (#11/#12, FIN-013).
+    pub next_index: Scalar,
     pub old_frontier: Vec<Scalar>,
     pub new_frontier: Vec<Scalar>,
+    /// Change-note auditor ciphertext (mandatory, inv #5); all-zero when there is
+    /// no change note.
     pub c_auditor: Vec<Scalar>,
+    /// Change-note recipient ciphertext (sender self-discovery); all-zero when
+    /// there is no change note.
+    pub c_recipient: Vec<Scalar>,
 }
 
 /// `dvp.circom` - atomic two-asset settlement (DEMO: single combined proof).
@@ -349,9 +360,11 @@ impl UnshieldPublicInputs {
         v.push_back(self.cm_change_0.clone()); // 10
         v.push_back(self.new_root.clone()); // 11
         v.push_back(self.fee.clone()); // 12
-        extend(&mut v, &self.old_frontier); // 13 .. 13+D-1
+        v.push_back(self.next_index.clone()); // 13
+        extend(&mut v, &self.old_frontier); // 14 .. 14+D-1
         extend(&mut v, &self.new_frontier);
         extend(&mut v, &self.c_auditor);
+        extend(&mut v, &self.c_recipient);
         v
     }
 }

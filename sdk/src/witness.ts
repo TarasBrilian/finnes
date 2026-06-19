@@ -348,3 +348,187 @@ export function buildShieldWitness(input: ShieldWitnessInput): ShieldWitnessResu
 
   return { witness, derived: { cmOut, newRoot, newFrontier } };
 }
+
+// ===========================================================================
+// unshield.circom - shielded -> transparent (1 input, optional change) (FIN-013)
+// ===========================================================================
+
+/**
+ * Fully-resolved inputs for an unshield (shielded -> transparent) witness.
+ *
+ * The transparent leg `(asset_id, amount, recipient)` is public; the public
+ * `asset_id` equals the spent note's asset. The OPTIONAL change note goes back to
+ * the sender: pass `changeNote` to mint one (`has_change = 1`), or omit it for an
+ * exact spend (`has_change = 0`, `cm_change_0 = 0`, all-zero ciphertexts). All
+ * Merkle paths/roots and IMT low-leaf witnesses are supplied by the caller.
+ */
+export interface UnshieldWitnessInput {
+  /** The single spent input note. `assetId` is the publicly-revealed asset. SECRET. */
+  readonly inNote: Note;
+  /** Spender spending key. SECRET. */
+  readonly ownerSk: Fr;
+  /** Inclusion path for the input commitment under `anchorRoot`. */
+  readonly inPath: MerklePath;
+  readonly anchorRoot: Fr;
+  /** Frozen-set non-membership of the spent commitment (invariant #19b). */
+  readonly frozenLow: ImtLowLeaf;
+  readonly frozenPath: MerklePath;
+  readonly frozenRoot: Fr;
+  /** Public transparent recipient address (field) - also the KYC-enrolled identity. */
+  readonly recipient: Fr;
+  /** KYC membership of `recipient` (invariant #19a). */
+  readonly kycPath: MerklePath;
+  readonly kycRoot: Fr;
+  /** Sanctions non-membership of `recipient` (invariant #19a). */
+  readonly sanctionLow: ImtLowLeaf;
+  readonly sanctionPath: MerklePath;
+  readonly sanctionRoot: Fr;
+  /** Public raw amount leaving the shielded domain. */
+  readonly amount: Fr;
+  /** Optional change note back to the sender; omit for an exact spend. SECRET. */
+  readonly changeNote?: Note;
+  /** Authorized-assets registry leaf witness (invariant #17). */
+  readonly sacAddress: Fr;
+  readonly decimals: Fr;
+  readonly perTxLimitRaw: Fr;
+  readonly assetsPath: MerklePath;
+  readonly assetsRoot: Fr;
+  /** Tree transition: frontier before the (conditional) insert + leaf count. */
+  readonly oldFrontier: readonly Fr[];
+  readonly nextIndex: number;
+  /** Per-asset fee (0 in the demo, invariant #3). */
+  readonly fee: Fr;
+  /** Auditor public key `= Poseidon(kView)`; checked against contract state. */
+  readonly auditorPk: Fr;
+  /** Sender↔auditor shared key. SECRET. */
+  readonly kView: Fr;
+  /** Sender↔self pairwise secret for the change note (demo: OOB). SECRET. */
+  readonly kPair: Fr;
+  /** Published auditor-ciphertext nonce (ignored when there is no change). */
+  readonly rhoEncAuditor: Fr;
+  /** Published recipient-ciphertext nonce (ignored when there is no change). */
+  readonly rhoEncRecipient: Fr;
+}
+
+export interface UnshieldWitnessDerived {
+  readonly cmIn: Fr;
+  readonly nf: Fr;
+  /** Change-note commitment, or 0n when there is no change (sentinel). */
+  readonly cmChange: Fr;
+  readonly hasChange: boolean;
+  readonly newRoot: Fr;
+  readonly newFrontier: readonly Fr[];
+}
+
+export interface UnshieldWitnessResult {
+  readonly witness: CircomWitness;
+  readonly derived: UnshieldWitnessDerived;
+}
+
+const ZERO_CT: string[] = ['0', '0', '0', '0', '0'];
+
+/**
+ * Assemble the complete `Unshield(D, 5, 5)` witness from resolved inputs.
+ * Depth `D` is taken from `oldFrontier.length`. When a change note is present it
+ * is inserted at `nextIndex`; otherwise the (gated) 0 leaf reproduces the current
+ * root and `new_frontier` is the unchanged `old_frontier` (mirrors the in-circuit
+ * MUX, invariants #11/#12).
+ */
+export function buildUnshieldWitness(input: UnshieldWitnessInput): UnshieldWitnessResult {
+  const depth = input.oldFrontier.length;
+  const sk = input.ownerSk as OwnerSk;
+  const assetId = input.inNote.assetId;
+
+  const cmIn = commitNote(input.inNote);
+  const nf = deriveNullifier(input.inNote.rho, sk);
+
+  const hasChange = input.changeNote !== undefined;
+  const change = input.changeNote;
+  const cmChange: Fr = hasChange ? commitNote(change!) : 0n;
+
+  // Change-note ciphertexts: real keystream when present, all-zero otherwise
+  // (the circuit gates every published slot on has_change).
+  const cAud: string[] = hasChange
+    ? encryptToAuditor(change!, input.kView, { rhoEnc: input.rhoEncAuditor }).fields.map(String)
+    : [...ZERO_CT];
+  const cRec: string[] = hasChange
+    ? encryptToRecipient(change!, input.kPair, { rhoEnc: input.rhoEncRecipient }).fields.map(String)
+    : [...ZERO_CT];
+
+  // Frontier transition. With a change note: a normal 1-leaf insert. Without:
+  // inserting the gated 0 leaf yields the CURRENT root, and new_frontier stays
+  // old_frontier (the in-circuit MUX) since no filled subtree advances.
+  const tt = applyFrontierTransition(input.oldFrontier, input.nextIndex, [cmChange], depth);
+  const newFrontier: readonly Fr[] = hasChange ? tt.newFrontier : input.oldFrontier;
+  const newRoot = tt.newRoot;
+
+  const witness: CircomWitness = {
+    // --- public inputs ---
+    anchor_root: S(input.anchorRoot),
+    kyc_root: S(input.kycRoot),
+    sanction_root: S(input.sanctionRoot),
+    assets_root: S(input.assetsRoot),
+    frozen_root: S(input.frozenRoot),
+    auditor_pk: S(input.auditorPk),
+    nf_in_0: S(nf),
+    asset_id: S(assetId),
+    amount: S(input.amount),
+    recipient: S(input.recipient),
+    cm_change_0: S(cmChange),
+    new_root: S(newRoot),
+    fee: S(input.fee),
+    next_index: String(input.nextIndex),
+    old_frontier: input.oldFrontier.map(String),
+    new_frontier: newFrontier.map(String),
+    c_auditor: cAud,
+    c_recipient: cRec,
+
+    // --- private witness: spent input note ---
+    in_asset_id: S(input.inNote.assetId),
+    in_value: S(input.inNote.value),
+    in_owner_pk: S(input.inNote.ownerPk),
+    in_rho: S(input.inNote.rho),
+    in_r_note: S(input.inNote.rNote),
+    owner_sk: S(input.ownerSk),
+    in_path_elements: pe(input.inPath),
+    in_path_indices: pi(input.inPath),
+
+    // --- frozen non-membership of the spent commitment ---
+    frozen_low_value: S(input.frozenLow.value),
+    frozen_low_next_index: S(input.frozenLow.nextIndex),
+    frozen_low_next_value: S(input.frozenLow.nextValue),
+    frozen_path_elements: pe(input.frozenPath),
+    frozen_path_indices: pi(input.frozenPath),
+
+    // --- recipient compliance ---
+    kyc_path_elements: pe(input.kycPath),
+    kyc_path_indices: pi(input.kycPath),
+    sanction_low_value: S(input.sanctionLow.value),
+    sanction_low_next_index: S(input.sanctionLow.nextIndex),
+    sanction_low_next_value: S(input.sanctionLow.nextValue),
+    sanction_path_elements: pe(input.sanctionPath),
+    sanction_path_indices: pi(input.sanctionPath),
+
+    // --- change-note opening + selector ---
+    change_owner_pk: S(change?.ownerPk ?? 0n),
+    change_value: S(change?.value ?? 0n),
+    change_rho: S(change?.rho ?? 0n),
+    change_r_note: S(change?.rNote ?? 0n),
+    has_change: hasChange ? '1' : '0',
+
+    // --- assets registry membership + per-tx limit ---
+    sac_address: S(input.sacAddress),
+    decimals: S(input.decimals),
+    per_tx_limit_raw: S(input.perTxLimitRaw),
+    assets_path_elements: pe(input.assetsPath),
+    assets_path_indices: pi(input.assetsPath),
+
+    // --- change-note encryption keying ---
+    k_view: S(input.kView),
+    k_pair: S(input.kPair),
+    rho_enc_auditor: S(hasChange ? input.rhoEncAuditor : 0n),
+    rho_enc_recipient: S(hasChange ? input.rhoEncRecipient : 0n),
+  };
+
+  return { witness, derived: { cmIn, nf, cmChange, hasChange, newRoot, newFrontier } };
+}

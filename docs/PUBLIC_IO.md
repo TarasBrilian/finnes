@@ -202,9 +202,10 @@ Total: **73** public signals (`13 + 2·D + 2·K_a + 2·K_r` = `13 + 40 + 10 + 10
 > never prover-controlled — otherwise a prover could compute a self-consistent
 > transition for a wrong index and corrupt the verbatim-stored tree
 > (invariants #11/#12). The FIN-003 heads-up flagged this; it is now wired.
-> `shield` is now amended (FIN-012: `next_index` at index 8, total 59).
-> `unshield`/`dvp` need the same signal when their circuits are completed
-> (FIN-013/016) — their tables below are NOT yet amended.
+> `shield` is now amended (FIN-012: `next_index` at index 8, total 59) and
+> `unshield` too (FIN-013: `next_index` at index 13, total 64). `dvp` needs the
+> same signal when its circuit is completed (FIN-016) — its table below is NOT yet
+> amended.
 
 Private witness: input notes `(asset_id, value, owner_pk, rho, r_note)×2`,
 `owner_sk`, Merkle paths for the two inputs, KYC path, sanctions non-membership
@@ -269,13 +270,23 @@ Prevents minting a note labelled as a different/more-valuable asset.
 10       cm_change_0         (change note; 0 SENTINEL = no change, see below)
 11       new_root
 12       fee
-13 .. 32 old_frontier[0..19] (D = 20)
-33 .. 52 new_frontier[0..19]
-53 .. 57 c_auditor_0[0..4]   (change note; all-zero when cm_change_0 == 0)
-58 .. 62 c_recipient_0[0..4] (change note; all-zero when cm_change_0 == 0)
+13       next_index          (current leaf count; checked == contract state. FIN-013)
+14 .. 33 old_frontier[0..19] (D = 20)
+34 .. 53 new_frontier[0..19]
+54 .. 58 c_auditor_0[0..4]   (change note; all-zero when cm_change_0 == 0)
+59 .. 63 c_recipient_0[0..4] (change note; all-zero when cm_change_0 == 0)
 ```
 
-Total: **63** public signals (`13 + 2·D + K_a + K_r` = `13 + 40 + 5 + 5`).
+Total: **64** public signals (`14 + 2·D + K_a + K_r` = `14 + 40 + 5 + 5`).
+
+> **`next_index` (FIN-013 layout amendment).** Like `transfer` (FIN-006) and
+> `shield` (FIN-012), unshield's `FrontierTransition` needs the append position
+> pinned to real state. `next_index` (the current leaf count) is a public input the
+> **contract supplies from state** (`pi.next_index == state.leaf_count`), never
+> prover-controlled (invariants #11/#12). When `cm_change_0 == 0` (no change) the
+> in-circuit insert of the gated `0` leaf reproduces the current root and the
+> contract advances `leaf_count` by `0`; otherwise the change note is inserted and
+> the count advances by `1`.
 
 **`recipient` encoding (LOCKED, demo):** a **single** field element. The demo's
 transparent addresses are sampled to fit `< r`, and the contract maps
