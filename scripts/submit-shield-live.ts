@@ -17,8 +17,10 @@ import { readFileSync, writeFileSync } from 'node:fs';
 
 import { g1ToHex, g2ToHex, frToHex } from './lib/vk-host.js';
 
-const IN = 'setup/build/shield-proof-live.json';
-const OUT = 'setup/build/shield-args.json';
+// Optional argv lets the same converter serve the genesis shield (no args) and
+// shield #2 (FIN-025): `... submit-shield-live.ts <in.json> <out.json>`.
+const IN = process.argv[2] ?? 'setup/build/shield-proof-live.json';
+const OUT = process.argv[3] ?? 'setup/build/shield-args.json';
 const D = 20;
 
 type G1 = [string, string, string];

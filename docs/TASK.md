@@ -225,7 +225,26 @@ The deployed+init'd contract (`CDIWXQSWIP6GKJKCAZPFONDD7VZ2PR2AQVCBQ7WRNTL64M3DA
 the live shield+disclosure (FIN-015) are the base. These extend the same
 prove-on-Railway → convert → submit-locally pipeline to the rest of the flow.
 
-### [ ] FIN-025 · P2 · `confidential_transfer` on-chain
+### [x] FIN-025 · P2 · `confidential_transfer` on-chain — LIVE ON TESTNET (2026-06-20)
+- **Done (LIVE ON TESTNET, 2026-06-20):** a real 2-in/2-out confidential transfer
+  verified on-chain end-to-end against the deployed contract
+  `CDIWXQSWIP6G…AP55G7IA`. Proved on the Railway `ceremony` container with the
+  production `shield.zkey`/`transfer.zkey` (VK hashes confirmed byte-equal to the
+  deployed VKs before submitting), exfiltrated, locally re-verified
+  (`groth16.verify` ACCEPT against `vk_*.json`), then submitted via `stellar`.
+  - **Shield #2** (prerequisite; tx `d3b2e58c2e24e547241c14b68480b91f1be68fbe2bf2d83f603df3f084d5334a`):
+    minted the 2nd note (1000 TBOND, Bank A) at index 1 → `new_root 38170760…`;
+    on-chain `current_root` then equalled the transfer's `anchor_root` exactly.
+  - **Transfer** (tx `bf6f54f0466772833541d101313da891336e08b52172b1250f25cfe695da945e`):
+    spent [genesis 1000, shield2 1000] → recipient 1500 (Bank B) + change 500
+    (Bank A). On-chain event = the EXACT values the offline gate derived:
+    `nf_in_0 73bd4f2f…`, `nf_in_1 4b7d8246…`, `cm_out_0 283af76c…`,
+    `cm_out_1 4340d50a…`, `new_root 069cbb56…`.
+  - **Effects verified on-chain:** `current_root == 069cbb56…` (tree advanced by 2);
+    both nullifiers `is_nullifier_used == true`; regulator `discloseTransaction`
+    decrypted recipient 1500 → Cendrawasih (Bank B) + change 500 → Meridian (Bank A),
+    Σ==2000, both in-range — invariant #5 proven on live transfer data.
+- **Was (scripts + offline verification, retained):** SCRIPTS DONE + WITNESS-VERIFIED OFFLINE
 Spend two shielded notes → recipient + change, verified on-chain. Unlike shield,
 transfer needs a non-empty tree and a valid `anchor_root` in the recent-roots
 window, so it must run **after** ≥2 on-chain shields:
@@ -239,8 +258,60 @@ window, so it must run **after** ≥2 on-chain shields:
    `anchor_root` = current tree root, `next_index` = current leaf_count), prove
    with `transfer.zkey` on Railway, convert (73 signals) + submit
    `confidential_transfer`. Disclose both output notes with the view key.
+
+- **Done (scripts, offline-verified):** the full pipeline is implemented and the
+  witness/state wiring is machine-verified WITHOUT the Railway-only `transfer.zkey`.
+  - `scripts/lib/live-notes.ts` — single source of truth (indexer stand-in) for the
+    two on-chain input notes + the two transfer outputs. `GENESIS_NOTE` is pinned
+    byte-equal to `prove-shield-live.ts`; the gate asserts
+    `commitNote(GENESIS_NOTE)` equals the on-chain `cm_out_0`
+    (`577c94d2…`) — closing the drift gotcha. `reconstructAnchorTree()` rebuilds the
+    live tree from the two commitments → anchor_root / old_frontier / next_index.
+  - `scripts/lib/transfer-live.ts` (`buildLiveTransferWitness`) — assembles the real
+    `Transfer(20,5,5)` witness against `buildDemoComplianceState(20)`: spend
+    [genesis 1000, shield2 1000] (Bank A) → [1500 → Bank B recipient, 500 change →
+    Bank A]; recipient KYC membership, empty sanctions/frozen non-membership of each
+    spent cm, TBOND assets membership, frozen_root STRICT-equal to state.
+  - `scripts/test-transfer-live-witness.ts` + `npm run transfer:live:witness` — the
+    OFFLINE GATE. Asserts indexer parity + conservation (Σin 2000 == Σout 2000) +
+    bracketability, then runs `snarkjs wtns calculate` + `wtns check` on
+    `transfer.r1cs`: **WITNESS IS CORRECT — all 295,206 constraints satisfied, 73
+    public inputs, bls12381.** A proof from this witness WILL verify on-chain; the
+    `.zkey` only affects proof *generation*, not satisfiability.
+  - `scripts/test-transfer-live-anchor.ts` + `npm run transfer:live:anchor` — the
+    ANCHOR-PARITY gate: proves the off-chain indexer stand-in reconstructs the SAME
+    tree the contract stored — the 1-note reconstructed root EQUALS the on-chain
+    genesis `new_root` (`70112c60…`), shield #2's `old_frontier` equals the on-chain
+    post-genesis `new_frontier`, the empty seed equals the genesis `old_frontier`,
+    and every witness compliance root equals the live init root (frozen STRICT). So
+    anchor_root / old_frontier / next_index will pass the contract's checks.
+  - `scripts/prove-shield2-live.ts` (`npm run shield2:live:prove`) — the ≥2-shield
+    prerequisite: shields note #2 at index 1 / post-genesis frontier. Witness
+    machine-verified CORRECT against `shield.r1cs`.
+  - `scripts/prove-transfer-live.ts` (`transfer:live:prove`), `submit-transfer-live.ts`
+    (`transfer:live:submit`, 73-signal → host-byte `TransferPublicInputs`; the
+    field-by-field mapping smoke-tested: 96/192/96-byte proof, 20/20 frontiers,
+    10/10 ciphertext vectors, exact order), `disclose-transfer-live.ts`
+    (`transfer:live:disclose`, decrypts recipient + change). `submit-shield-live.ts`
+    parameterized with optional `<in> <out>` argv so shield #2 reuses it.
+  - **Ceremony-artifact note (operational, important):** the LOCAL
+    `setup/build/shield/shield.zkey` is a DIFFERENT (older/local) ceremony than the
+    production `vk_shield.json` — a locally-made shield proof REJECTS against the
+    deployed VK, while the genesis proof (made on Railway) ACCEPTS. So shield #2 and
+    transfer MUST be proved on the Railway `ceremony` container that holds the
+    production `transfer.zkey` (as the script headers state). Do not submit a
+    locally-generated proof.
+- **Remaining (needs Railway prover + testnet deployer key):**
+  1. `npm run shield2:live:prove` ON RAILWAY → `submit-shield-live.ts
+     setup/build/shield2-proof-live.json setup/build/shield2-args.json` → invoke
+     `shield` on testnet (tree advances to leaf_count 2).
+  2. `npm run transfer:live:prove` ON RAILWAY → `npm run transfer:live:submit` →
+     invoke `confidential_transfer` on testnet → `npm run transfer:live:disclose`.
+
 **Acceptance:** a real transfer proof verifies on-chain; nullifiers recorded; tree
-advances by 2; auditor decrypts recipient + change notes.
+advances by 2; auditor decrypts recipient + change notes. *(Offline half met:
+witness machine-verified CORRECT at D=20; on-chain half awaits the two Railway/
+testnet runs above.)*
 **Deps:** FIN-015.
 
 ### [ ] FIN-026 · P2 · `unshield` on-chain
