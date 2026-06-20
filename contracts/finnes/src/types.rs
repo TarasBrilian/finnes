@@ -92,14 +92,14 @@ pub struct VerifyingKey {
 pub struct InitConfig {
     pub admin: Address,
     pub issuer_authority: Address,
-    pub auditor_pk: Scalar,
-    pub kyc_root: Root,
-    pub sanction_root: Root,
-    pub assets_root: Root,
-    pub frozen_root: Root,
+    pub auditor_pk: BytesN<32>,
+    pub kyc_root: BytesN<32>,
+    pub sanction_root: BytesN<32>,
+    pub assets_root: BytesN<32>,
+    pub frozen_root: BytesN<32>,
     /// Empty-tree frontier seed; exactly `TREE_DEPTH` elements.
-    pub initial_frontier: Vec<Scalar>,
-    pub initial_root: Root,
+    pub initial_frontier: Vec<BytesN<32>>,
+    pub initial_root: BytesN<32>,
     pub vk_shield: VerifyingKey,
     pub vk_transfer: VerifyingKey,
     pub vk_unshield: VerifyingKey,
@@ -138,32 +138,32 @@ pub enum Circuit {
 #[contracttype]
 #[derive(Clone)]
 pub struct TransferPublicInputs {
-    pub anchor_root: Root,
-    pub kyc_root: Root,
-    pub sanction_root: Root,
-    pub assets_root: Root,
-    pub frozen_root: Root,
-    pub auditor_pk: Scalar,
-    pub nf_in_0: Nullifier,
-    pub nf_in_1: Nullifier,
-    pub cm_out_0: Commitment,
-    pub cm_out_1: Commitment,
-    pub new_root: Root,
-    pub fee: Scalar,
+    pub anchor_root: BytesN<32>,
+    pub kyc_root: BytesN<32>,
+    pub sanction_root: BytesN<32>,
+    pub assets_root: BytesN<32>,
+    pub frozen_root: BytesN<32>,
+    pub auditor_pk: BytesN<32>,
+    pub nf_in_0: BytesN<32>,
+    pub nf_in_1: BytesN<32>,
+    pub cm_out_0: BytesN<32>,
+    pub cm_out_1: BytesN<32>,
+    pub new_root: BytesN<32>,
+    pub fee: BytesN<32>,
     /// Current leaf count before insertion; the contract checks this equals the
     /// stored `leaf_count` so the circuit's `FrontierTransition` inserts at the
     /// true append index (invariants #11/#12). Never prover-controlled.
-    pub next_index: Scalar,
+    pub next_index: BytesN<32>,
     /// `old_frontier` - exactly `TREE_DEPTH` elements; checked equal to state.
-    pub old_frontier: Vec<Scalar>,
+    pub old_frontier: Vec<BytesN<32>>,
     /// `new_frontier` - exactly `TREE_DEPTH` elements; stored verbatim.
-    pub new_frontier: Vec<Scalar>,
+    pub new_frontier: Vec<BytesN<32>>,
     /// `c_auditor` = `c_auditor_0 ‖ c_auditor_1`, `2·K_a` packed field elements;
     /// EVERY output note (incl. the change note) carries a mandatory auditor
     /// ciphertext (invariant #5).
-    pub c_auditor: Vec<Scalar>,
+    pub c_auditor: Vec<BytesN<32>>,
     /// `c_recipient` = `c_recipient_0 ‖ c_recipient_1`, `2·K_r` packed elements.
-    pub c_recipient: Vec<Scalar>,
+    pub c_recipient: Vec<BytesN<32>>,
 }
 
 /// `shield.circom` - transparent → shielded (0 shielded inputs, 1 transparent).
@@ -179,24 +179,24 @@ pub struct TransferPublicInputs {
 #[contracttype]
 #[derive(Clone)]
 pub struct ShieldPublicInputs {
-    pub asset_id: Scalar,
-    pub amount: Scalar,
-    pub kyc_root: Root,
-    pub assets_root: Root,
-    pub auditor_pk: Scalar,
-    pub cm_out_0: Commitment,
-    pub new_root: Root,
-    pub fee: Scalar,
+    pub asset_id: BytesN<32>,
+    pub amount: BytesN<32>,
+    pub kyc_root: BytesN<32>,
+    pub assets_root: BytesN<32>,
+    pub auditor_pk: BytesN<32>,
+    pub cm_out_0: BytesN<32>,
+    pub new_root: BytesN<32>,
+    pub fee: BytesN<32>,
     /// Current leaf count before insertion; the contract checks this equals the
     /// stored `leaf_count` so the circuit's `FrontierTransition` inserts at the
     /// true append index (invariants #11/#12). Never prover-controlled (FIN-012).
-    pub next_index: Scalar,
+    pub next_index: BytesN<32>,
     /// `old_frontier` - exactly `TREE_DEPTH` elements; checked equal to state.
-    pub old_frontier: Vec<Scalar>,
+    pub old_frontier: Vec<BytesN<32>>,
     /// `new_frontier` - exactly `TREE_DEPTH` elements; stored verbatim.
-    pub new_frontier: Vec<Scalar>,
-    pub c_auditor: Vec<Scalar>,
-    pub c_recipient: Vec<Scalar>,
+    pub new_frontier: Vec<BytesN<32>>,
+    pub c_auditor: Vec<BytesN<32>>,
+    pub c_recipient: Vec<BytesN<32>>,
 }
 
 /// `unshield.circom` - shielded → transparent (1+ shielded inputs, transparent out).
@@ -215,35 +215,35 @@ pub struct ShieldPublicInputs {
 #[contracttype]
 #[derive(Clone)]
 pub struct UnshieldPublicInputs {
-    pub anchor_root: Root,
-    pub kyc_root: Root,
-    pub sanction_root: Root,
-    pub assets_root: Root,
-    pub frozen_root: Root,
-    pub auditor_pk: Scalar,
-    pub nf_in_0: Nullifier,
-    pub asset_id: Scalar,
-    pub amount: Scalar,
+    pub anchor_root: BytesN<32>,
+    pub kyc_root: BytesN<32>,
+    pub sanction_root: BytesN<32>,
+    pub assets_root: BytesN<32>,
+    pub frozen_root: BytesN<32>,
+    pub auditor_pk: BytesN<32>,
+    pub nf_in_0: BytesN<32>,
+    pub asset_id: BytesN<32>,
+    pub amount: BytesN<32>,
     /// Transparent recipient - a field-encoded Stellar address used for the SAC
     /// `transfer`. The contract additionally checks recipient authorisation
     /// (invariant #19) before performing effects.
-    pub recipient: Scalar,
+    pub recipient: BytesN<32>,
     /// Optional change-note commitment; `0` sentinel if none. The contract uses
     /// `cm_change_0 == 0` to decide whether the tree advances by 0 or 1 (FIN-013).
-    pub cm_change_0: Commitment,
-    pub new_root: Root,
-    pub fee: Scalar,
+    pub cm_change_0: BytesN<32>,
+    pub new_root: BytesN<32>,
+    pub fee: BytesN<32>,
     /// Current leaf count before the (conditional) insert; checked == stored
     /// `leaf_count` so the in-circuit FrontierTransition is sound (#11/#12, FIN-013).
-    pub next_index: Scalar,
-    pub old_frontier: Vec<Scalar>,
-    pub new_frontier: Vec<Scalar>,
+    pub next_index: BytesN<32>,
+    pub old_frontier: Vec<BytesN<32>>,
+    pub new_frontier: Vec<BytesN<32>>,
     /// Change-note auditor ciphertext (mandatory, inv #5); all-zero when there is
     /// no change note.
-    pub c_auditor: Vec<Scalar>,
+    pub c_auditor: Vec<BytesN<32>>,
     /// Change-note recipient ciphertext (sender self-discovery); all-zero when
     /// there is no change note.
-    pub c_recipient: Vec<Scalar>,
+    pub c_recipient: Vec<BytesN<32>>,
 }
 
 /// `dvp.circom` - atomic two-asset settlement (DEMO: single combined proof).
@@ -261,25 +261,25 @@ pub struct UnshieldPublicInputs {
 #[contracttype]
 #[derive(Clone)]
 pub struct DvpPublicInputs {
-    pub anchor_root: Root,
-    pub kyc_root: Root,
-    pub sanction_root: Root,
-    pub assets_root: Root,
-    pub frozen_root: Root,
-    pub auditor_pk: Scalar,
-    pub nf_leg_x_0: Nullifier,
-    pub nf_leg_y_0: Nullifier,
-    pub cm_out_x: Commitment,
-    pub cm_out_y: Commitment,
-    pub new_root: Root,
-    pub fee_x: Scalar,
-    pub fee_y: Scalar,
-    pub old_frontier: Vec<Scalar>,
-    pub new_frontier: Vec<Scalar>,
-    pub c_auditor_x: Vec<Scalar>,
-    pub c_auditor_y: Vec<Scalar>,
-    pub c_recipient_x: Vec<Scalar>,
-    pub c_recipient_y: Vec<Scalar>,
+    pub anchor_root: BytesN<32>,
+    pub kyc_root: BytesN<32>,
+    pub sanction_root: BytesN<32>,
+    pub assets_root: BytesN<32>,
+    pub frozen_root: BytesN<32>,
+    pub auditor_pk: BytesN<32>,
+    pub nf_leg_x_0: BytesN<32>,
+    pub nf_leg_y_0: BytesN<32>,
+    pub cm_out_x: BytesN<32>,
+    pub cm_out_y: BytesN<32>,
+    pub new_root: BytesN<32>,
+    pub fee_x: BytesN<32>,
+    pub fee_y: BytesN<32>,
+    pub old_frontier: Vec<BytesN<32>>,
+    pub new_frontier: Vec<BytesN<32>>,
+    pub c_auditor_x: Vec<BytesN<32>>,
+    pub c_auditor_y: Vec<BytesN<32>>,
+    pub c_recipient_x: Vec<BytesN<32>>,
+    pub c_recipient_y: Vec<BytesN<32>>,
 }
 
 // ---------------------------------------------------------------------------

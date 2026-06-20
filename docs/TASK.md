@@ -34,8 +34,16 @@ layout and the project root `CLAUDE.md` for the binding security invariants.
 > the BLS12-381 host functions (single `g1_msm` for `vk_x` + one `pairing_check`); a
 > real depth-4 demo proof verifies in `cargo test` and a tampered public signal is
 > rejected (`scripts/gen-verifier-fixture.ts` → `contracts/finnes/src/test_vectors.rs`).
-> clippy/fmt clean, wasm builds. **Next on the critical path:** **FIN-010** (move the
-> real SAC token on shield/unshield) + **FIN-011** (state polish: windowed roots + events).
+> clippy/fmt clean, wasm builds.
+> **FIN-009 through FIN-014 are DONE. FIN-015 is now LIVE ON TESTNET (2026-06-20):**
+> the contract is deployed + initialised and a **real D=20 shield proof verifies
+> on-chain** (1000 TBOND moved depositor→contract via a registered test SAC), with the
+> **regulator decrypting the on-chain note** to full plaintext — the core claim proven
+> against a deployed Soroban contract. Fixed a deploy blocker: `#[contracttype]` structs
+> used type aliases Soroban's spec macro doesn't define, so `init` failed at the CLI
+> (`Missing Entry Root`) — aliases replaced with `BytesN<32>` in all spec-facing
+> surfaces. **Next on the critical path:** **FIN-025** (transfer on-chain), **FIN-027**
+> (frontend write-path), then **FIN-026** (unshield). See Phase 8.
 
 ---
 
@@ -193,14 +201,75 @@ Implemented the auditor (regulator) disclosure path and finalized the SAC-addres
 **Acceptance:** ✅ recipient discovers an incoming note (scan, parity-tested since FIN-004); auditor decrypts a tx to full plaintext (amount, asset, parties), machine-verified by `sdk/test/disclose.test.ts`.
 **Deps:** FIN-004.
 
-### [~] FIN-015 · P2 · Deploy testnet + wire frontend — READ PATHS WIRED
+### [~] FIN-015 · P2 · Deploy testnet + wire frontend — DEPLOYED + INIT'D; SHIELD + DISCLOSURE LIVE ON TESTNET
 Run `scripts/deploy.sh`, run the post-deploy `init` (auditor_pk, issuer_authority, roots, VKs). Replace mocks in `frontend/lib/finnes-client.ts` with real sdk/prover/contract calls; configure browser proving (snarkjs webpack fallbacks + load `.wasm`/`.zkey`). Mock KYC enrollment via an admin script (pre-enroll demo accounts; invariant: keep the in-circuit check).
 - **Done (frontend READ paths, real crypto):** new `frontend/lib/demo-data.ts` builds a deterministic ledger of GENUINE Poseidon commitments + auditor/recipient ciphertexts (an indexer stand-in, FIN-019) keyed by a fixed demo view key. `scanConfidentialBalances` now runs the SDK's **`scanForOwnedNotes`** (real trial-decrypt + commitment re-derivation, per-asset aggregation, no cross-asset sum #3/#16) and `decryptAuditorView` runs **`discloseTransaction`** (real auditor decrypt to amount/asset/parties; recipient + change notes; a non-matching view key recovers out-of-range garbage and surfaces an honest error — never a faked reveal). `keys.ts` derives the real `auditor_pk = Poseidon(k_view)` (`auditorPkFromKey`) and the "Demo key" loads the ledger's matching view key. `OnChainTxSummary` reshaped to per-output `{commitment, cAuditor}`; `TxList`/`DisclosurePanel` updated (DisclosurePanel shows the per-note recipient/change breakdown). Stale "sdk … throws / MOCK" comments corrected across `finnes-client.ts`, `keys.ts`, `ConfidentialBalances.tsx`, `DisclosurePanel.tsx`. Verified: 10/10 wiring checks (real disclosure + scan over demo data, wrong-key reject, foreign-owner finds 0); `next build` compiles all 6 routes; frontend `tsc --noEmit` adds no new errors (only the 3 pre-existing prover↔snarkjs resolution ones).
 - **Done (mock KYC enrollment + demo compliance state, offline):** `scripts/lib/demo-state.ts` + `scripts/enroll-demo.ts` (`npm run enroll:demo`) pre-enroll the demo institutions into `kyc_root` and build the four compliance roots (kyc membership / sanction + frozen empty-IMT non-membership / assets registry), `auditor_pk = Poseidon(k_view)`, and the empty commitment-tree seed (initial frontier/root) — all real SDK Poseidon/Merkle at the production `D = 20`, no ceremony or chain needed. Emits the PUBLIC state to `setup/build/demo-state.json` (gitignored, regenerable) that the post-deploy `init` / prover / frontend consume; writes NO secret (`owner_sk` / `k_view` stay in the script, invariant #8; the in-circuit KYC check is kept). Gate `scripts/test-demo-state.ts` (`npm run demo:state`, 17/17) asserts every enrolled account proves membership, a non-enrolled account neither is in the set nor verifies against `kyc_root` via any path, each asset proves assets-registry membership, `auditor_pk == Poseidon(k_view)`, and the serialized state leaks no secret (exhaustive key-allowlist on every JSON branch). Hardened after adversarial review: the gate now constructs an actual IMT **non-membership** proof for a real target against the empty sanctions+frozen sets (and fails it against a wrong root), and pins the empty commitment-tree seed value-equal to `emptyTreeZeros` (the genesis convention the contract `init`/first-transfer `old_frontier` mirror, #12) — not a length-only check. The assets leaf's `sac_address` field and `asset_id`'s preimage now share the single canonical `sacAddressToField` encoding. (Fixed an incremental-Merkle bug: asset/KYC inclusion paths are derived after ALL inserts.) Demo identity constants are kept in lockstep with `frontend/lib/demo-data.ts` (documented; a cross-file parity gate is deferred until the UI refactor settles).
 - **Done (VK→contract conversion + init config, offline):** the **D=20 ceremony is now done (FIN-007)** — `scripts/lib/vk-host.ts` converts each snarkjs `vk_*.json` to the contract's host-byte `VerifyingKey` (G1 96B / G2 192B with the c1‖c0 swap / Fr 32B — the EXACT encoding `verifier.rs` decodes and the FIN-009 cargo tests pass). `scripts/gen-init-config.ts` (`npm run init:config`) assembles the full `InitConfig` from `demo-state.json` (roots + `auditor_pk` + empty-tree seed) + the 3 host VKs (+ an EMPTY `dvp` placeholder) into `setup/build/init-config.json`, validating every byte length (auditor_pk 32B, frontier 20×32B, vk_transfer alpha 96 / beta 192 / ic 74×96). `scripts/init.sh` (`npm run init`) invokes `init` via the stellar CLI (admin/issuer from env) and optionally wires `register_asset`/`register_transparent` from a registry mapping. Hardened after adversarial review: fixed a **blocker** in `init.sh` (a `VAR=x ( subshell )` env-prefix is a bash parse error — `bash -n` now clean); the host-byte encoders are **single-source** in `vk-host.ts` (imported by `gen-verifier-fixture.ts`, so the deployed VK and the cargo-validated test vectors can't drift); `vk_dvp`'s placeholder is a valid-length zero blob (not an empty `Bytes` string the CLI might reject); and the registry hex conversion guards against >32-byte values. (Runtime-confirm risk: the stellar CLI's `Bytes` JSON format — bare hex vs `0x` vs base64 — and empty-`ic` Vec acceptance are validated only on the first live `init`.)
-- **Remaining (deploy + submit on testnet):** run `scripts/deploy.sh` then `npm run init` (needs a funded Testnet account + `stellar keys`); browser proving needs the `.zkey` served (regenerable via the ceremony in ~13 min) + snarkjs webpack fallbacks; `submitToContract` + the shield/transfer/unshield op-flows need the Soroban entrypoint invocations wired. Frontend write-path wiring is deferred while the UI is being refactored separately. (The proof + VKs are real now — only the live deploy/submit remain.)
-**Acceptance:** `npm run demo` and the frontend run shield → transfer → regulator disclosure end-to-end on testnet. (Regulator-disclosure + balance-scan halves now run for real over demo data; the on-chain settle half awaits the ceremony + contract wiring.)
+- **Done (LIVE ON TESTNET, 2026-06-20):** contract deployed + initialised + a real **shield** verified on-chain + **regulator disclosure** of the on-chain note — the core "confidential yet auditable" claim proven against a deployed Soroban contract.
+  - **Contract spec bug fixed (blocker):** the `#[contracttype]` structs used the type aliases `Root`/`Scalar`/`Nullifier`/`Commitment` (= `BytesN<32>`) as field/variant types; Soroban's spec macro does NOT define aliases, so the embedded contract spec carried dangling type refs and `init` failed at the CLI with `Missing Entry Root`. Replaced the aliases with `BytesN<32>` in every spec-facing surface (`types.rs` PublicInputs + `InitConfig`, `events.rs` event structs, `state.rs` `DataKey`, and `lib.rs` public-fn signatures); alias defs kept for internal/test use. Rebuilt clean (no more "not defined in the spec" warnings). **Any CLI/frontend invocation was blocked by this** — must stay fixed.
+  - **Deploy:** deploy the `wasm32v1-none` artifact (`contracts/target/wasm32v1-none/release/finnes.wasm`) — the `wasm32-unknown-unknown` variant is rejected by the Soroban VM (`reference-types not enabled`). `scripts/deploy.sh` still points at the old `contracts/finnes/target/...` path (workspace puts it under `contracts/target/...`) — **FIN-028 below**. Deployed contract `CDIWXQSWIP6GKJKCAZPFONDD7VZ2PR2AQVCBQ7WRNTL64M3DAP55G7IA`; `setup/build/deploy.testnet.json` records it.
+  - **Init:** `npm run init` (admin=issuer=`deployer`) succeeded; on-chain `current_root` equals `demo-state.json` `initialRoot` exactly.
+  - **Proving on Railway:** `scripts/prove-shield-live.ts` builds a D=20 shield witness against the **live genesis** (`buildDemoComplianceState(20)` — same roots/auditor_pk/frontier `init` stored) and proves it with the production `shield.zkey` on the Railway `ceremony` service; the small proof JSON is exfiltrated.
+  - **Submit:** `scripts/submit-shield-live.ts` converts the snarkjs proof + 59 public signals to the host-byte `Proof` + `ShieldPublicInputs` args (reusing `vk-host.ts`). Real `shield` tx moved **1000 TBOND** depositor→contract atomically (test SAC `CBJMD3SA…` registered via `register_asset`), minted cm `577c94d2…`, advanced the tree to root `70112c60…`. Verified: contract balance 1000, deployer 999000.
+  - **Disclosure:** `scripts/disclose-shield-live.ts` — the auditor view key decrypts the **on-chain** `c_auditor` to (value 1000, TBOND-2031, Meridian Capital), invariant #5 proven end-to-end on live data.
+- **Remaining (frontend write-path + full demo):** `confidential_transfer` / `unshield` on-chain (**FIN-025 / FIN-026**); wire `frontend/lib/finnes-client.ts` write paths to real prove + `submitToContract` against the deployed contract (**FIN-027**); browser proving needs `.zkey` served + snarkjs webpack fallbacks. `npm run demo` orchestration still a scaffold.
+**Acceptance:** ✅ shield → regulator disclosure run end-to-end on testnet with a real proof. (Transfer + frontend write-path remain — see FIN-025/026/027.)
 **Deps:** FIN-009, FIN-010, FIN-012, FIN-013, FIN-014.
+
+---
+
+## Phase 8 — On-chain end-to-end (live testnet, builds on FIN-015)
+
+The deployed+init'd contract (`CDIWXQSWIP6GKJKCAZPFONDD7VZ2PR2AQVCBQ7WRNTL64M3DAP55G7IA`) and
+the live shield+disclosure (FIN-015) are the base. These extend the same
+prove-on-Railway → convert → submit-locally pipeline to the rest of the flow.
+
+### [ ] FIN-025 · P2 · `confidential_transfer` on-chain
+Spend two shielded notes → recipient + change, verified on-chain. Unlike shield,
+transfer needs a non-empty tree and a valid `anchor_root` in the recent-roots
+window, so it must run **after** ≥2 on-chain shields:
+1. Shield two notes owned by the same sender (reuse `scripts/prove-shield-live.ts`,
+   but at the live `next_index` / `old_frontier` after each insert — the genesis
+   shield used index 0; the 2nd needs index 1 and the post-1st frontier).
+2. Reconstruct the off-chain commitment tree from the two on-chain `cm`s (an
+   indexer stand-in) to get the input inclusion paths + the current `anchor_root`.
+3. Build the `Transfer(20,5,5)` witness (`buildTransferWitness`) against the live
+   roots (kyc/sanction/assets/frozen/auditor_pk from `buildDemoComplianceState`,
+   `anchor_root` = current tree root, `next_index` = current leaf_count), prove
+   with `transfer.zkey` on Railway, convert (73 signals) + submit
+   `confidential_transfer`. Disclose both output notes with the view key.
+**Acceptance:** a real transfer proof verifies on-chain; nullifiers recorded; tree
+advances by 2; auditor decrypts recipient + change notes.
+**Deps:** FIN-015.
+
+### [ ] FIN-026 · P2 · `unshield` on-chain
+Spend a shielded note → transparent recipient, moving the real SAC out. Requires a
+`register_transparent(recipient_field → G-addr)` mapping and the frozen/sanction
+non-membership + recipient-KYC witness (invariant #19). Build the `Unshield(20,5,5)`
+witness (64 signals) against live state, prove on Railway, submit; assert the SAC
+moves contract→recipient and the change-note sentinel path (0 vs 1 insert) is
+exercised.
+**Deps:** FIN-015, FIN-025 (needs an on-chain note to spend).
+
+### [ ] FIN-027 · P2 · Frontend write-path wiring (real submit)
+Replace the honest `todo` step lists in `frontend/lib/finnes-client.ts`
+(`shield` / `confidentialTransfer` / `unshield`) with the real flow: UTXO
+selection → witness build → client-side prove (snarkjs in-browser: serve
+`.wasm`/`.zkey`, add webpack fallbacks, **FIN-023**) → `submitToContract` invoking
+the deployed contract via `@stellar/stellar-sdk` + Freighter (or the relayer
+fee-bump). Point at contract `CDIWXQSWIP6G…AP55G7IA` (or read from
+`setup/build/deploy.testnet.json`). The "Build, prove & submit" button then runs
+for real. `fetchStateRoots` must read live contract/indexer state instead of MOCK.
+**Deps:** FIN-015, FIN-019 (indexer for paths/roots/ciphertexts; can stub via RPC).
+
+### [ ] FIN-028 · P3 · Fix `scripts/deploy.sh` wasm path + record contract id
+`deploy.sh` looks for `contracts/finnes/target/wasm32-unknown-unknown/release/finnes.wasm`,
+but the cargo **workspace** emits to `contracts/target/`, and Soroban needs the
+**`wasm32v1-none`** target (the `unknown-unknown` build trips
+`reference-types not enabled`). Update `WASM_PATH` to
+`contracts/target/wasm32v1-none/release/finnes.wasm`.
+**Deps:** none.
 
 ---
 

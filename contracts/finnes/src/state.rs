@@ -17,7 +17,7 @@
 //! checked by `has()` (existence), NOT appended to a growing blob. A blob would
 //! cost O(n) to read/write and eventually exceed entry-size limits.
 
-use soroban_sdk::{contracttype, Address, Env, Vec};
+use soroban_sdk::{contracttype, Address, BytesN, Env, Vec};
 
 use crate::types::{Circuit, Commitment, Nullifier, Root, Scalar, VerifyingKey};
 
@@ -96,7 +96,7 @@ pub enum DataKey {
     // --- persistent (fund-critical / unbounded) ---
     /// Existence marker for a spent nullifier. Value is unit `()`; presence ==
     /// spent. One entry per nullifier (invariant #4).
-    Nullifier(Nullifier),
+    Nullifier(BytesN<32>),
     /// Commitment-tree frontier (filled subtrees), `TREE_DEPTH` scalars.
     Frontier,
     /// Recent-roots ring buffer (commitment-tree roots) for windowed anchoring.
@@ -104,17 +104,17 @@ pub enum DataKey {
     /// Membership marker for a commitment in the frozen set (existence check).
     /// Complements `FrozenRoot`: the contract stores the verbatim issuer-set root
     /// strictly, and also records which `cm`s were frozen for auditability.
-    Frozen(Commitment),
+    Frozen(BytesN<32>),
     /// SAC contract `Address` for an `asset_id` (FIN-010). The contract performs
     /// no hashing (invariant #11), so it cannot recompute `Poseidon(sac_address)`
     /// to resolve the concrete token; instead the admin registers an
     /// `asset_id -> Address` mirror of the authorized-assets registry, and
     /// shield/unshield move the real SAC token through it.
-    SacAddr(Scalar),
+    SacAddr(BytesN<32>),
     /// Concrete Stellar `Address` for a transparent `recipient` field (FIN-010).
     /// The demo account registry: the unshield circuit binds compliance to the
     /// field-encoded `recipient`; the contract maps it to the real payout address.
-    TransparentAddr(Scalar),
+    TransparentAddr(BytesN<32>),
 }
 
 // ---------------------------------------------------------------------------

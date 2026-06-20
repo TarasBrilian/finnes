@@ -38,7 +38,7 @@ mod test;
 #[cfg(test)]
 mod test_vectors;
 
-use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env};
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env};
 
 use crate::errors::Error;
 use crate::state::RECENT_ROOTS_CAPACITY;
@@ -393,7 +393,7 @@ impl FinnesContract {
     // -----------------------------------------------------------------------
     /// Update `kyc_root`, pushing the prior value out of the window naturally
     /// (windowed acceptance is per-root; KYC change is benign - invariant #6).
-    pub fn update_kyc_root(env: Env, new_root: Root) -> Result<(), Error> {
+    pub fn update_kyc_root(env: Env, new_root: BytesN<32>) -> Result<(), Error> {
         require_issuer(&env)?;
         state::set_kyc_root(&env, &new_root);
         state::bump_instance_ttl(&env);
@@ -402,7 +402,7 @@ impl FinnesContract {
     }
 
     /// Update `sanction_root`.
-    pub fn update_sanction_root(env: Env, new_root: Root) -> Result<(), Error> {
+    pub fn update_sanction_root(env: Env, new_root: BytesN<32>) -> Result<(), Error> {
         require_issuer(&env)?;
         state::set_sanction_root(&env, &new_root);
         state::bump_instance_ttl(&env);
@@ -411,7 +411,7 @@ impl FinnesContract {
     }
 
     /// Update `assets_root` (authorized-assets registry).
-    pub fn update_assets_root(env: Env, new_root: Root) -> Result<(), Error> {
+    pub fn update_assets_root(env: Env, new_root: BytesN<32>) -> Result<(), Error> {
         require_issuer(&env)?;
         state::set_assets_root(&env, &new_root);
         state::bump_instance_ttl(&env);
@@ -427,7 +427,7 @@ impl FinnesContract {
     /// token to move. The admin MUST keep it in lockstep with `assets_root` (the
     /// same `(asset_id, sac_address, …)` leaf), so an `asset_id` resolves to the
     /// SAC whose Poseidon hash it is.
-    pub fn register_asset(env: Env, asset_id: Scalar, sac: Address) -> Result<(), Error> {
+    pub fn register_asset(env: Env, asset_id: BytesN<32>, sac: Address) -> Result<(), Error> {
         require_issuer(&env)?;
         state::set_asset_sac(&env, &asset_id, &sac);
         state::bump_instance_ttl(&env);
@@ -439,7 +439,7 @@ impl FinnesContract {
     /// `recipient` field (FIN-010, the demo account registry). `unshield` resolves
     /// `pi.recipient` to this address for the SAC payout; the in-circuit proof
     /// binds the recipient's KYC/non-sanction to the same field.
-    pub fn register_transparent(env: Env, recipient: Scalar, addr: Address) -> Result<(), Error> {
+    pub fn register_transparent(env: Env, recipient: BytesN<32>, addr: Address) -> Result<(), Error> {
         require_issuer(&env)?;
         state::set_transparent_addr(&env, &recipient, &addr);
         state::bump_instance_ttl(&env);
@@ -459,8 +459,8 @@ impl FinnesContract {
     /// decrypts with the view key. This entrypoint MAY require both signatures.
     pub fn freeze(
         env: Env,
-        cm_target: types::Commitment,
-        new_frozen_root: Root,
+        cm_target: BytesN<32>,
+        new_frozen_root: BytesN<32>,
     ) -> Result<(), Error> {
         // Write authority (issuer). TODO: optionally also require the auditor's
         // signature here to make the read+write join explicit (DualAuthRequired).
@@ -520,7 +520,7 @@ impl FinnesContract {
     // -----------------------------------------------------------------------
     // Read-only views (handy for the indexer / tests).
     // -----------------------------------------------------------------------
-    pub fn current_root(env: Env) -> Option<Root> {
+    pub fn current_root(env: Env) -> Option<BytesN<32>> {
         state::get_tree_root(&env)
     }
 
@@ -528,7 +528,7 @@ impl FinnesContract {
         RECENT_ROOTS_CAPACITY
     }
 
-    pub fn is_nullifier_used(env: Env, nf: types::Nullifier) -> bool {
+    pub fn is_nullifier_used(env: Env, nf: BytesN<32>) -> bool {
         state::nullifier_exists(&env, &nf)
     }
 }

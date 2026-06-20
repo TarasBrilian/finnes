@@ -12,7 +12,7 @@
 //! The `#[contracttype]` payloads give the indexer a stable, named schema; the
 //! single-symbol topic identifies the effect kind.
 
-use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec};
 
 use crate::types::{Commitment, Nullifier, Root, Scalar};
 
@@ -20,67 +20,67 @@ use crate::types::{Commitment, Nullifier, Root, Scalar};
 #[contracttype]
 #[derive(Clone)]
 pub struct ShieldEvent {
-    pub asset_id: Scalar,
-    pub amount: Scalar,
-    pub cm_out: Commitment,
-    pub new_root: Root,
-    pub c_auditor: Vec<Scalar>,
-    pub c_recipient: Vec<Scalar>,
+    pub asset_id: BytesN<32>,
+    pub amount: BytesN<32>,
+    pub cm_out: BytesN<32>,
+    pub new_root: BytesN<32>,
+    pub c_auditor: Vec<BytesN<32>>,
+    pub c_recipient: Vec<BytesN<32>>,
 }
 
 /// `confidential_transfer`: 2 spent inputs, 2 minted outputs.
 #[contracttype]
 #[derive(Clone)]
 pub struct TransferEvent {
-    pub nf_in_0: Nullifier,
-    pub nf_in_1: Nullifier,
-    pub cm_out_0: Commitment,
-    pub cm_out_1: Commitment,
-    pub new_root: Root,
-    pub c_auditor: Vec<Scalar>,
-    pub c_recipient: Vec<Scalar>,
+    pub nf_in_0: BytesN<32>,
+    pub nf_in_1: BytesN<32>,
+    pub cm_out_0: BytesN<32>,
+    pub cm_out_1: BytesN<32>,
+    pub new_root: BytesN<32>,
+    pub c_auditor: Vec<BytesN<32>>,
+    pub c_recipient: Vec<BytesN<32>>,
 }
 
 /// `unshield`: 1 spent input, value left to a transparent recipient, optional change.
 #[contracttype]
 #[derive(Clone)]
 pub struct UnshieldEvent {
-    pub nf_in_0: Nullifier,
-    pub asset_id: Scalar,
-    pub amount: Scalar,
-    pub recipient: Scalar,
+    pub nf_in_0: BytesN<32>,
+    pub asset_id: BytesN<32>,
+    pub amount: BytesN<32>,
+    pub recipient: BytesN<32>,
     /// `0` sentinel when there is no change note.
-    pub cm_change_0: Commitment,
-    pub new_root: Root,
-    pub c_auditor: Vec<Scalar>,
-    pub c_recipient: Vec<Scalar>,
+    pub cm_change_0: BytesN<32>,
+    pub new_root: BytesN<32>,
+    pub c_auditor: Vec<BytesN<32>>,
+    pub c_recipient: Vec<BytesN<32>>,
 }
 
 /// `settle_dvp`: two legs, one combined proof (demo).
 #[contracttype]
 #[derive(Clone)]
 pub struct DvpEvent {
-    pub nf_leg_x_0: Nullifier,
-    pub nf_leg_y_0: Nullifier,
-    pub cm_out_x: Commitment,
-    pub cm_out_y: Commitment,
-    pub new_root: Root,
+    pub nf_leg_x_0: BytesN<32>,
+    pub nf_leg_y_0: BytesN<32>,
+    pub cm_out_x: BytesN<32>,
+    pub cm_out_y: BytesN<32>,
+    pub new_root: BytesN<32>,
 }
 
 /// `freeze`: a commitment was added to the frozen set; `frozen_root` advanced.
 #[contracttype]
 #[derive(Clone)]
 pub struct FreezeEvent {
-    pub cm_target: Commitment,
-    pub new_frozen_root: Root,
+    pub cm_target: BytesN<32>,
+    pub new_frozen_root: BytesN<32>,
 }
 
 /// `mint_recovery` / `clawback`: a recovery note was minted into the tree.
 #[contracttype]
 #[derive(Clone)]
 pub struct RecoveryEvent {
-    pub cm_out: Commitment,
-    pub new_root: Root,
+    pub cm_out: BytesN<32>,
+    pub new_root: BytesN<32>,
 }
 
 /// An admin compliance-root update (kyc / sanction / assets / frozen). `kind`
@@ -89,7 +89,7 @@ pub struct RecoveryEvent {
 #[derive(Clone)]
 pub struct RootUpdatedEvent {
     pub kind: Symbol,
-    pub new_root: Root,
+    pub new_root: BytesN<32>,
 }
 
 /// Admin registered/updated an `asset_id → SAC Address` mapping (FIN-010 mirror).
@@ -98,7 +98,7 @@ pub struct RootUpdatedEvent {
 #[contracttype]
 #[derive(Clone)]
 pub struct AssetRegisteredEvent {
-    pub asset_id: Scalar,
+    pub asset_id: BytesN<32>,
     pub sac: Address,
 }
 
@@ -108,7 +108,7 @@ pub struct AssetRegisteredEvent {
 #[contracttype]
 #[derive(Clone)]
 pub struct TransparentRegisteredEvent {
-    pub recipient: Scalar,
+    pub recipient: BytesN<32>,
     pub addr: Address,
 }
 
