@@ -33,6 +33,8 @@
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "demo": "tsx scripts/demo.ts",
+    "enroll:demo": "tsx scripts/enroll-demo.ts",
+    "demo:state": "tsx scripts/test-demo-state.ts",
     "deploy": "bash scripts/deploy.sh",
     "typecheck": "tsc -b sdk prover"
   },
