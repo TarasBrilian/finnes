@@ -36,6 +36,8 @@
     "demo": "tsx scripts/demo.ts",
     "enroll:demo": "tsx scripts/enroll-demo.ts",
     "demo:state": "tsx scripts/test-demo-state.ts",
+    "init:config": "tsx scripts/gen-init-config.ts",
+    "init": "bash scripts/init.sh",
     "deploy": "bash scripts/deploy.sh",
     "typecheck": "tsc -b sdk prover"
   },
