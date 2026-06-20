@@ -43,10 +43,12 @@ if [[ "${ADMIN_ADDRESS:-}" == "" || "${ISSUER_ADDRESS:-}" == "" ]]; then
   exit 1
 fi
 
-# (Re)generate the init config with the real admin/issuer baked in.
+# (Re)generate the init config with the real admin/issuer baked in. Export the
+# vars (an assignment-prefix before a `( subshell )` is a bash syntax error, and
+# would not export into the subshell's `npm` child either).
 echo "==> Generating init config (admin=${ADMIN_ADDRESS}, issuer=${ISSUER_ADDRESS})"
-ADMIN_ADDRESS="${ADMIN_ADDRESS}" ISSUER_ADDRESS="${ISSUER_ADDRESS}" \
-  ( cd "${ROOT_DIR}" && npm run --silent init:config )
+export ADMIN_ADDRESS ISSUER_ADDRESS
+( cd "${ROOT_DIR}" && npm run --silent init:config )
 
 [[ -f "${CFG_JSON}" ]] || { echo "ERROR: ${CFG_JSON} not generated." >&2; exit 1; }
 
@@ -80,6 +82,13 @@ echo "    init OK."
 # (FIN-010). Provide the mapping as setup/build/asset-registry.json:
 #   { "assets": [ {"asset_id":"<decimal>", "sac":"C..."} ],
 #     "recipients": [ {"recipient":"<decimal>", "addr":"G..."} ] }
+# Decimal field element -> 32-byte (64-hex) BytesN<32>, failing LOUDLY if it
+# exceeds 32 bytes (padStart only pads, never truncates — an over-large value
+# would otherwise emit a malformed arg and register under the wrong asset_id).
+to_hex32() {
+  node -e "const h=BigInt(process.argv[1]).toString(16); if(h.length>64){process.stderr.write('value exceeds 32 bytes: '+process.argv[1]+'\n');process.exit(1)} process.stdout.write(h.padStart(64,'0'))" "$1"
+}
+
 REG="${BUILD}/asset-registry.json"
 if [[ -f "${REG}" ]]; then
   echo "==> Registering assets / transparent recipients from ${REG}"
@@ -88,13 +97,11 @@ if [[ -f "${REG}" ]]; then
     for (const a of (r.assets||[])) console.log('asset', a.asset_id, a.sac);
     for (const t of (r.recipients||[])) console.log('recip', t.recipient, t.addr);
   " | while read -r kind a b; do
+    HEX="$(to_hex32 "${a}")" || { echo "ERROR: bad ${kind} id ${a}" >&2; exit 1; }
     if [[ "${kind}" == "asset" ]]; then
-      # asset_id (decimal) -> 32-byte hex for the Scalar arg.
-      HEX="$(node -e "process.stdout.write(BigInt('${a}').toString(16).padStart(64,'0'))")"
       stellar contract invoke --id "${CONTRACT_ID}" --source-account "${SOURCE_ACCOUNT}" --network "${NETWORK}" \
         -- register_asset --asset_id "${HEX}" --sac "${b}"
     elif [[ "${kind}" == "recip" ]]; then
-      HEX="$(node -e "process.stdout.write(BigInt('${a}').toString(16).padStart(64,'0'))")"
       stellar contract invoke --id "${CONTRACT_ID}" --source-account "${SOURCE_ACCOUNT}" --network "${NETWORK}" \
         -- register_transparent --recipient "${HEX}" --addr "${b}"
     fi

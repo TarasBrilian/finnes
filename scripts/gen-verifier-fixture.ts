@@ -22,6 +22,10 @@
 import { existsSync, writeFileSync, readFileSync } from 'node:fs';
 
 import { buildTransferScenario } from './lib/transfer-scenario.js';
+// Single-source host-byte encoders (also used by scripts/lib/vk-host.ts for the
+// on-chain InitConfig) — keeping ONE encoder means the deployed VK and these
+// cargo-validated test vectors can never drift (invariant: layout parity).
+import { g1Bytes as g1, g2Bytes as g2, frBytes as fr } from './lib/vk-host.js';
 import { prove } from '../prover/src/prove.js';
 import type { Witness } from '../prover/src/types.js';
 
@@ -38,35 +42,6 @@ for (const p of [wasmPath, zkeyPath, vkeyPath]) {
     console.error(`MISSING ${p}. Run the depth-4 demo ceremony first (npm run setup:demo).`);
     process.exit(1);
   }
-}
-
-// --- byte-encoding helpers --------------------------------------------------
-
-/** Big-endian fixed-width bytes of a decimal/bigint string. */
-function be(dec: string | bigint, len: number): Uint8Array {
-  let hex = BigInt(dec).toString(16);
-  if (hex.length > len * 2) throw new Error(`value 0x${hex} exceeds ${len} bytes`);
-  hex = hex.padStart(len * 2, '0');
-  return Uint8Array.from(Buffer.from(hex, 'hex'));
-}
-
-function cat(...parts: Uint8Array[]): Uint8Array {
-  return Uint8Array.from(Buffer.concat(parts.map((p) => Buffer.from(p))));
-}
-
-/** snarkjs G1 `[x, y, "1"]` → 96-byte host encoding. */
-function g1(p: [string, string, string]): Uint8Array {
-  return cat(be(p[0], 48), be(p[1], 48));
-}
-
-/** snarkjs G2 `[[x_c0, x_c1], [y_c0, y_c1], ["1","0"]]` → 192-byte host encoding (c1 ‖ c0). */
-function g2(p: [[string, string], [string, string], [string, string]]): Uint8Array {
-  return cat(be(p[0][1], 48), be(p[0][0], 48), be(p[1][1], 48), be(p[1][0], 48));
-}
-
-/** Fr scalar (decimal) → 32-byte big-endian. */
-function fr(dec: string): Uint8Array {
-  return be(dec, 32);
 }
 
 // --- Rust literal formatting ------------------------------------------------
