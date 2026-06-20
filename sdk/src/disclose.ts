@@ -165,10 +165,15 @@ export function discloseTransaction(
   kView: Fr,
   resolvers?: DisclosureResolvers,
 ): DisclosedTransaction {
-  const real = tx.outputs.filter((o) => !isSentinel(o.commitment));
-  const outputs = real.map((o, i) =>
-    discloseNote(o, kView, resolvers, roleFor(tx.circuit, i, real.length)),
-  );
+  // Role is derived from the ORIGINAL output position + the original output
+  // count (docs/PUBLIC_IO.md ordering), NOT a post-filter index — otherwise a
+  // dropped leading sentinel would re-index the survivors and shift the
+  // recipient/change (or leg_x/leg_y) roles the regulator relies on.
+  const total = tx.outputs.length;
+  const outputs = tx.outputs
+    .map((o, idx) => ({ o, idx }))
+    .filter(({ o }) => !isSentinel(o.commitment))
+    .map(({ o, idx }) => discloseNote(o, kView, resolvers, roleFor(tx.circuit, idx, total)));
   return { circuit: tx.circuit, nullifiers: tx.nullifiers, outputs };
 }
 

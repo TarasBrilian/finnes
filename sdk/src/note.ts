@@ -29,27 +29,6 @@ import { poseidonBLS, toField } from './poseidon.js';
 /** Max raw value permitted by the 64-bit range check (invariant #2). */
 export const MAX_NOTE_VALUE: bigint = (1n << 64n) - 1n;
 
-/** RFC 4648 base32 alphabet used by Stellar StrKey (no padding in the 56-char form). */
-const STRKEY_BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-
-/** Decode a Stellar StrKey (`G…`/`C…`, 56 base32 chars → 35 bytes). */
-function decodeStrKey(s: string): Uint8Array {
-  let bits = 0;
-  let value = 0;
-  const out: number[] = [];
-  for (const ch of s) {
-    const idx = STRKEY_BASE32.indexOf(ch);
-    if (idx === -1) throw new Error('sacAddressToField: invalid StrKey character');
-    value = (value << 5) | idx;
-    bits += 5;
-    if (bits >= 8) {
-      bits -= 8;
-      out.push((value >>> bits) & 0xff);
-    }
-  }
-  return Uint8Array.from(out);
-}
-
 /**
  * Encode an SAC address into the single field element fed to
  * `asset_id = Poseidon(sac_address)`. The circuit (`circuits/lib/note.circom`
@@ -57,39 +36,33 @@ function decodeStrKey(s: string): Uint8Array {
  * here and in the contract's admin asset registry (`register_asset`), which must
  * stay in lockstep so an `asset_id` resolves to the same SAC everywhere.
  *
- * Two accepted forms:
- *   - a field-element literal (decimal or `0x…` hex) — the demo representation
- *     used by `scripts/lib/*-scenario.ts` (`sac_address = 777n`), parsed verbatim;
- *   - a real Stellar StrKey (`C…` contract / `G…` account, 56 base32 chars) — its
- *     32-byte payload (version byte + payload + CRC; payload = bytes[1..33]) is
- *     read big-endian into a bigint.
+ * DEMO form (the only one accepted): a field-element literal — decimal or `0x…`
+ * hex — exactly as `scripts/lib/*-scenario.ts` use it (`sac_address = 777n`).
+ * Parsed verbatim and reduced mod `r`.
  *
- * PRODUCTION GAP (mirrors the `recipient` encoding in docs/PUBLIC_IO.md): a full
- * 32-byte payload spans up to 2^256 > r, so reducing it mod `r` is not injective
- * at the very top of the range. Production splits the address into two fields
- * (hi/lo 16 bytes) or binds it via the SHA-256 host function (the one on-chain
- * hash invariant #11 permits) — a fresh-ceremony change. The demo's contract IDs
- * are assumed to fit `< r`.
+ * PRODUCTION GAP — real Stellar StrKey (`C…`/`G…`) binding is deliberately NOT
+ * implemented here (it THROWS), mirroring the deferred `recipient` encoding in
+ * docs/PUBLIC_IO.md: a 32-byte address payload spans up to 2^256 > r, so a naive
+ * big-endian-mod-`r` map is non-injective at the top (two addresses can alias to
+ * one `asset_id`) AND skips StrKey version/CRC validation (a typo would silently
+ * mint a wrong `asset_id` that desyncs from the contract registry). Production
+ * binds the full address via two fields (hi/lo 16 bytes) or the SHA-256 host
+ * function (invariant #11) — a fresh-ceremony change. Until then we fail loudly
+ * rather than encode a possibly-wrong identity.
  */
 export function sacAddressToField(sacAddress: string): Fr {
   const s = sacAddress.trim();
   if (s.length === 0) throw new Error('sacAddressToField: empty address');
 
-  // Field-element literal (demo representation).
+  // Field-element literal (demo representation): decimal or 0x-hex.
   if (/^0x[0-9a-fA-F]+$/.test(s)) return toField(BigInt(s));
   if (/^[0-9]+$/.test(s)) return toField(BigInt(s));
 
-  // Real Stellar StrKey: 56 base32 chars → 35 bytes (1 version + 32 payload + 2 CRC).
-  if (/^[A-Z2-7]{56}$/.test(s)) {
-    const raw = decodeStrKey(s);
-    let acc = 0n;
-    for (const b of raw.slice(1, 33)) acc = (acc << 8n) | BigInt(b);
-    return toField(acc);
-  }
-
+  // Anything else (incl. a real C…/G… StrKey) is the production gap above.
   throw new Error(
-    'sacAddressToField: unrecognised SAC address; expected a decimal/0x-hex ' +
-      'field element or a Stellar StrKey (C…/G…).',
+    'sacAddressToField: only field-element literals (decimal/0x-hex) are supported ' +
+      'in the demo. Real Stellar StrKey (C…/G…) binding is a production gap (split ' +
+      'hi/lo or SHA-256; see docs/PUBLIC_IO.md) — not a naive mod-r reduction.',
   );
 }
 

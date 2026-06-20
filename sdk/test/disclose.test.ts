@@ -128,6 +128,27 @@ test('unshield "no change" sentinel output is skipped', () => {
   assert.equal(disclosed.outputs.length, 0);
 });
 
+test('roles derive from the ORIGINAL output position, not a post-filter index', () => {
+  // A leading sentinel must NOT re-index the surviving note: the real output at
+  // original index 1 of a 2-output transfer is the change note (back to sender),
+  // and must keep the 'change' role even though it is the only survivor.
+  const tx: AuditorObservedTx = {
+    circuit: 'transfer',
+    nullifiers: [],
+    outputs: [
+      { commitment: 0n, cAuditor: { fields: [0n, 0n, 0n, 0n, 0n] } }, // sentinel at index 0
+      {
+        commitment: commitNote(changeNote),
+        cAuditor: encryptToAuditor(changeNote, kView, { rhoEnc: 9n }),
+      },
+    ],
+  };
+  const disclosed = discloseTransaction(tx, kView);
+  assert.equal(disclosed.outputs.length, 1);
+  assert.equal(disclosed.outputs[0]!.role, 'change'); // not 'recipient', not 'output'
+  assert.equal(disclosed.outputs[0]!.ownerPk, changeNote.ownerPk);
+});
+
 test('END-TO-END: auditor discloses the c_auditor that buildTransferWitness emits', () => {
   // The strongest parity: disclose the ciphertexts AS PRODUCED by the witness
   // builder (the same `c_auditor` signals the Groth16 proof binds), consumed via
@@ -209,17 +230,21 @@ test('sacAddressToField: field-element literal matches the scenario convention',
   assert.equal(deriveAssetId('777'), poseidonBLS([777n]));
 });
 
-test('sacAddressToField: Stellar StrKey decodes deterministically and reduces < r', () => {
-  const a = 'C' + 'D'.repeat(55); // 56 base32 chars
-  const b = 'C' + 'E'.repeat(55);
-  const fa = sacAddressToField(a);
-  assert.equal(fa, sacAddressToField(a)); // deterministic
-  assert.notEqual(fa, sacAddressToField(b)); // distinct addresses → distinct fields
-  assert.ok(fa < poseidonBLS([0n]) || fa >= 0n); // a valid field element (non-negative)
-  assert.equal(typeof fa, 'bigint');
+test('sacAddressToField: throws on a real StrKey (production gap, not a silent mod-r)', () => {
+  // A real C…/G… StrKey shape must FAIL LOUDLY rather than silently produce a
+  // non-injective / CRC-unvalidated asset_id (FIN-014 hardening).
+  assert.throws(() => sacAddressToField('C' + 'D'.repeat(55))); // 56 base32 chars
+  assert.throws(() => sacAddressToField('GABC' + 'D'.repeat(52)));
 });
 
 test('sacAddressToField: rejects an unrecognised address', () => {
   assert.throws(() => sacAddressToField('not-an-address!'));
   assert.throws(() => sacAddressToField(''));
+});
+
+test('formatRawAmount: whole / zero / decimals=0 / negative edges', () => {
+  assert.equal(formatRawAmount(10_000_000n, 7), '1'); // exact whole strips fraction
+  assert.equal(formatRawAmount(0n, 7), '0');
+  assert.equal(formatRawAmount(5_000_000n, 0), '5000000'); // decimals=0 → no fraction
+  assert.equal(formatRawAmount(-500_000n, 7), '-0.05'); // negative + trailing-zero strip
 });
