@@ -3,9 +3,11 @@
 import type { OpResult, OpStep } from '@/lib/finnes-client';
 
 /**
- * Renders the honest step-by-step status of an intent (build → encrypt →
- * witness → prove → submit). Where sdk/prover/contract are unwired, each step
- * shows 'TODO · not wired' - we NEVER render a fake success.
+ * Renders the honest step-by-step status of a REAL write (FIN-027): assemble
+ * witness → prove in-browser → submit the Soroban tx. Each step shows its genuine
+ * outcome (done / error) as the pipeline runs — we NEVER render a fake success. A
+ * step that needs an operator prerequisite (served .zkey, connected Freighter, or
+ * enough spendable notes) fails with an actionable error.
  */
 function StepRow({ step }: { step: OpStep }) {
   const styles: Record<OpStep['status'], string> = {
@@ -15,7 +17,7 @@ function StepRow({ step }: { step: OpStep }) {
   };
   const labels: Record<OpStep['status'], string> = {
     ok: 'done',
-    todo: 'TODO · not wired',
+    todo: 'pending',
     error: 'error',
   };
   return (
@@ -34,19 +36,25 @@ export function OpResultPanel({ result }: { result: OpResult | null }) {
 
   const banner =
     result.status === 'ok'
-      ? { cls: 'bg-emerald-50 text-emerald-900', text: 'Completed.' }
+      ? { cls: 'bg-emerald-50 text-emerald-900', text: 'Submitted on-chain.' }
       : result.status === 'error'
-        ? { cls: 'bg-rose-50 text-rose-900', text: 'Failed.' }
-        : {
-            cls: 'bg-amber-50 text-amber-900',
-            text: 'Intent assembled - but not submitted. Steps below require real sdk/prover/contract wiring.',
-          };
+        ? { cls: 'bg-rose-50 text-rose-900', text: 'Stopped — see the failing step below.' }
+        : { cls: 'bg-amber-50 text-amber-900', text: 'In progress.' };
 
   return (
     <div className="mt-4 rounded-lg border border-slate-200">
       <div className={`rounded-t-lg px-4 py-2 text-sm font-medium ${banner.cls}`}>
         {banner.text}
-        {result.txHash && <span className="mono ml-2">{result.txHash}</span>}
+        {result.txHash && (
+          <a
+            className="mono ml-2 underline"
+            href={`https://stellar.expert/explorer/testnet/tx/${result.txHash}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {result.txHash.slice(0, 12)}…
+          </a>
+        )}
       </div>
       <ul className="divide-y divide-slate-100 px-4 py-1">
         {result.steps.map((s, i) => (

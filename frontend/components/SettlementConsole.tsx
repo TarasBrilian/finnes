@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   confidentialTransfer,
+  fetchSpendableUnshield,
   shield,
   unshield,
   formatRawAmount,
@@ -98,7 +99,34 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [result, setResult] = useState<OpResult | null>(null);
+  const [spendable, setSpendable] = useState<{ rawAmount: bigint; assetLabel: string } | null | 'loading'>(null);
   const [busy, setBusy] = useState(false);
+
+  // On the Unshield tab, read the live spendable note (the on-chain note this
+  // identity can redeem) so the form shows the max instead of letting the user
+  // submit an over-the-note amount the witness builder would reject.
+  useEffect(() => {
+    if (mode !== 'unshield') {
+      setSpendable(null);
+      return;
+    }
+    let cancelled = false;
+    setSpendable('loading');
+    fetchSpendableUnshield()
+      .then((s) => {
+        if (cancelled) return;
+        setSpendable(s ? { rawAmount: s.rawAmount, assetLabel: s.assetLabel } : null);
+        // Pre-fill the amount with the spendable note value so unshield is one-click
+        // (the only valid amount is in (0, note value]).
+        if (s) setAmount(s.rawAmount.toString());
+      })
+      .catch(() => {
+        if (!cancelled) setSpendable(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode]);
 
   const meta = MODES.find((m) => m.id === mode)!;
   const ticker = assetLabel.split(' ')[0];
@@ -246,7 +274,9 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
                   onChange={(e) => setRecipient(e.target.value)}
                 />
                 <p className="mt-1.5 text-[11px] text-ink-faint">
-                  Must be KYC-approved &amp; non-sanctioned (invariant #19).
+                  Must be KYC-approved &amp; non-sanctioned (invariant #19). The demo pays the
+                  pre-registered recipient (Bank B → the contract&apos;s registered payout address);
+                  arbitrary recipients need an admin <span className="font-mono">register_transparent</span> (FIN-010).
                 </p>
               </div>
             )}
@@ -278,6 +308,33 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
                   <>Display conversion appears here as you type.</>
                 )}
               </p>
+              {mode === 'unshield' && (
+                <p className="mt-1.5 text-[11px]">
+                  {spendable === 'loading' ? (
+                    <span className="text-ink-faint">Reading spendable balance on-chain…</span>
+                  ) : spendable ? (
+                    <span className="text-ink-muted">
+                      Spendable note on-chain:{' '}
+                      <span className="font-mono text-sm font-semibold text-ink">{spendable.rawAmount.toString()}</span> raw
+                      {' '}({formatRawAmount(spendable.rawAmount, DISPLAY_DECIMALS)} {ticker}) — pre-filled.{' '}
+                      <button
+                        type="button"
+                        className="ml-1 font-semibold text-blue-600 underline"
+                        onClick={() => setAmount(spendable.rawAmount.toString())}
+                      >
+                        use max
+                      </button>
+                      <span className="mt-1 block text-ink-faint">
+                        No TBOND deposit here — unshield pays OUT from the contract; your wallet only pays the XLM fee.
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="text-rose-600">
+                      No spendable note for this identity (the demo notes are spent). Shield one first.
+                    </span>
+                  )}
+                </p>
+              )}
             </div>
           </div>
 

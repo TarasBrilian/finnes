@@ -374,7 +374,7 @@ exercised.
     now proven on live data.
 **Deps:** FIN-015, FIN-025 (needs an on-chain note to spend).
 
-### [ ] FIN-027 · P2 · Frontend write-path wiring (real submit)
+### [~] FIN-027 · P2 · Frontend write-path wiring (real submit) — INFRA DONE + BUILD/RPC-VERIFIED; one-click write awaits indexer + served zkeys
 Replace the honest `todo` step lists in `frontend/lib/finnes-client.ts`
 (`shield` / `confidentialTransfer` / `unshield`) with the real flow: UTXO
 selection → witness build → client-side prove (snarkjs in-browser: serve
@@ -383,6 +383,48 @@ the deployed contract via `@stellar/stellar-sdk` + Freighter (or the relayer
 fee-bump). Point at contract `CDIWXQSWIP6G…AP55G7IA` (or read from
 `setup/build/deploy.testnet.json`). The "Build, prove & submit" button then runs
 for real. `fetchStateRoots` must read live contract/indexer state instead of MOCK.
+
+- **Done (option 2 — in-browser proving; real infra, machine-verified):**
+  - `frontend/lib/config.ts` — deployed contract id / RPC / network / SAC / artifact
+    URLs (env-overridable). `frontend/lib/host-bytes.ts` — browser-safe port of
+    `vk-host` (frToHex/g1ToHex/g2ToHex); **byte-identical to the cargo-verified
+    converter** (parity-checked against `transfer-args.json`).
+  - `frontend/lib/contract-spec.json` — the deployed contract's OWN spec (extracted
+    via `stellar contract bindings`); `frontend/lib/soroban.ts` uses
+    `Spec.funcArgsToScVals` to encode args. **Encoding validated against the LIVE
+    contract**: a real `confidential_transfer` simulate decoded to contract logic
+    (`Error(Contract,#11)` = nullifier used), not an encoding error.
+  - `fetchStateRoots` now reads the LIVE `current_root` over Soroban RPC (verified
+    returns `542198b8…`) + the four compliance roots from `demoComplianceRoots`
+    (real SDK Poseidon/Merkle, **verified == the on-chain init roots**) — no MOCK.
+  - `submitToContract` is REAL: spec-encode → `prepareTransaction` (RPC simulate +
+    footprint) → Freighter sign → `sendTransaction` → poll. `proveInBrowser`
+    (`frontend/lib/prove-browser.ts`) runs `groth16.fullProve` client-side; the
+    witness never leaves the tab (invariant #8). `next.config.mjs` adds the snarkjs
+    browser fallbacks; `snarkjs`+`buffer` added to the frontend. `next build` is
+    GREEN (6/6 routes). The circuit `.wasm` are committed under
+    `frontend/public/artifacts/<circuit>/`; the `.zkey` are gitignored (operator
+    copies them there).
+- **Done (buttons now EXECUTE the real pipeline, not a static TODO list):**
+  `frontend/lib/write-flow.ts` wires `shield` / `confidentialTransfer` / `unshield`
+  to: assemble a contract-acceptable witness from the live state → `proveInBrowser`
+  → `submitInvocation`, reporting genuine per-step `ok`/`error` (the panel no longer
+  shows "TODO · not wired"). `frontend/lib/demo-state.ts` (enrolled identities +
+  KYC/assets paths) + `frontend/lib/live-notes.ts` (the on-chain note set + tree
+  reconstruction — indexer stand-in) anchor the witness to the **current** chain
+  state: verified `reconstructLiveTree().root == 542198b8…` (the live root), and the
+  built **shield + unshield witnesses are `WITNESS IS CORRECT`** against the r1cs
+  (so the proofs will be accepted). The session acts as an enrolled demo bank
+  (Bank B) — a random key isn't in `kyc_root`. `is_nullifier_used` is read live to
+  pick spendable notes; `unshield` spends the one remaining note, `transfer` errors
+  honestly (`1 < 2` spendable). `next build` GREEN.
+- **Remaining = operator RUNTIME prerequisites only (no more code for the demo
+  path):** (1) place the PRODUCTION D=20 `.zkey` under `public/artifacts/<circuit>/`
+  (from the Railway ceremony — the LOCAL `shield.zkey` is a different ceremony and a
+  proof from it is rejected on-chain; only the Railway zkeys match the deployed VK);
+  (2) connect a funded Testnet Freighter (it signs + pays); (3) `transfer` needs ≥2
+  spendable notes — shield twice first (each shield UI press mints one). Full
+  arbitrary-input UX still wants the real indexer (FIN-019).
 **Deps:** FIN-015, FIN-019 (indexer for paths/roots/ciphertexts; can stub via RPC).
 
 ### [ ] FIN-028 · P3 · Fix `scripts/deploy.sh` wasm path + record contract id

@@ -16,15 +16,23 @@
  * It may fetch PUBLIC data (Merkle paths, roots, ciphertext blobs) from the API,
  * but it MUST NEVER send a witness, a key, or note plaintext to the backend.
  *
- * STATUS (FIN-014/015): the READ paths are now REAL over a local demo fixture
+ * STATUS (FIN-014/015): the READ paths are REAL over a local demo fixture
  * (`demo-data.ts`, an indexer stand-in) with genuine SDK crypto:
  *   - scanConfidentialBalances → scanForOwnedNotes (real trial-decrypt),
  *   - decryptAuditorView       → discloseTransaction (real auditor decrypt).
- * The WRITE paths (shield/confidential_transfer/unshield) still return honest
- * step-by-step `todo` results: the SDK witness builders + encryptors are wired,
- * but client-side proving needs the D=20 ceremony artifacts and submission needs
- * the Soroban entrypoints — both out of scope for the frontend-wiring slice.
- * We NEVER fake a successful settlement.
+ *
+ * STATUS (FIN-027, option 2 — in-browser proving): the WRITE-path INFRASTRUCTURE
+ * is now real and verified against the deployed contract:
+ *   - fetchStateRoots  → live `current_root` over Soroban RPC (soroban.ts),
+ *   - proveInBrowser   → client-side snarkjs groth16.fullProve (prove-browser.ts),
+ *   - submitToContract → real Soroban invocation, spec-encoded + Freighter-signed
+ *                        + RPC-sent (soroban.ts; arg encoding validated by a live
+ *                        simulate that decodes to contract logic, not an error).
+ * What remains for a one-click arbitrary-input write (reported honestly per step,
+ * NEVER faked): the live commitment-tree frontier/paths need an indexer (FIN-019;
+ * the demo's deterministic tree can stand in), the session must act as a
+ * KYC-enrolled identity, and the operator must place the D=20 `.zkey` under
+ * public/artifacts/<circuit>/. We NEVER fake a successful settlement.
  * ============================================================================
  */
 
@@ -49,11 +57,16 @@ import type { SpendingKeypair, AuditorKeypair } from './keys.js';
 import {
   buildDemoOwnedCiphertexts,
   buildDemoTransactions,
+  demoComplianceRoots,
   DEMO_AUDITOR_PK,
   DEMO_PAIRWISE_KEY,
   resolveAsset,
   resolveParty,
 } from './demo-data.js';
+import { readCurrentRoot, submitInvocation } from './soroban.js';
+import { fetchSpendableUnshield, runShield, runTransfer, runUnshield } from './write-flow.js';
+
+export { fetchSpendableUnshield };
 
 // ---------------------------------------------------------------------------
 // Result envelope - operations report a real, honest status.
@@ -96,24 +109,19 @@ function summarise(steps: OpStep[], txHash?: string): OpResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch the current/recent state roots from the API/indexer.
+ * Fetch the current/recent state roots (FIN-027).
  *
- * TODO(backend): wire to the real indexer API (ARCHITECTURE.md → Backend). For
- * now returns clearly-labelled mock roots so the UI can render.
+ * REAL: `anchorRoot` is read LIVE from the deployed contract's `current_root`
+ * view over Soroban RPC (read-only simulate, no wallet/fee). The four compliance
+ * roots are the deterministic demo-state values the post-deploy `init` stored
+ * (`demoComplianceRoots`, real SDK Poseidon/Merkle) — they change rarely (config),
+ * the tree root is what moves. A proof built against these will match contract
+ * state. Returns `isMock: false`; an empty tree yields `anchorRoot = 0`.
  */
 export async function fetchStateRoots(): Promise<{ roots: StateRoots; isMock: boolean }> {
-  // MOCK - not real chain state.
-  const z: Fr = 0n;
-  return {
-    isMock: true,
-    roots: {
-      anchorRoot: z,
-      kycRoot: z,
-      sanctionRoot: z,
-      assetsRoot: z,
-      frozenRoot: z,
-    },
-  };
+  const hex = await readCurrentRoot(); // live contract state
+  const anchorRoot: Fr = hex ? BigInt('0x' + hex) : 0n;
+  return { isMock: false, roots: { anchorRoot, ...demoComplianceRoots() } };
 }
 
 /**
@@ -237,148 +245,32 @@ export interface UnshieldIntent {
  *   3. Assemble the witness, prove client-side, build public inputs.
  *   4. Sign + submit the SAC deposit + contract `shield` invocation.
  */
-export async function shield(
-  _intent: ShieldIntent,
-  _spending: SpendingKeypair,
-): Promise<OpResult> {
-  const steps: OpStep[] = [];
-
-  steps.push(
-    todo(
-      'Build note opening + asset binding',
-      'sdk createNote / deriveAssetId / sacAddressToField are wired (FIN-014); needs ' +
-        'integrating into this submit flow (asset_id = Poseidon(sac_address)). TODO(flow).',
-    ),
-  );
-  steps.push(
-    todo(
-      'Encrypt note to auditor (mandatory) + recipient',
-      'sdk encryptToAuditor/encryptToRecipient are wired (FIN-004); auditor ciphertext is ' +
-        'mandatory (invariant #5). Needs integrating into this flow. TODO(flow).',
-    ),
-  );
-  steps.push(
-    todo(
-      'Assemble shield witness',
-      'prover assembleShieldWitness needs final circuit signal names + frontier/ciphertext packing. TODO(prover).',
-    ),
-  );
-  steps.push(
-    todo(
-      'Generate Groth16 proof (client-side, BLS12-381)',
-      'prover.prove needs the bls12381 .wasm/.zkey from circuits:build + setup:ceremony. ' +
-        'Runs in-browser; witness never leaves this tab (invariant #8). TODO(prover/setup).',
-    ),
-  );
-  steps.push(
-    todo(
-      'Submit shield tx to Soroban contract',
-      'Contract `shield` entrypoint + SAC deposit not wired. TODO(contract). ' +
-        'Build public inputs via buildShieldPublicInputs (depth ' + TREE_DEPTH + ').',
-    ),
-  );
-
-  return summarise(steps);
+export async function shield(intent: ShieldIntent, _spending: SpendingKeypair): Promise<OpResult> {
+  // REAL execution (FIN-027): assemble the shield witness from live state, prove
+  // in-browser, submit the Soroban tx. Honest ok/error per step; never faked.
+  return runShield(intent.rawAmount);
 }
 
 /**
  * CONFIDENTIAL TRANSFER: shielded A → shielded B (2-in / 2-out, single asset).
  */
 export async function confidentialTransfer(
-  _intent: TransferIntent,
+  intent: TransferIntent,
   _spending: SpendingKeypair,
 ): Promise<OpResult> {
-  const steps: OpStep[] = [];
-
-  steps.push(
-    todo(
-      'Select input notes + build outputs',
-      'Owned notes come from the real scan (scanForOwnedNotes, FIN-014); needs UTXO ' +
-        'selection + output construction wired into this flow. TODO(flow).',
-    ),
-  );
-  steps.push(
-    ok(
-      'Fetch public Merkle paths + roots from API',
-      'Only PUBLIC data crosses to the backend. fetchStateRoots returns MOCK roots for now.',
-    ),
-  );
-  steps.push(
-    todo(
-      'Encrypt 2 output notes to auditor (mandatory) + recipients',
-      'sdk encrypt* are wired (FIN-004); mandatory auditor ct (invariant #5). Needs ' +
-        'integrating into this flow. TODO(flow).',
-    ),
-  );
-  steps.push(
-    todo(
-      'Assemble transfer witness (nullifiers, conservation, KYC, limits)',
-      'prover assembleTransferWitness - per-asset conservation, 64-bit range, KYC membership, ' +
-        'sanctions/frozen non-membership, assets membership + value ≤ per_tx_limit. TODO(prover).',
-    ),
-  );
-  steps.push(
-    todo(
-      'Generate Groth16 proof (client-side)',
-      'prover.prove with bls12381 artifacts. Witness stays in this tab (invariant #8). TODO(prover/setup).',
-    ),
-  );
-  steps.push(
-    todo(
-      'Submit confidential_transfer to contract',
-      'Contract entrypoint not wired. Public inputs via buildTransferPublicInputs. TODO(contract).',
-    ),
-  );
-
-  // Demonstrate that the PUBLIC-input builder is real (it does not touch secrets),
-  // but it cannot complete without real nullifiers/commitments/ciphertexts.
-  void buildTransferPublicInputs;
-
-  return summarise(steps);
+  // REAL execution (FIN-027): scan live spendable notes, build the 2-in/2-out
+  // witness, prove, submit. Honestly errors if < 2 spendable notes exist on-chain.
+  return runTransfer(intent.rawAmount, intent.recipientPk);
 }
 
 /**
  * UNSHIELD: shielded → transparent. Top compliance checkpoint (invariant #19):
  * MUST prove frozen-set non-membership + transparent recipient compliance.
  */
-export async function unshield(
-  _intent: UnshieldIntent,
-  _spending: SpendingKeypair,
-): Promise<OpResult> {
-  const steps: OpStep[] = [];
-
-  steps.push(
-    todo(
-      'Select spent note + change',
-      'Owned notes come from the real scan (scanForOwnedNotes, FIN-014); needs spent-note ' +
-        'selection + change construction wired into this flow. TODO(flow).',
-    ),
-  );
-  steps.push(
-    todo(
-      'Assemble unshield witness (frozen non-membership + recipient KYC)',
-      'prover assembleUnshieldWitness - invariant #19: frozen-set non-membership of the spent ' +
-        'commitment + KYC/non-sanctioned transparent recipient. TODO(prover).',
-    ),
-  );
-  steps.push(
-    todo(
-      'Generate Groth16 proof (client-side)',
-      'prover.prove with bls12381 artifacts. TODO(prover/setup).',
-    ),
-  );
-  steps.push(
-    todo(
-      'Submit unshield tx (contract calls SAC transfer)',
-      'Contract `unshield` reveals (asset_id, amount, recipient) for the SAC transfer. ' +
-        'Public inputs via buildUnshieldPublicInputs. TODO(contract).',
-    ),
-  );
-
-  void buildUnshieldPublicInputs;
-  void buildShieldPublicInputs;
-
-  return summarise(steps);
+export async function unshield(intent: UnshieldIntent, _spending: SpendingKeypair): Promise<OpResult> {
+  // REAL execution (FIN-027): pick a live spendable note, build the unshield
+  // witness (frozen non-membership + recipient KYC, invariant #19), prove, submit.
+  return runUnshield(intent.rawAmount);
 }
 
 // ---------------------------------------------------------------------------
@@ -510,24 +402,22 @@ export async function decryptAuditorView(
 // ---------------------------------------------------------------------------
 
 /**
- * Placeholder contract submission. Accepts ONLY public data (a proof bundle +
- * ciphertexts). NEVER pass a witness or key here.
+ * REAL contract submission (FIN-027). Accepts ONLY public data: the host-byte
+ * proof + the named public-input struct (hex strings / arrays) the entrypoint
+ * expects (asset_id, roots, nullifiers, commitments, frontiers, ciphertexts, …).
+ * NEVER pass a witness or key here (invariant #8).
  *
- * TODO(contract): build a Soroban operation invoking the entrypoint with the
- * proof, public inputs, and ciphertexts; sign via Freighter (transparent legs)
- * or submit via the relayer fee-bump; await the tx result. Order per invariant
- * #9: validate root → nullifiers → compliance roots → verify Groth16 → bind
- * ciphertexts → mutate. (That ordering is enforced ON-CHAIN, not here.)
+ * Delegates to `soroban.submitInvocation`, which encodes the args via the
+ * deployed contract's OWN spec, prepares + signs (Freighter) + sends the tx over
+ * RPC, and returns a REAL tx hash. The verify-before-effects ordering (invariant
+ * #9) is enforced ON-CHAIN, not here. `shield` additionally needs a `depositor`
+ * field (the transparent G-address authorising the SAC pull).
  */
 export async function submitToContract(
-  _entrypoint: 'shield' | 'confidential_transfer' | 'settle_dvp' | 'unshield',
-  _bundle: ProofBundle,
-  _ciphertexts: readonly Ciphertext[],
+  entrypoint: 'shield' | 'confidential_transfer' | 'unshield',
+  native: Readonly<Record<string, unknown>>,
 ): Promise<{ txHash: string }> {
-  throw new Error(
-    'TODO(contract): Soroban entrypoint invocation not wired. ' +
-      'Submit proof + public inputs + ciphertexts (public data only).',
-  );
+  return submitInvocation(entrypoint, native as Record<string, unknown>);
 }
 
 /** Display helper: format raw SAC units using the asset's display decimals. */

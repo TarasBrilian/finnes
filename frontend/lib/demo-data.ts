@@ -18,8 +18,9 @@
  * model production keys this way. No real secret is logged or persisted.
  */
 
-import type { Ciphertext, Commitment, Fr, Note, OwnerPk, OwnerSk } from '@finnes/sdk';
+import type { Ciphertext, Commitment, Fr, Note, OwnerPk, OwnerSk, StateRoots } from '@finnes/sdk';
 import {
+  assetsLeafHash,
   auditorPkFromKey,
   commitNote,
   deriveAssetId,
@@ -27,6 +28,11 @@ import {
   deriveOwnerPk,
   encryptToAuditor,
   encryptToRecipient,
+  FR_MODULUS,
+  imtLeafHash,
+  IncrementalMerkleTree,
+  sacAddressToField,
+  TREE_DEPTH,
 } from '@finnes/sdk';
 
 /** Fixed demo auditor view key `k_view`; `auditor_pk = Poseidon(k_view)`. */
@@ -65,6 +71,49 @@ const ASSETS: readonly DemoAsset[] = [
   asset('777', 'TBOND-2031 (tokenized bond)', 7),
   asset('888', 'eUSD (confidential cash)', 7),
 ];
+
+/**
+ * Per-asset registry leaf metadata, in lockstep with scripts/lib/demo-state.ts
+ * (the off-chain state the deployed contract was init'd with). `limit` is the raw
+ * per-tx limit committed into `assets_root`.
+ */
+const ASSET_REGISTRY: readonly { sac: string; decimals: number; limit: bigint }[] = [
+  { sac: '777', decimals: 7, limit: 10_000_000n }, // TBOND-2031
+  { sac: '888', decimals: 7, limit: 50_000_000n }, // eUSD
+];
+
+const IMT_MAX: Fr = FR_MODULUS - 1n;
+
+/**
+ * Compute the four compliance roots deterministically, matching what the
+ * post-deploy `init` stored on-chain (kyc membership of the demo banks; empty
+ * sanction/frozen IMTs; the assets registry). Real SDK Poseidon/Merkle — the same
+ * roots a proof must anchor to. These change rarely (config), so they are derived
+ * here rather than read per-call; the LIVE tree `anchor_root` is read from chain.
+ */
+export function demoComplianceRoots(): Omit<StateRoots, 'anchorRoot'> {
+  const kyc = new IncrementalMerkleTree(TREE_DEPTH);
+  for (const p of PARTIES) kyc.insert(p.ownerPk);
+
+  const emptyImt = () => {
+    const t = new IncrementalMerkleTree(TREE_DEPTH);
+    t.insert(imtLeafHash(0n, 1n, IMT_MAX));
+    t.insert(imtLeafHash(IMT_MAX, 0n, 0n));
+    return t;
+  };
+
+  const assets = new IncrementalMerkleTree(TREE_DEPTH);
+  for (const a of ASSET_REGISTRY) {
+    assets.insert(assetsLeafHash(deriveAssetId(a.sac), sacAddressToField(a.sac), BigInt(a.decimals), a.limit));
+  }
+
+  return {
+    kycRoot: kyc.root(),
+    sanctionRoot: emptyImt().root(),
+    assetsRoot: assets.root(),
+    frozenRoot: emptyImt().root(),
+  };
+}
 
 /** Resolve an `asset_id` to its display label + decimals (assets registry stand-in). */
 export function resolveAsset(assetId: Fr): { label: string; decimals: number } | undefined {

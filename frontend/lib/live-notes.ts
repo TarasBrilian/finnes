@@ -1,0 +1,58 @@
+'use client';
+
+/**
+ * Frontend indexer stand-in (FIN-027): the deterministic set of notes that exist
+ * on-chain after the FIN-025/026 demo sequence, plus the live tree reconstruction.
+ * A production deployment reconstructs this from contract events (FIN-019); here it
+ * is pinned because the demo sequence is deterministic. Each note's opening matches
+ * exactly what was committed on-chain, so the recomputed commitments equal the live
+ * leaves and inclusion proofs are valid.
+ *
+ * SECURITY (invariant #8): these openings are demo data; the spending keys live in
+ * demo-state.ts (throwaway). Nothing here is a real secret.
+ */
+
+import type { Fr, Note } from '@finnes/sdk';
+import { commitNote, deriveNullifier, IncrementalMerkleTree, TREE_DEPTH } from '@finnes/sdk';
+import type { OwnerSk } from '@finnes/sdk';
+
+import { demoState } from './demo-state.js';
+
+const st = demoState();
+const TBOND = st.assets[0]!.assetId;
+const BANK_A = st.accounts[0]!; // Meridian
+const BANK_B = st.accounts[1]!; // Cendrawasih
+
+/** The on-chain notes, in leaf order (index 0..4) — the live commitment tree. */
+export interface LiveNote {
+  readonly leafIndex: number;
+  readonly note: Note;
+  readonly ownerSk: OwnerSk;
+  readonly ownerLabel: string;
+}
+
+export const LIVE_NOTES: readonly LiveNote[] = [
+  { leafIndex: 0, ownerLabel: BANK_A.label, ownerSk: BANK_A.ownerSk, note: { assetId: TBOND, value: 1000n, ownerPk: BANK_A.ownerPk, rho: 3001n, rNote: 4001n } },
+  { leafIndex: 1, ownerLabel: BANK_A.label, ownerSk: BANK_A.ownerSk, note: { assetId: TBOND, value: 1000n, ownerPk: BANK_A.ownerPk, rho: 3003n, rNote: 4003n } },
+  { leafIndex: 2, ownerLabel: BANK_B.label, ownerSk: BANK_B.ownerSk, note: { assetId: TBOND, value: 1500n, ownerPk: BANK_B.ownerPk, rho: 3005n, rNote: 4005n } },
+  { leafIndex: 3, ownerLabel: BANK_A.label, ownerSk: BANK_A.ownerSk, note: { assetId: TBOND, value: 500n, ownerPk: BANK_A.ownerPk, rho: 3006n, rNote: 4006n } },
+  { leafIndex: 4, ownerLabel: BANK_B.label, ownerSk: BANK_B.ownerSk, note: { assetId: TBOND, value: 500n, ownerPk: BANK_B.ownerPk, rho: 3007n, rNote: 4007n } },
+];
+
+/** Reconstruct the live commitment tree from the on-chain leaves. */
+export function reconstructLiveTree(): IncrementalMerkleTree {
+  const t = new IncrementalMerkleTree(TREE_DEPTH);
+  for (const l of LIVE_NOTES) t.insert(commitNote(l.note));
+  return t;
+}
+
+/** Live tree state the write-path anchors to: root / frontier / leaf count. */
+export function liveTreeState(): { root: Fr; frontier: readonly Fr[]; leafCount: number } {
+  const t = reconstructLiveTree();
+  return { root: t.root(), frontier: t.frontier(), leafCount: t.size };
+}
+
+/** The nullifier (hex, 0x-less) of a live note — to check spent status on-chain. */
+export function liveNoteNullifier(l: LiveNote): string {
+  return deriveNullifier(l.note.rho, l.ownerSk).toString(16).padStart(64, '0');
+}

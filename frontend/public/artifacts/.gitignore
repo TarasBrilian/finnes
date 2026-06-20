@@ -1,0 +1,7 @@
+# Proving artifacts for in-browser snarkjs (FIN-027, option 2).
+# The .wasm (witness generators) are small and committed; the .zkey (proving keys)
+# are large (shield 31MB / unshield 64MB / transfer 110MB) and DEMO-only
+# (single-party ceremony, invariant #10) — never committed. The operator copies
+# them here from the Railway `ceremony` container (or a local setup:ceremony):
+#   setup/build/<circuit>/<circuit>.zkey  ->  public/artifacts/<circuit>/<circuit>.zkey
+*.zkey
