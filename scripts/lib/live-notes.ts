@@ -43,6 +43,8 @@ const recipientSk = DEMO_ACCOUNTS[1]!.ownerSk; // Cendrawasih Bank (Bank B)
 
 /** Sender spending key (owns both inputs). SECRET — never serialized. */
 export const SENDER_SK: Fr = senderSk;
+/** Recipient (Bank B) spending key — owns the transfer recipient note. SECRET. */
+export const RECIPIENT_SK: Fr = recipientSk;
 /** Sender public key (the change note's owner). */
 export const SENDER_PK: Fr = deriveOwnerPk(senderSk as unknown as OwnerSk);
 /** Recipient public key (output note 0's owner; KYC-enrolled). */
@@ -129,3 +131,48 @@ export function reconstructAnchorTree(): IncrementalMerkleTree {
   t.insert(commitNote(SHIELD2_NOTE));
   return t;
 }
+
+/**
+ * Reconstruct the FULL post-transfer commitment tree (4 leaves) — the indexer
+ * stand-in for FIN-026 (`unshield`). After the FIN-025 transfer the on-chain tree
+ * holds, at indices 0..3: the two spent inputs (genesis, shield2) followed by the
+ * two transfer outputs (recipient 1500 @ idx 2, change 500 @ idx 3). Its root is
+ * the current on-chain root (`069cbb56…`) — the unshield's `anchor_root` — and its
+ * `inclusionPath(3)` is the spend proof for the change note being unshielded.
+ */
+export function reconstructPostTransferTree(): IncrementalMerkleTree {
+  const t = new IncrementalMerkleTree(DEPTH);
+  t.insert(commitNote(GENESIS_NOTE));
+  t.insert(commitNote(SHIELD2_NOTE));
+  t.insert(commitNote(TRANSFER_OUT_RECIPIENT));
+  t.insert(commitNote(TRANSFER_OUT_CHANGE));
+  return t;
+}
+
+/** On-chain `current_root` after the FIN-025 transfer (the unshield anchor). */
+export const POST_TRANSFER_ROOT_HEX =
+  '069cbb56b27b6f070fb0563a3b837848b98f9a8d5f736c80ab6a5306a5291834';
+
+/** Leaf index of the change note (500 TBOND, Bank A) the exact-spend unshield spends. */
+export const UNSHIELD_SPENT_INDEX = 3;
+
+/**
+ * Leaf index of the transfer recipient note (1500 TBOND, Bank B) the PARTIAL
+ * unshield spends. The exact-spend unshield (leaf 3) inserts 0 leaves, so after it
+ * the tree is unchanged (still 4 leaves at root `069cbb56…`); this note (leaf 2) is
+ * still unspent and spendable.
+ */
+export const PARTIAL_UNSHIELD_SPENT_INDEX = 2;
+
+/**
+ * Change note minted by the PARTIAL unshield (1-insert path): 500 TBOND back to
+ * Bank B (the spender), inserted at the live `leaf_count`. Fresh rho/r_note so its
+ * commitment is distinct from every existing note.
+ */
+export const UNSHIELD2_CHANGE_NOTE: Note = {
+  assetId: LIVE_ASSET.assetId,
+  value: 500n,
+  ownerPk: RECIPIENT_PK,
+  rho: 3007n,
+  rNote: 4007n,
+};

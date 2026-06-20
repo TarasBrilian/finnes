@@ -309,18 +309,69 @@ window, so it must run **after** ≥2 on-chain shields:
      invoke `confidential_transfer` on testnet → `npm run transfer:live:disclose`.
 
 **Acceptance:** a real transfer proof verifies on-chain; nullifiers recorded; tree
-advances by 2; auditor decrypts recipient + change notes. *(Offline half met:
-witness machine-verified CORRECT at D=20; on-chain half awaits the two Railway/
-testnet runs above.)*
+advances by 2; auditor decrypts recipient + change notes. *(MET on testnet — txs
+`d3b2e58c…` (shield #2) + `bf6f54f0…` (transfer); see the Done block above.)*
 **Deps:** FIN-015.
 
-### [ ] FIN-026 · P2 · `unshield` on-chain
+### [x] FIN-026 · P2 · `unshield` on-chain — LIVE ON TESTNET (2026-06-20)
 Spend a shielded note → transparent recipient, moving the real SAC out. Requires a
 `register_transparent(recipient_field → G-addr)` mapping and the frozen/sanction
 non-membership + recipient-KYC witness (invariant #19). Build the `Unshield(20,5,5)`
 witness (64 signals) against live state, prove on Railway, submit; assert the SAC
 moves contract→recipient and the change-note sentinel path (0 vs 1 insert) is
 exercised.
+
+- **Done (LIVE ON TESTNET, 2026-06-20):** a real exact-spend unshield verified
+  on-chain. Spent the FIN-025 change note (500 TBOND, Bank A, on-chain leaf 3) out
+  to a transparent recipient, proved on the Railway `ceremony` container with the
+  production `unshield.zkey` (VK hash confirmed byte-equal to the deployed VK),
+  exfiltrated, locally re-verified (`groth16.verify` ACCEPT vs `vk_unshield.json`),
+  then submitted via `stellar`.
+  - `scripts/lib/unshield-live.ts` (`buildLiveUnshieldWitness`) builds the witness
+    against `buildDemoComplianceState(20)` + the reconstructed post-transfer 4-leaf
+    tree (`reconstructPostTransferTree` in `live-notes.ts`); spends an EXACT amount
+    so `cm_change_0 == 0` (no-change sentinel → 0 inserts, the gated 0-leaf path).
+  - `scripts/test-unshield-live-witness.ts` + `npm run unshield:live:witness` —
+    offline gate: anchor parity (4-leaf root == on-chain `069cbb56…`), exact-spend +
+    no-change sentinel + `new_root == anchor_root`, then `snarkjs wtns check` on
+    `unshield.r1cs`: **WITNESS IS CORRECT — 182,072 constraints, 64 public inputs.**
+  - `prove-unshield-live.ts` (`unshield:live:prove`) + `submit-unshield-live.ts`
+    (`unshield:live:submit`, 64-signal → host-byte `UnshieldPublicInputs`; change
+    ciphertexts are SINGLE-note K_a/K_r=5 vectors, all-zero for an exact spend).
+  - **Registry:** `register_transparent(recipient=480b9681… → deployer G-addr)`
+    (tx `431b948bd1168282e75666408b2c40a38402e1e523deaac8190b132dcfc9f227`).
+  - **Unshield** (tx `f8e47f81c14af6ab199393fe5372c16ab8d6b33b3bb1a35804ef18626790549e`):
+    on-chain event = the gate's derived values — `nf_in_0 126ef193…`, `amount 500`,
+    `cm_change_0 0`, `new_root 069cbb56…` (unchanged), `recipient 480b9681…`,
+    all-zero change ciphertexts.
+  - **Effects verified on-chain:** real SAC moved contract→recipient (TBOND contract
+    2000→1500, deployer 998000→998500); nullifier `126ef193…` `is_nullifier_used ==
+    true`; `current_root` UNCHANGED `069cbb56…` (0 inserts — the no-change sentinel
+    path exercised). Invariant #19 (frozen non-membership + recipient KYC) proven
+    in-circuit and verified on-chain.
+- **Done (1-insert sentinel branch — "0 vs 1 insert" completeness, 2026-06-20):** the
+  acceptance requires BOTH change-note sentinel branches; the above covered 0-insert,
+  this covers 1-insert (a PARTIAL unshield that mints a change note).
+  - `scripts/lib/unshield-live.ts` `buildLivePartialUnshieldWitness` + gate
+    `npm run unshield2:live:witness` (anchor parity, conservation 1000+500==1500,
+    `cm_change_0 != 0`, `new_root != anchor_root`, mandatory change-note `c_auditor`
+    non-zero; `snarkjs wtns check` → WITNESS IS CORRECT, 182k constraints). Prover
+    `prove-partial-unshield-live.ts` (`unshield2:live:prove`); submit reuses
+    `submit-unshield-live.ts <in> <out>`; disclosure `disclose-partial-unshield-live.ts`
+    (`unshield2:live:disclose`).
+  - **Registry:** `register_transparent(recipient=4c981b72… Bank B → deployer)`
+    (tx `c0ecac3a356384673959d56f0c752bea6415663d5973d615b8a9ee218926181b`).
+  - **Partial unshield** (tx `0da98de526dd8037fae8ffc611155d6d77207524a122082ad2f7906275e7a764`):
+    spent the transfer recipient note (1500, Bank B, leaf 2) → 1000 transparent +
+    500 change. On-chain event = the gate's values: `nf_in_0 07be65aa…`,
+    `amount 1000`, `cm_change_0 46b002cf…` (non-zero), `new_root 542198b8…`, real
+    change-note `c_auditor`.
+  - **Effects verified on-chain:** SAC moved contract→recipient 1000 (TBOND contract
+    1500→500, deployer 998500→999500); nullifier `07be65aa…` recorded;
+    `current_root` ADVANCED to `542198b8…` (1 insert — the change-note sentinel
+    branch exercised); regulator decrypted the change note (500 → Bank B) from the
+    mandatory on-chain `c_auditor` (invariant #5). Both `(0 vs 1 insert)` branches
+    now proven on live data.
 **Deps:** FIN-015, FIN-025 (needs an on-chain note to spend).
 
 ### [ ] FIN-027 · P2 · Frontend write-path wiring (real submit)
