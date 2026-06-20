@@ -14,9 +14,10 @@ import type { SpendingKeypair } from '@/lib/keys';
  * dashboard's primary anchor: a deep navy panel with large per-asset figures.
  * The institution sees only its OWN notes.
  *
- * SCAFFOLD: sdk scanning throws (encryption scheme not fixed), so the data is
- * clearly labelled MOCK until @finnes/sdk decryption is wired. Per-asset figures
- * are NOT summed across assets (invariant #3 spirit - no cross-asset total).
+ * REAL (FIN-014/015): balances come from the SDK's scanForOwnedNotes — a genuine
+ * trial-decrypt + commitment re-derivation over a local demo ciphertext fixture
+ * (indexer stand-in). Per-asset figures are NOT summed across assets (invariant
+ * #3 spirit - no cross-asset total).
  */
 export function ConfidentialBalances({ spending }: { spending: SpendingKeypair | null }) {
   const [balances, setBalances] = useState<ConfidentialBalance[] | null>(null);

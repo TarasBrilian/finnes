@@ -23,15 +23,15 @@
  * must use a hardware/OS keystore or a wallet-managed signer. See TODO(security).
  * ============================================================================
  *
- * NOTE: actual key generation requires field sampling + Poseidon derivation
- * from @finnes/sdk, which are SCAFFOLD stubs that throw. We therefore generate
- * placeholder field elements with a clear `isMock` flag, and route real
- * derivation (`deriveOwnerPk`) through the SDK so it lights up automatically
- * once the SDK lands. We never fabricate a working key silently.
+ * NOTE: `owner_pk = Poseidon(owner_sk)` and `auditor_pk = Poseidon(k_view)` are
+ * derived through the REAL SDK (FIN-002/014). Only the secret-key SAMPLING here
+ * is still a demo placeholder (`mockFieldElement`, flagged `isMock`) pending a
+ * CSPRNG field-sampler; we never fabricate a working key silently.
  */
 
 import type { Fr, OwnerPk, OwnerSk } from '@finnes/sdk';
-import { deriveOwnerPk } from '@finnes/sdk';
+import { auditorPkFromKey, deriveOwnerPk } from '@finnes/sdk';
+import { DEMO_AUDITOR_VIEW_KEY } from './demo-data.js';
 
 /** A spending keypair held client-side. `ownerSk` is SECRET (invariant #8). */
 export interface SpendingKeypair {
@@ -95,20 +95,21 @@ export function generateSpendingKeypair(): SpendingKeypair {
 }
 
 /**
- * Generate / import an auditor view keypair.
- *
- * TODO(crypto): the auditor key uses the (BLS-native) KEM of the chosen
- * encryption scheme - see sdk/src/encrypt.ts and docs/PUBLIC_IO.md
- * §"Ciphertext binding". Until then this is a mock placeholder.
+ * Provide the DEMO auditor view key — the read authority that can decrypt the
+ * demo ledger (`lib/demo-data.ts`). `auditor_pk = Poseidon(k_view)` is the real
+ * derived key the contract would enforce. Loading this lets the regulator view
+ * genuinely decrypt the demo transactions (FIN-014 scheme A).
  */
 export function generateAuditorKeypair(): AuditorKeypair {
-  return { sk: mockFieldElement(), pk: mockFieldElement(), isMock: true };
+  return { sk: DEMO_AUDITOR_VIEW_KEY, pk: auditorPkFromKey(DEMO_AUDITOR_VIEW_KEY).pk, isMock: true };
 }
 
 /**
  * Parse a user-supplied auditor view key (regulator pastes their key).
  * Accepts a decimal or 0x-hex string. Throws on malformed input - we never
- * silently coerce a bad key.
+ * silently coerce a bad key. The public key is the REAL `Poseidon(k_view)`
+ * (sdk `auditorPkFromKey`); a key other than the one the notes were encrypted to
+ * simply fails to decrypt them (the disclosure path reports that honestly).
  */
 export function importAuditorViewKey(raw: string): AuditorKeypair {
   const trimmed = raw.trim();
@@ -119,8 +120,7 @@ export function importAuditorViewKey(raw: string): AuditorKeypair {
   } catch {
     throw new Error('Auditor view key must be a decimal or 0x-hex field element.');
   }
-  // TODO(crypto): derive pk from sk via the scheme KEM once defined.
-  return { sk, pk: mockFieldElement(), isMock: true };
+  return { sk, pk: auditorPkFromKey(sk).pk, isMock: false };
 }
 
 // ---------------------------------------------------------------------------

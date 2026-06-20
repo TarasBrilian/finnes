@@ -67,7 +67,7 @@ export function TxList({
                       commitments
                     </dt>
                     <dd className="truncate font-mono">
-                      {tx.outputCommitments.map(shortCm).join(', ')}
+                      {tx.outputs.map((o) => shortCm(o.commitment)).join(', ')}
                     </dd>
                   </div>
                 </dl>

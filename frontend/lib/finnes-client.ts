@@ -16,9 +16,15 @@
  * It may fetch PUBLIC data (Merkle paths, roots, ciphertext blobs) from the API,
  * but it MUST NEVER send a witness, a key, or note plaintext to the backend.
  *
- * STATUS: SCAFFOLD. The SDK/prover/contract calls below are stubs that throw or
- * return a clearly-labelled "not wired" result. We NEVER fake a successful
- * settlement. Every place needing real wiring is marked TODO(sdk/prover/contract).
+ * STATUS (FIN-014/015): the READ paths are now REAL over a local demo fixture
+ * (`demo-data.ts`, an indexer stand-in) with genuine SDK crypto:
+ *   - scanConfidentialBalances → scanForOwnedNotes (real trial-decrypt),
+ *   - decryptAuditorView       → discloseTransaction (real auditor decrypt).
+ * The WRITE paths (shield/confidential_transfer/unshield) still return honest
+ * step-by-step `todo` results: the SDK witness builders + encryptors are wired,
+ * but client-side proving needs the D=20 ceremony artifacts and submission needs
+ * the Soroban entrypoints — both out of scope for the frontend-wiring slice.
+ * We NEVER fake a successful settlement.
  * ============================================================================
  */
 
@@ -33,11 +39,21 @@ import {
   buildTransferPublicInputs,
   buildShieldPublicInputs,
   buildUnshieldPublicInputs,
+  discloseTransaction,
+  scanForOwnedNotes,
   TREE_DEPTH,
 } from '@finnes/sdk';
 import type { ProofBundle, Witness } from '@finnes/prover';
 
 import type { SpendingKeypair, AuditorKeypair } from './keys.js';
+import {
+  buildDemoOwnedCiphertexts,
+  buildDemoTransactions,
+  DEMO_AUDITOR_PK,
+  DEMO_PAIRWISE_KEY,
+  resolveAsset,
+  resolveParty,
+} from './demo-data.js';
 
 // ---------------------------------------------------------------------------
 // Result envelope - operations report a real, honest status.
@@ -105,7 +121,9 @@ export async function fetchStateRoots(): Promise<{ roots: StateRoots; isMock: bo
  * TODO(backend/contract): read `auditor_pk` from contract state.
  */
 export async function fetchAuditorPublicKey(): Promise<{ pk: AuditorPublicKey; isMock: boolean }> {
-  return { pk: { pk: 0n }, isMock: true };
+  // The demo's enforced auditor key = Poseidon(demo k_view). Real value (so the
+  // UI can show what the contract would check), demo source.
+  return { pk: { pk: DEMO_AUDITOR_PK }, isMock: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -126,31 +144,41 @@ export interface ConfidentialBalance {
 /**
  * Scan + aggregate the institution's confidential balances.
  *
- * TODO(sdk): call `scanForOwnedNotes` over indexer-served ciphertexts using the
- * viewing context. `tryDecryptNote` currently THROWS (encryption scheme not
- * fixed - sdk/src/scan.ts, encrypt.ts). Until then we return labelled MOCK
- * balances so the institution view is demo-credible without faking decryption.
+ * REAL (FIN-014/015): runs the SDK's `scanForOwnedNotes` — trial-decrypts each
+ * observed recipient ciphertext with the session's spending key and ACCEPTS a
+ * note only when the recomputed Poseidon commitment matches (foreign/garbled
+ * ciphertexts are silently skipped). Per-asset figures are never summed across
+ * assets (invariant #3/#16). The ciphertext SOURCE is a local demo fixture
+ * (`demo-data.ts`, an indexer stand-in, FIN-019); the decryption is genuine.
+ *
+ * SECURITY (invariant #8): `owner_sk` and recovered plaintext stay in this tab.
  */
 export async function scanConfidentialBalances(
-  _spending: SpendingKeypair,
+  spending: SpendingKeypair,
 ): Promise<ConfidentialBalance[]> {
-  // MOCK display data - clearly labelled in the UI as not-yet-decrypted.
-  return [
-    {
-      assetId: 1n,
-      assetLabel: 'TBOND-2031 (tokenized bond)',
-      rawAmount: 5_000_000n,
-      noteCount: 3,
-      isMock: true,
-    },
-    {
-      assetId: 2n,
-      assetLabel: 'eUSD (confidential cash)',
-      rawAmount: 12_500_000n,
-      noteCount: 5,
-      isMock: true,
-    },
-  ];
+  // Indexer stand-in: ciphertexts the institution would fetch from the backend.
+  const observed = buildDemoOwnedCiphertexts(spending.ownerPk);
+  const discovered = scanForOwnedNotes(observed, {
+    ownerSk: spending.ownerSk,
+    recipientKey: DEMO_PAIRWISE_KEY,
+  });
+
+  // Aggregate per asset (never across assets).
+  const byAsset = new Map<Fr, { rawAmount: bigint; noteCount: number }>();
+  for (const d of discovered) {
+    const acc = byAsset.get(d.note.assetId) ?? { rawAmount: 0n, noteCount: 0 };
+    acc.rawAmount += d.note.value;
+    acc.noteCount += 1;
+    byAsset.set(d.note.assetId, acc);
+  }
+
+  return [...byAsset.entries()].map(([assetId, agg]) => ({
+    assetId,
+    assetLabel: resolveAsset(assetId)?.label ?? `asset ${assetId.toString()}`,
+    rawAmount: agg.rawAmount,
+    noteCount: agg.noteCount,
+    isMock: false,
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -218,15 +246,15 @@ export async function shield(
   steps.push(
     todo(
       'Build note opening + asset binding',
-      'sdk createNote / deriveAssetId / sacAddressToField are SCAFFOLD stubs that throw ' +
-        '(asset_id = Poseidon(sac_address); SAC-address→Fr encoding undefined). TODO(sdk).',
+      'sdk createNote / deriveAssetId / sacAddressToField are wired (FIN-014); needs ' +
+        'integrating into this submit flow (asset_id = Poseidon(sac_address)). TODO(flow).',
     ),
   );
   steps.push(
     todo(
       'Encrypt note to auditor (mandatory) + recipient',
-      'sdk encryptToAuditor/encryptToRecipient throw - hybrid value-equality scheme not fixed. ' +
-        'Auditor ciphertext is mandatory (invariant #5). TODO(sdk).',
+      'sdk encryptToAuditor/encryptToRecipient are wired (FIN-004); auditor ciphertext is ' +
+        'mandatory (invariant #5). Needs integrating into this flow. TODO(flow).',
     ),
   );
   steps.push(
@@ -265,7 +293,8 @@ export async function confidentialTransfer(
   steps.push(
     todo(
       'Select input notes + build outputs',
-      'Requires decrypted owned notes (scan) - sdk scan/encrypt throw. TODO(sdk).',
+      'Owned notes come from the real scan (scanForOwnedNotes, FIN-014); needs UTXO ' +
+        'selection + output construction wired into this flow. TODO(flow).',
     ),
   );
   steps.push(
@@ -277,7 +306,8 @@ export async function confidentialTransfer(
   steps.push(
     todo(
       'Encrypt 2 output notes to auditor (mandatory) + recipients',
-      'sdk encrypt* throw (scheme not fixed). Mandatory auditor ct, invariant #5. TODO(sdk).',
+      'sdk encrypt* are wired (FIN-004); mandatory auditor ct (invariant #5). Needs ' +
+        'integrating into this flow. TODO(flow).',
     ),
   );
   steps.push(
@@ -320,7 +350,8 @@ export async function unshield(
   steps.push(
     todo(
       'Select spent note + change',
-      'Requires decrypted owned notes (scan throws). TODO(sdk).',
+      'Owned notes come from the real scan (scanForOwnedNotes, FIN-014); needs spent-note ' +
+        'selection + change construction wired into this flow. TODO(flow).',
     ),
   );
   steps.push(
@@ -355,23 +386,42 @@ export async function unshield(
 // Runs in the AUDITOR zone with the auditor view secret (invariant #8).
 // ---------------------------------------------------------------------------
 
+/** One output note as the public sees it: an opaque commitment + its auditor ct. */
+export interface OnChainOutput {
+  readonly commitment: Commitment;
+  /** The mandatory auditor ciphertext for this note (field-packed; invariant #5). */
+  readonly cAuditor: Ciphertext;
+}
+
 export interface OnChainTxSummary {
   readonly txHash: string;
   readonly timestamp: string;
   readonly circuit: 'shield' | 'transfer' | 'unshield' | 'dvp';
-  /** What the PUBLIC sees: opaque commitments, nullifiers, ciphertext refs. */
+  /** What the PUBLIC sees: opaque nullifiers + per-output commitments/ciphertexts. */
   readonly nullifiers: readonly string[];
-  readonly outputCommitments: readonly Commitment[];
-  /** The mandatory auditor ciphertext attached to this tx (field-packed). */
-  readonly cAuditor: Ciphertext;
+  readonly outputs: readonly OnChainOutput[];
   readonly isMock: boolean;
+}
+
+/** One decrypted output note in the regulator's full view. */
+export interface DisclosedOutput {
+  readonly role: string;
+  /** Party label (resolved from `owner_pk`) or the raw `owner_pk` hex. */
+  readonly party: string;
+  readonly assetLabel: string;
+  readonly assetId: Fr;
+  readonly rawAmount: bigint;
+  readonly decimals: number;
 }
 
 /** The decrypted, FULL view only the regulator can produce. */
 export interface DecryptedAuditView {
+  /** Every decrypted output note (recipient + change for a transfer). */
+  readonly outputs: readonly DisclosedOutput[];
+  /** Convenience for the headline display (the primary/recipient note). */
   readonly assetLabel: string;
   readonly assetId: Fr;
-  /** Plaintext amount (raw SAC units). */
+  /** Plaintext amount of the headline note (raw SAC units). */
   readonly rawAmount: bigint;
   readonly senderPk: string;
   readonly recipientPk: string;
@@ -382,69 +432,76 @@ export interface DecryptedAuditView {
  * List on-chain transactions (regulator view). PUBLIC data only - the regulator
  * sees the same opaque records as everyone else until they decrypt.
  *
- * TODO(backend): wire to the indexer. Returns clearly-labelled MOCK txs.
+ * The records are a local DEMO fixture (`demo-data.ts`, an indexer stand-in,
+ * FIN-019) but carry GENUINE Poseidon commitments + auditor ciphertexts, so the
+ * disclosure below is a real decryption, not a faked reveal.
  */
 export async function listOnChainTransactions(): Promise<OnChainTxSummary[]> {
-  const ct = (n: bigint): Ciphertext => ({ fields: [n, n + 1n, n + 2n] });
-  return [
-    {
-      txHash: 'MOCK_TX_a1b2c3…',
-      timestamp: '2026-06-18T09:14:00Z',
-      circuit: 'transfer',
-      nullifiers: ['0x9f…21', '0x4c…e7'],
-      outputCommitments: [111111n, 222222n],
-      cAuditor: ct(900n),
-      isMock: true,
-    },
-    {
-      txHash: 'MOCK_TX_d4e5f6…',
-      timestamp: '2026-06-18T10:02:00Z',
-      circuit: 'shield',
-      nullifiers: [],
-      outputCommitments: [333333n],
-      cAuditor: ct(700n),
-      isMock: true,
-    },
-    {
-      txHash: 'MOCK_TX_77aa88…',
-      timestamp: '2026-06-18T11:48:00Z',
-      circuit: 'unshield',
-      nullifiers: ['0x12…ab'],
-      outputCommitments: [444444n],
-      cAuditor: ct(500n),
-      isMock: true,
-    },
-  ];
+  return buildDemoTransactions().map((t) => ({
+    txHash: t.txHash,
+    timestamp: t.timestamp,
+    circuit: t.circuit,
+    nullifiers: t.nullifiers,
+    outputs: t.outputs.map((o) => ({ commitment: o.commitment, cAuditor: o.cAuditor })),
+    isMock: true,
+  }));
+}
+
+function partyLabel(ownerPk: Fr): string {
+  return resolveParty(ownerPk) ?? `0x${ownerPk.toString(16).slice(0, 8)}…`;
 }
 
 /**
- * Decrypt the auditor ciphertext for a selected tx - the demo's climax
+ * Decrypt the auditor ciphertexts for a selected tx - the demo's climax
  * ("public sees nothing, regulator sees everything").
  *
- * TODO(sdk): the real path derives the auditor decryption key from `auditor.sk`
- * and decrypts `tx.cAuditor` (hybrid scheme - sdk/src/encrypt.ts, scan.ts both
- * THROW today). We DO NOT fabricate a decryption. We return a clearly-labelled
- * MOCK plaintext so the regulator flow is demo-credible, and we flag `isMock`.
+ * REAL (FIN-014/015): runs the SDK's `discloseTransaction`, decrypting every
+ * output note's MANDATORY auditor ciphertext with the auditor's view key
+ * (`auditor.sk = k_view`) to full plaintext (amount, asset, party). For a
+ * transfer, output 0 is the recipient note and output 1 is the change note back
+ * to the sender, so both parties are recovered. A view key that does not match
+ * the key the notes were encrypted to recovers out-of-64-bit-range garbage; we
+ * detect that (`valueInRange`) and throw rather than show a bogus "reveal".
  *
  * SECURITY: `auditor.sk` is SECRET and stays in this tab. Never log it; never
  * send it or the plaintext to any backend (invariant #8).
  */
 export async function decryptAuditorView(
   tx: OnChainTxSummary,
-  _auditor: AuditorKeypair,
+  auditor: AuditorKeypair,
 ): Promise<DecryptedAuditView> {
-  // TODO(sdk): real trial-decrypt. For now, derive a deterministic MOCK from the
-  // ciphertext fields so the UI shows a plausible "full transaction".
-  const seed = tx.cAuditor.fields.reduce((a, b) => a + b, 0n);
-  const mockAmount = (seed % 9_000_000n) + 1_000_000n;
-  const labels = ['TBOND-2031 (tokenized bond)', 'eUSD (confidential cash)'];
+  const disclosed = discloseTransaction(
+    { circuit: tx.circuit, nullifiers: [], outputs: tx.outputs.map((o) => ({ commitment: o.commitment, cAuditor: o.cAuditor })) },
+    auditor.sk,
+    { asset: resolveAsset, party: resolveParty },
+  );
+
+  if (disclosed.outputs.length === 0 || !disclosed.outputs[0]!.valueInRange) {
+    throw new Error(
+      'This view key cannot decrypt this transaction (it is not the auditor key the notes were encrypted to).',
+    );
+  }
+
+  const outputs: DisclosedOutput[] = disclosed.outputs.map((o) => ({
+    role: o.role ?? 'output',
+    party: o.party ?? partyLabel(o.ownerPk),
+    assetLabel: o.assetLabel ?? `asset ${o.assetId.toString()}`,
+    assetId: o.assetId,
+    rawAmount: o.value,
+    decimals: o.decimals ?? 7,
+  }));
+
+  // Headline = the recipient/primary note (output 0); sender = the change note.
+  const head = outputs[0]!;
+  const change = outputs.find((o) => o.role === 'change');
   return {
-    isMock: true,
-    assetId: seed % 2n,
-    assetLabel: labels[Number(seed % 2n)] ?? labels[0]!,
-    rawAmount: mockAmount,
-    senderPk: '0xPK_SENDER_' + tx.txHash.slice(-6),
-    recipientPk: '0xPK_RECIPIENT_' + tx.txHash.slice(-6),
+    outputs,
+    assetLabel: head.assetLabel,
+    assetId: head.assetId,
+    rawAmount: head.rawAmount,
+    recipientPk: head.party,
+    senderPk: change?.party ?? (tx.circuit === 'shield' ? 'transparent deposit' : '—'),
+    isMock: false,
   };
 }
 

@@ -17,8 +17,9 @@ import { useAuditorKeypair } from '@/lib/use-keys';
  * SECURITY: the view key and the decrypted plaintext stay in this tab; never
  * logged or sent to a backend (invariant #8).
  *
- * SCAFFOLD: sdk decryption throws (scheme not fixed), so decryptAuditorView
- * returns a clearly-labelled MOCK plaintext. We never claim real decryption.
+ * REAL (FIN-014/015): decryptAuditorView runs the SDK's discloseTransaction over
+ * the demo ledger's genuine auditor ciphertexts. A non-matching view key fails to
+ * decrypt and surfaces an honest error rather than a fabricated reveal.
  */
 export function DisclosurePanel({ tx }: { tx: OnChainTxSummary | null }) {
   const auditor = useAuditorKeypair();
@@ -65,8 +66,9 @@ export function DisclosurePanel({ tx }: { tx: OnChainTxSummary | null }) {
               </span>
             </div>
             <p className="mt-2 leading-relaxed text-ink-muted">
-              Auditor ciphertext - {tx.cAuditor.fields.length} field-packed elements, bound to the
-              proof as a public input (invariant #5).
+              {tx.outputs.length} output note{tx.outputs.length === 1 ? '' : 's'} ·{' '}
+              {tx.outputs[0]?.cAuditor.fields.length ?? 0} field-packed auditor-ciphertext elements
+              each, bound to the proof as public inputs (invariant #5).
             </p>
           </div>
 
@@ -114,6 +116,21 @@ export function DisclosurePanel({ tx }: { tx: OnChainTxSummary | null }) {
                     </dd>
                   </div>
                 </dl>
+
+                {view.outputs.length > 1 && (
+                  <ul className="mt-4 space-y-1.5 border-t border-white/10 pt-4 text-xs">
+                    {view.outputs.map((o, i) => (
+                      <li key={i} className="flex items-center justify-between gap-3">
+                        <span className="capitalize text-blue-200/70">
+                          {o.role} · {o.party}
+                        </span>
+                        <span className="font-mono text-blue-50">
+                          {formatRawAmount(o.rawAmount, o.decimals)} {o.assetLabel.split(' ')[0]}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
           )}
