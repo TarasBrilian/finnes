@@ -1,7 +1,15 @@
 # Proving artifacts for in-browser snarkjs (FIN-027, option 2).
-# The .wasm (witness generators) are small and committed; the .zkey (proving keys)
-# are large (shield 31MB / unshield 64MB / transfer 110MB) and DEMO-only
-# (single-party ceremony, invariant #10) — never committed. The operator copies
-# them here from the Railway `ceremony` container (or a local setup:ceremony):
-#   setup/build/<circuit>/<circuit>.zkey  ->  public/artifacts/<circuit>/<circuit>.zkey
+#
+# CRITICAL: the .wasm (witness generator) and the .zkey (proving key) MUST come
+# from the SAME build as the DEPLOYED verifying key — the Railway `ceremony`
+# container (circom 2.1.9), NOT the local `circuits/build` (a different circom
+# build whose witness layout mismatches the deployed zkey → "Invalid witness
+# length" in the browser). Both were exfiltrated from Railway and verified by
+# sha256 + a full fullProve→verify against the deployed VK.
+#
+# The .wasm are small and committed (the Railway-built ones); the .zkey are large
+# (shield 31MB / unshield 64MB / transfer 110MB) and DEMO-only (single-party
+# ceremony, invariant #10) — never committed. Copy the .zkey from Railway:
+#   railway ssh --service ceremony "base64 -w0 setup/build/<c>/<c>.zkey" 2>/dev/null \
+#     | base64 -d > public/artifacts/<c>/<c>.zkey
 *.zkey

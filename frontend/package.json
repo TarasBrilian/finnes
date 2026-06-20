@@ -15,12 +15,12 @@
     "@finnes/prover": "*",
     "@finnes/sdk": "*",
     "@stellar/freighter-api": "^3.0.0",
-    "@stellar/stellar-sdk": "^12.2.0",
+    "@stellar/stellar-sdk": "^14.6.1",
     "buffer": "^6.0.3",
-    "snarkjs": "^0.7.5",
     "next": "^14.2.5",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "snarkjs": "^0.7.5"
   },
   "devDependencies": {
     "@types/node": "^20.14.13",

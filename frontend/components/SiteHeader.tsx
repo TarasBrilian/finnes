@@ -50,6 +50,7 @@ export function SiteHeader() {
           <nav className={`mr-2 hidden items-center gap-1 text-sm font-medium sm:flex ${dark ? 'text-white/70' : 'text-ink-muted'}`}>
             <a href="/institution" className={navLink}>Institution</a>
             <a href="/regulator" className={navLink}>Regulator</a>
+            <a href="/faucet" className={navLink}>Faucet</a>
           </nav>
           <HeaderWalletButton />
         </div>

@@ -13,6 +13,7 @@ import {
   type UnshieldIntent,
 } from '@/lib/finnes-client';
 import type { SpendingKeypair } from '@/lib/keys';
+import { TBOND_SAC } from '@/lib/config';
 import { OpResultPanel } from './OpResultPanel';
 
 /**
@@ -105,6 +106,13 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
   // On the Unshield tab, read the live spendable note (the on-chain note this
   // identity can redeem) so the form shows the max instead of letting the user
   // submit an over-the-note amount the witness builder would reject.
+  // On the Shield tab, pre-fill the registered TBOND SAC so the form is ready (the
+  // demo shields the registered TBOND asset; only it is wired on-chain).
+  useEffect(() => {
+    if (mode === 'shield' && !sacAddress) setSacAddress(TBOND_SAC);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
   useEffect(() => {
     if (mode !== 'unshield') {
       setSpendable(null);
@@ -333,6 +341,12 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
                       No spendable note for this identity (the demo notes are spent). Shield one first.
                     </span>
                   )}
+                </p>
+              )}
+              {mode === 'transfer' && (
+                <p className="mt-1.5 text-[11px] text-ink-faint">
+                  A transfer spends 2 notes. If you don&apos;t have 2 yet, this <span className="font-semibold text-ink-muted">auto-shields</span> them
+                  first — expect a few wallet prompts (the auto-shields, then the transfer). No need to press Shield manually.
                 </p>
               )}
             </div>

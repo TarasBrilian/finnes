@@ -32,6 +32,17 @@ export const TBOND_SAC = env(
   'CBJMD3SAONL6X7CJO5SQPK42X5BWDKXBQBMUT5NBXI4SJAPZQZPPOZXM',
 );
 
+/** The underlying classic TBOND asset (the SAC wraps it 1:1). A trustline to this
+ *  is what a wallet needs to hold TBOND; the SAC balance reads the same entry. */
+export const TBOND_CODE = env('NEXT_PUBLIC_TBOND_CODE', 'TBOND');
+export const TBOND_ISSUER = env(
+  'NEXT_PUBLIC_TBOND_ISSUER',
+  'GB66GONTENMTB5L5QXO7ARYR6HN7FAQG7MX6KCAJGHJIYUXE44JW37TD',
+);
+
+/** Horizon (classic) endpoint — for trustlines + the faucet payment. */
+export const HORIZON_URL = env('NEXT_PUBLIC_HORIZON_URL', 'https://horizon-testnet.stellar.org');
+
 /**
  * Base URL for the in-browser proving artifacts (option 2 — client-side snarkjs).
  * Each circuit loads `${ARTIFACT_BASE}/<circuit>/<circuit>.wasm` and

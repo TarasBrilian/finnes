@@ -19,13 +19,15 @@
 
 import {
   buildShieldWitness,
+  buildTransferWitness,
   buildUnshieldWitness,
   commitNote,
   sacAddressToField,
 } from '@finnes/sdk';
 
 import { demoState, DEMO_AUDITOR_VIEW_KEY, HEAD_LOW } from './demo-state.js';
-import { LIVE_NOTES, liveNoteNullifier, liveTreeState, reconstructLiveTree } from './live-notes.js';
+import { allLiveNotes, liveNoteNullifier, liveTreeState, reconstructLiveTree } from './live-notes.js';
+import { saveStoredNote } from './note-store.js';
 import { proveInBrowser } from './prove-browser.js';
 import { isNullifierUsed, submitInvocation } from './soroban.js';
 import type { OpResult, OpStep, StepStatus } from './finnes-client.js';
@@ -62,6 +64,15 @@ function mapShieldPi(h: string[]): Record<string, unknown> {
     c_auditor: h.slice(49, 54), c_recipient: h.slice(54, 59),
   };
 }
+function mapTransferPi(h: string[]): Record<string, unknown> {
+  return {
+    anchor_root: h[0], kyc_root: h[1], sanction_root: h[2], assets_root: h[3], frozen_root: h[4],
+    auditor_pk: h[5], nf_in_0: h[6], nf_in_1: h[7], cm_out_0: h[8], cm_out_1: h[9],
+    new_root: h[10], fee: h[11], next_index: h[12],
+    old_frontier: h.slice(13, 33), new_frontier: h.slice(33, 53),
+    c_auditor: h.slice(53, 63), c_recipient: h.slice(63, 73),
+  };
+}
 function mapUnshieldPi(h: string[]): Record<string, unknown> {
   return {
     anchor_root: h[0], kyc_root: h[1], sanction_root: h[2], assets_root: h[3], frozen_root: h[4],
@@ -90,7 +101,7 @@ const submitHint = 'Connect a funded Testnet Freighter account (it signs + pays)
  */
 export async function fetchSpendableUnshield(): Promise<{ rawAmount: bigint; leafIndex: number; assetLabel: string } | null> {
   const { me, asset } = identity();
-  const owned = LIVE_NOTES.filter((l) => l.ownerSk === me.ownerSk);
+  const owned = allLiveNotes().filter((l) => l.note.ownerPk === me.ownerPk);
   for (const l of owned) {
     if (!(await isNullifierUsed(liveNoteNullifier(l)))) {
       return { rawAmount: l.note.value, leafIndex: l.leafIndex, assetLabel: asset.label };
@@ -99,32 +110,55 @@ export async function fetchSpendableUnshield(): Promise<{ rawAmount: bigint; lea
   return null;
 }
 
+type LiveNote = ReturnType<typeof allLiveNotes>[number];
+
+/** Live spendable notes (owned by the identity, not yet nullified on-chain). */
+async function spendableNotes(ownerPk: bigint): Promise<LiveNote[]> {
+  const owned = allLiveNotes().filter((l) => l.note.ownerPk === ownerPk);
+  const out: LiveNote[] = [];
+  for (const l of owned) if (!(await isNullifierUsed(liveNoteNullifier(l)))) out.push(l);
+  return out;
+}
+
+/**
+ * Shield one note of `value` to the demo identity: assemble → prove → submit →
+ * remember it (note store). Pushes a step and returns the tx hash. Shared by the
+ * single Shield button and the transfer auto-prepare. Anchors to the CURRENT live
+ * frontier, so sequential shields land at consecutive leaves.
+ */
+async function doShield(value: bigint, steps: OpStep[], label: string): Promise<string> {
+  const { st, me, asset } = identity();
+  if (value <= 0n || value > asset.perTxLimitRaw) {
+    throw new Error(`shield amount must be in (0, ${asset.perTxLimitRaw}] raw (per-tx limit)`);
+  }
+  const tree = liveTreeState();
+  const leafIndex = tree.leafCount;
+  const outNote = { assetId: asset.assetId, value, ownerPk: me.ownerPk, rho: randFr(), rNote: randFr() };
+  const { witness } = buildShieldWitness({
+    outNote,
+    kycPath: me.kycPath, kycRoot: st.kycRoot,
+    sacAddress: sacAddressToField(asset.sacAddress), decimals: BigInt(asset.decimals), perTxLimitRaw: asset.perTxLimitRaw,
+    assetsPath: asset.assetsPath, assetsRoot: st.assetsRoot,
+    oldFrontier: tree.frontier, nextIndex: leafIndex, fee: 0n,
+    auditorPk: st.auditorPk, kView: DEMO_AUDITOR_VIEW_KEY, kPair: randFr(), rhoEncAuditor: randFr(), rhoEncRecipient: randFr(),
+  });
+  const proof = await proveInBrowser('shield', witness as Record<string, unknown>);
+  const res = await submitInvocation('shield', { proof: proof.hostProof, pi: mapShieldPi(proof.publicHex) });
+  saveStoredNote({
+    leafIndex, assetId: asset.assetId.toString(), value: value.toString(),
+    ownerPk: me.ownerPk.toString(), ownerSk: (me.ownerSk as unknown as bigint).toString(),
+    rho: outNote.rho.toString(), rNote: outNote.rNote.toString(),
+  });
+  steps.push(ok(label, `minted ${value} raw to ${me.label} (leaf ${leafIndex}); proved in-browser + submitted — tx ${res.txHash.slice(0, 10)}….`));
+  return res.txHash;
+}
+
 /** SHIELD: mint a new confidential note for the deposited (asset, amount). */
 export async function runShield(rawAmount: bigint): Promise<OpResult> {
   const steps: OpStep[] = [];
   try {
-    const { st, me, asset } = identity();
-    if (rawAmount <= 0n || rawAmount > asset.perTxLimitRaw) {
-      return done([err('Validate amount', `amount must be in (0, ${asset.perTxLimitRaw}] raw (per-tx limit).`)]);
-    }
-    const tree = liveTreeState();
-    const outNote = { assetId: asset.assetId, value: rawAmount, ownerPk: me.ownerPk, rho: randFr(), rNote: randFr() };
-    const { witness } = buildShieldWitness({
-      outNote,
-      kycPath: me.kycPath, kycRoot: st.kycRoot,
-      sacAddress: sacAddressToField(asset.sacAddress), decimals: BigInt(asset.decimals), perTxLimitRaw: asset.perTxLimitRaw,
-      assetsPath: asset.assetsPath, assetsRoot: st.assetsRoot,
-      oldFrontier: tree.frontier, nextIndex: tree.leafCount, fee: 0n,
-      auditorPk: st.auditorPk, kView: DEMO_AUDITOR_VIEW_KEY, kPair: randFr(), rhoEncAuditor: randFr(), rhoEncRecipient: randFr(),
-    });
-    steps.push(ok('Build note + assemble shield witness', `mint ${rawAmount} raw to ${me.label}; auditor-encrypted (inv #5), anchored to live frontier (leaf ${tree.leafCount}).`));
-
-    const proof = await proveInBrowser('shield', witness as Record<string, unknown>);
-    steps.push(ok('Generate Groth16 proof (in-browser)', `${proof.publicSignals.length} public signals; witness never left this tab (inv #8).`));
-
-    const res = await submitInvocation('shield', { proof: proof.hostProof, pi: mapShieldPi(proof.publicHex) });
-    steps.push(ok('Submit shield to contract', `real Soroban tx ${res.txHash}; SAC pulled depositor→contract atomically.`));
-    return done(steps, res.txHash);
+    const tx = await doShield(rawAmount, steps, 'Shield deposit');
+    return done(steps, tx);
   } catch (e) {
     return done([...steps, classify(steps, e)]);
   }
@@ -135,11 +169,11 @@ export async function runUnshield(rawAmount: bigint): Promise<OpResult> {
   const steps: OpStep[] = [];
   try {
     const { st, me, asset } = identity();
-    const owned = LIVE_NOTES.filter((l) => l.ownerSk === me.ownerSk);
+    const owned = allLiveNotes().filter((l) => l.note.ownerPk === me.ownerPk);
     const unspent: typeof owned = [];
     for (const l of owned) if (!(await isNullifierUsed(liveNoteNullifier(l)))) unspent.push(l);
     if (unspent.length === 0) {
-      return done([err('Select spent note', `${me.label} has 0 spendable notes on-chain (the FIN-025/026 demo spent them). Shield one first.`)]);
+      return done([err('Select spent note', `${me.label} has 0 spendable notes on-chain. Shield one first (the Shield tab mints a note you can then unshield).`)]);
     }
     const spend = unspent[0]!;
     if (rawAmount <= 0n || rawAmount > spend.note.value) {
@@ -175,37 +209,103 @@ export async function runUnshield(rawAmount: bigint): Promise<OpResult> {
   }
 }
 
-/** TRANSFER: 2-in / 2-out. Needs ≥2 spendable notes for the same owner. */
-export async function runTransfer(_rawAmount: bigint, _recipient: string): Promise<OpResult> {
+/** TRANSFER: 2-in / 2-out. Spends 2 notes → recipient (enrolled Bank A) + change. */
+export async function runTransfer(rawAmount: bigint): Promise<OpResult> {
   const steps: OpStep[] = [];
   try {
-    const { me } = identity();
-    const owned = LIVE_NOTES.filter((l) => l.ownerSk === me.ownerSk);
-    const unspent: typeof owned = [];
-    for (const l of owned) if (!(await isNullifierUsed(liveNoteNullifier(l)))) unspent.push(l);
-    if (unspent.length < 2) {
-      return done([
-        ok('Scan spendable notes (live)', `${me.label} has ${unspent.length} spendable note(s) on-chain.`),
-        err('Select 2 input notes', `a confidential transfer spends 2 notes for one owner; only ${unspent.length} available. Shield ${2 - unspent.length} more first.`),
-      ]);
+    const { st, me, asset } = identity();
+    const recipientAcct = st.accounts[0]!; // Bank A — an enrolled recipient (kyc_leaf)
+    let unspent = await spendableNotes(me.ownerPk);
+    steps.push(ok('Scan spendable notes (live)', `${me.label} has ${unspent.length} spendable note(s).`));
+
+    // AUTO-PREPARE (option 1): a fixed 2-in transfer needs 2 notes. If you have
+    // fewer, shield the missing ones automatically (each = the transfer amount, so
+    // the two inputs cover it) — so you never have to press Shield manually first.
+    // Each auto-shield is its own on-chain tx (approve each in your wallet).
+    const needed = 2 - unspent.length;
+    if (needed > 0) {
+      steps.push(ok('Auto-prepare notes', `a 2-in transfer needs 2 notes; auto-shielding ${needed} (each ${rawAmount} raw) — approve each in your wallet.`));
+      for (let i = 0; i < needed; i++) {
+        await doShield(rawAmount, steps, `Auto-shield note ${i + 1}/${needed}`);
+      }
+      unspent = await spendableNotes(me.ownerPk);
     }
-    // (With ≥2 notes this would build the Transfer(20,5,5) witness, prove, and
-    // submit — same pattern as runUnshield. Unreachable from the current demo
-    // state, so left as an honest gate rather than dead unverifiable code.)
-    return done([...steps, err('Assemble transfer witness', 'reachable once ≥2 spendable notes exist; build+prove+submit wiring mirrors unshield.')]);
+    if (unspent.length < 2) {
+      return done([...steps, err('Select 2 input notes', `could not prepare 2 spendable notes (have ${unspent.length}).`)]);
+    }
+    // Spend the 2 highest-value notes so their sum covers the amount.
+    unspent.sort((a, b) => (b.note.value > a.note.value ? 1 : b.note.value < a.note.value ? -1 : 0));
+    const [in0, in1] = [unspent[0]!, unspent[1]!];
+    const sum = in0.note.value + in1.note.value;
+    if (rawAmount <= 0n || rawAmount > sum) {
+      return done([...steps, err('Validate amount', `amount must be in (0, ${sum}] raw (sum of your 2 input notes).`)]);
+    }
+    const changeVal = sum - rawAmount;
+    const tree = reconstructLiveTree();
+    const outRecipient = { assetId: asset.assetId, value: rawAmount, ownerPk: recipientAcct.ownerPk, rho: randFr(), rNote: randFr() };
+    const outChange = { assetId: asset.assetId, value: changeVal, ownerPk: me.ownerPk, rho: randFr(), rNote: randFr() };
+    steps.push(ok('Select 2 input notes + build outputs', `spend leaves ${in0.leafIndex},${in1.leafIndex} (${sum} raw) → ${rawAmount} to ${recipientAcct.label} + ${changeVal} change to ${me.label}.`));
+
+    const { witness } = buildTransferWitness({
+      ownerSk: me.ownerSk,
+      inNotes: [in0.note, in1.note],
+      inPaths: [tree.inclusionPath(in0.leafIndex), tree.inclusionPath(in1.leafIndex)],
+      anchorRoot: tree.root(),
+      outNotes: [outRecipient, outChange],
+      kycLeaf: recipientAcct.ownerPk, kycPath: recipientAcct.kycPath, kycRoot: st.kycRoot,
+      sanctionLow: HEAD_LOW, sanctionPath: st.sanctionLowPath, sanctionRoot: st.sanctionRoot,
+      frozenLow: [HEAD_LOW, HEAD_LOW], frozenPaths: [st.frozenLowPath, st.frozenLowPath], frozenRoot: st.frozenRoot,
+      sacAddress: sacAddressToField(asset.sacAddress), decimals: BigInt(asset.decimals), perTxLimitRaw: asset.perTxLimitRaw,
+      assetsPath: asset.assetsPath, assetsRoot: st.assetsRoot,
+      oldFrontier: tree.frontier(), nextIndex: tree.size, fee: 0n,
+      auditorPk: st.auditorPk, kView: DEMO_AUDITOR_VIEW_KEY,
+      kPair: [randFr(), randFr()], rhoEncAuditor: [randFr(), randFr()], rhoEncRecipient: [randFr(), randFr()],
+    });
+    steps.push(ok('Assemble transfer witness', 'per-asset conservation, 64-bit range, recipient KYC, sanctions/frozen non-membership, limits.'));
+
+    const proof = await proveInBrowser('transfer', witness as Record<string, unknown>);
+    steps.push(ok('Generate Groth16 proof (in-browser)', `${proof.publicSignals.length} public signals; witness stays in this tab (inv #8).`));
+
+    const res = await submitInvocation('confidential_transfer', { proof: proof.hostProof, pi: mapTransferPi(proof.publicHex) });
+    // Keep the change note (back to us) spendable; the recipient note belongs to Bank A.
+    saveStoredNote({
+      leafIndex: tree.size + 1, assetId: asset.assetId.toString(), value: changeVal.toString(),
+      ownerPk: me.ownerPk.toString(), ownerSk: (me.ownerSk as unknown as bigint).toString(),
+      rho: outChange.rho.toString(), rNote: outChange.rNote.toString(),
+    });
+    steps.push(ok('Submit confidential_transfer', `real Soroban tx ${res.txHash}; 2 nullifiers recorded, tree advanced by 2.`));
+    return done(steps, res.txHash);
   } catch (e) {
     return done([...steps, classify(steps, e)]);
   }
 }
 
-/** Turn a thrown error into an honest, actionable step (prove vs submit vs other). */
+/** Turn a thrown error into an honest, actionable step. Contract/on-chain errors
+ *  are detected FIRST (they surface during prepare/submit, not proving). */
 function classify(prior: OpStep[], e: unknown): OpStep {
   const msg = e instanceof Error ? e.message : String(e);
+  // Depositor has no TBOND trustline / balance (shield pulls TBOND from the wallet).
+  if (/trustline/i.test(msg)) {
+    return err(
+      'Submit to contract',
+      'Your connected wallet has no TBOND trustline (or no TBOND). Shield pulls TBOND from your ' +
+        'wallet, so it must hold it. Add the TBOND asset in Freighter (issuer ' +
+        'GB66GONTENMTB5L5QXO7ARYR6HN7FAQG7MX6KCAJGHJIYUXE44JW37TD), then fund it — or connect an ' +
+        'account that already holds TBOND.',
+    );
+  }
+  // Any other contract rejection (from the simulate inside prepareTransaction).
+  const code = msg.match(/Error\(Contract,\s*#(\d+)\)/);
+  if (code || /HostError|escalating error|contract call failed/i.test(msg)) {
+    return err('Submit to contract', `the contract rejected the transaction${code ? ` (error #${code[1]})` : ''}: ${msg.slice(0, 200)}`);
+  }
+  // Proving artifacts missing (only before a proof was produced).
   const proven = prior.some((s) => s.label.startsWith('Generate Groth16'));
-  if (!proven && /fetch|artifact|zkey|wasm|Failed to fetch|404|Unexpected|network/i.test(msg)) {
+  if (!proven && /zkey|wasm|artifact|Failed to fetch|404|fullProve|Invalid witness length/i.test(msg)) {
     return err('Generate Groth16 proof (in-browser)', `${msg}. ${proveHint}`);
   }
-  if (/Freighter|wallet|sign|account|getAccount|not connected|funded/i.test(msg)) {
+  // Wallet / signing problems.
+  if (/Freighter|wallet|sign|getAccount|not connected|no account/i.test(msg)) {
     return err('Submit to contract', `${msg}. ${submitHint}`);
   }
   return err('Execute write', msg);

@@ -17,6 +17,7 @@ import { commitNote, deriveNullifier, IncrementalMerkleTree, TREE_DEPTH } from '
 import type { OwnerSk } from '@finnes/sdk';
 
 import { demoState } from './demo-state.js';
+import { loadStoredNotes } from './note-store.js';
 
 const st = demoState();
 const TBOND = st.assets[0]!.assetId;
@@ -39,10 +40,22 @@ export const LIVE_NOTES: readonly LiveNote[] = [
   { leafIndex: 4, ownerLabel: BANK_B.label, ownerSk: BANK_B.ownerSk, note: { assetId: TBOND, value: 500n, ownerPk: BANK_B.ownerPk, rho: 3007n, rNote: 4007n } },
 ];
 
-/** Reconstruct the live commitment tree from the on-chain leaves. */
+/** The seed notes (leaves 0..4) + any notes this frontend later shielded (leaf 5+,
+ *  from the local note store), in on-chain leaf order — the full live note set. */
+export function allLiveNotes(): readonly LiveNote[] {
+  const stored: LiveNote[] = loadStoredNotes().map((s) => ({
+    leafIndex: s.leafIndex,
+    ownerLabel: 'You (shielded here)',
+    ownerSk: BigInt(s.ownerSk) as unknown as OwnerSk,
+    note: { assetId: BigInt(s.assetId), value: BigInt(s.value), ownerPk: BigInt(s.ownerPk), rho: BigInt(s.rho), rNote: BigInt(s.rNote) },
+  }));
+  return [...LIVE_NOTES, ...stored].sort((a, b) => a.leafIndex - b.leafIndex);
+}
+
+/** Reconstruct the live commitment tree from all on-chain leaves (seed + shielded). */
 export function reconstructLiveTree(): IncrementalMerkleTree {
   const t = new IncrementalMerkleTree(TREE_DEPTH);
-  for (const l of LIVE_NOTES) t.insert(commitNote(l.note));
+  for (const l of allLiveNotes()) t.insert(commitNote(l.note));
   return t;
 }
 

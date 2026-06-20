@@ -260,7 +260,10 @@ export async function confidentialTransfer(
 ): Promise<OpResult> {
   // REAL execution (FIN-027): scan live spendable notes, build the 2-in/2-out
   // witness, prove, submit. Honestly errors if < 2 spendable notes exist on-chain.
-  return runTransfer(intent.rawAmount, intent.recipientPk);
+  // The demo sends to an enrolled recipient (Bank A); the recipient field is
+  // informational (an arbitrary owner_pk must be KYC-enrolled to receive).
+  void intent.recipientPk;
+  return runTransfer(intent.rawAmount);
 }
 
 /**
