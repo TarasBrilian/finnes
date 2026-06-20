@@ -26,7 +26,8 @@ import {
 } from '@finnes/sdk';
 
 import { demoState, DEMO_AUDITOR_VIEW_KEY, HEAD_LOW } from './demo-state.js';
-import { allLiveNotes, liveNoteNullifier, liveTreeState, reconstructLiveTree } from './live-notes.js';
+import { allLiveNotes, liveNoteNullifier } from './live-notes.js';
+import { buildChainTree, type ChainTree } from './indexer.js';
 import { saveStoredNote } from './note-store.js';
 import { proveInBrowser } from './prove-browser.js';
 import { isNullifierUsed, submitInvocation } from './soroban.js';
@@ -101,45 +102,56 @@ const submitHint = 'Connect a funded Testnet Freighter account (it signs + pays)
  */
 export async function fetchSpendableUnshield(): Promise<{ rawAmount: bigint; leafIndex: number; assetLabel: string } | null> {
   const { me, asset } = identity();
-  const owned = allLiveNotes().filter((l) => l.note.ownerPk === me.ownerPk);
-  for (const l of owned) {
-    if (!(await isNullifierUsed(liveNoteNullifier(l)))) {
-      return { rawAmount: l.note.value, leafIndex: l.leafIndex, assetLabel: asset.label };
-    }
-  }
-  return null;
+  const chain = await buildChainTree();
+  const unspent = await spendableNotes(me.ownerPk, chain);
+  const s = unspent[0];
+  return s ? { rawAmount: s.note.value, leafIndex: s.leafIndex, assetLabel: asset.label } : null;
 }
 
-type LiveNote = ReturnType<typeof allLiveNotes>[number];
+/** A spendable note: its opening + the LIVE leaf index (matched on-chain). */
+interface Spendable {
+  readonly note: ReturnType<typeof allLiveNotes>[number]['note'];
+  readonly ownerSk: bigint;
+  readonly leafIndex: number;
+}
 
-/** Live spendable notes (owned by the identity, not yet nullified on-chain). */
-async function spendableNotes(ownerPk: bigint): Promise<LiveNote[]> {
-  const owned = allLiveNotes().filter((l) => l.note.ownerPk === ownerPk);
-  const out: LiveNote[] = [];
-  for (const l of owned) if (!(await isNullifierUsed(liveNoteNullifier(l)))) out.push(l);
+/**
+ * Live spendable notes: match each known opening (demo seeds + this wallet's
+ * shielded notes) to its leaf in the ON-CHAIN tree (the indexer), then keep the
+ * ones not yet nullified. Re-matching by commitment means we never rely on a stale
+ * hardcoded index — the on-chain events are the source of truth.
+ */
+async function spendableNotes(ownerPk: bigint, chain: ChainTree): Promise<Spendable[]> {
+  const out: Spendable[] = [];
+  for (const l of allLiveNotes()) {
+    if (l.note.ownerPk !== ownerPk) continue;
+    const leafIndex = chain.commitments.indexOf(commitNote(l.note));
+    if (leafIndex < 0) continue; // not on-chain
+    if (await isNullifierUsed(liveNoteNullifier(l))) continue; // already spent
+    out.push({ note: l.note, ownerSk: l.ownerSk as unknown as bigint, leafIndex });
+  }
   return out;
 }
 
 /**
- * Shield one note of `value` to the demo identity: assemble → prove → submit →
- * remember it (note store). Pushes a step and returns the tx hash. Shared by the
- * single Shield button and the transfer auto-prepare. Anchors to the CURRENT live
- * frontier, so sequential shields land at consecutive leaves.
+ * Shield one note of `value` to the demo identity: read the LIVE tree from chain
+ * events → assemble → prove → submit → remember it. Returns the tx hash. Anchors
+ * to the current on-chain frontier (the indexer), so it can never drift.
  */
 async function doShield(value: bigint, steps: OpStep[], label: string): Promise<string> {
   const { st, me, asset } = identity();
   if (value <= 0n || value > asset.perTxLimitRaw) {
     throw new Error(`shield amount must be in (0, ${asset.perTxLimitRaw}] raw (per-tx limit)`);
   }
-  const tree = liveTreeState();
-  const leafIndex = tree.leafCount;
+  const chain = await buildChainTree(); // live frontier + leaf count from on-chain events
+  const leafIndex = chain.leafCount;
   const outNote = { assetId: asset.assetId, value, ownerPk: me.ownerPk, rho: randFr(), rNote: randFr() };
   const { witness } = buildShieldWitness({
     outNote,
     kycPath: me.kycPath, kycRoot: st.kycRoot,
     sacAddress: sacAddressToField(asset.sacAddress), decimals: BigInt(asset.decimals), perTxLimitRaw: asset.perTxLimitRaw,
     assetsPath: asset.assetsPath, assetsRoot: st.assetsRoot,
-    oldFrontier: tree.frontier, nextIndex: leafIndex, fee: 0n,
+    oldFrontier: chain.tree.frontier(), nextIndex: leafIndex, fee: 0n,
     auditorPk: st.auditorPk, kView: DEMO_AUDITOR_VIEW_KEY, kPair: randFr(), rhoEncAuditor: randFr(), rhoEncRecipient: randFr(),
   });
   const proof = await proveInBrowser('shield', witness as Record<string, unknown>);
@@ -169,9 +181,8 @@ export async function runUnshield(rawAmount: bigint): Promise<OpResult> {
   const steps: OpStep[] = [];
   try {
     const { st, me, asset } = identity();
-    const owned = allLiveNotes().filter((l) => l.note.ownerPk === me.ownerPk);
-    const unspent: typeof owned = [];
-    for (const l of owned) if (!(await isNullifierUsed(liveNoteNullifier(l)))) unspent.push(l);
+    const chain = await buildChainTree();
+    const unspent = await spendableNotes(me.ownerPk, chain);
     if (unspent.length === 0) {
       return done([err('Select spent note', `${me.label} has 0 spendable notes on-chain. Shield one first (the Shield tab mints a note you can then unshield).`)]);
     }
@@ -179,21 +190,20 @@ export async function runUnshield(rawAmount: bigint): Promise<OpResult> {
     if (rawAmount <= 0n || rawAmount > spend.note.value) {
       return done([err('Validate amount', `amount must be in (0, ${spend.note.value}] raw (the spendable note's value).`)]);
     }
-    const tree = reconstructLiveTree();
     const change = rawAmount < spend.note.value
       ? { assetId: asset.assetId, value: spend.note.value - rawAmount, ownerPk: me.ownerPk, rho: randFr(), rNote: randFr() }
       : undefined;
     steps.push(ok('Select spent note + change', `spend leaf ${spend.leafIndex} (${spend.note.value} raw); ${change ? `change ${change.value} back to ${me.label}` : 'exact spend (no change)'}.`));
 
     const { witness } = buildUnshieldWitness({
-      inNote: spend.note, ownerSk: spend.ownerSk, inPath: tree.inclusionPath(spend.leafIndex), anchorRoot: tree.root(),
+      inNote: spend.note, ownerSk: spend.ownerSk, inPath: chain.tree.inclusionPath(spend.leafIndex), anchorRoot: chain.tree.root(),
       frozenLow: HEAD_LOW, frozenPath: st.frozenLowPath, frozenRoot: st.frozenRoot,
       recipient: me.ownerPk, kycPath: me.kycPath, kycRoot: st.kycRoot,
       sanctionLow: HEAD_LOW, sanctionPath: st.sanctionLowPath, sanctionRoot: st.sanctionRoot,
       amount: rawAmount, changeNote: change,
       sacAddress: sacAddressToField(asset.sacAddress), decimals: BigInt(asset.decimals), perTxLimitRaw: asset.perTxLimitRaw,
       assetsPath: asset.assetsPath, assetsRoot: st.assetsRoot,
-      oldFrontier: tree.frontier(), nextIndex: tree.size, fee: 0n,
+      oldFrontier: chain.tree.frontier(), nextIndex: chain.leafCount, fee: 0n,
       auditorPk: st.auditorPk, kView: DEMO_AUDITOR_VIEW_KEY, kPair: randFr(), rhoEncAuditor: randFr(), rhoEncRecipient: randFr(),
     });
     steps.push(ok('Assemble unshield witness', 'frozen non-membership of the spent note + recipient KYC (invariant #19).'));
@@ -215,7 +225,8 @@ export async function runTransfer(rawAmount: bigint): Promise<OpResult> {
   try {
     const { st, me, asset } = identity();
     const recipientAcct = st.accounts[0]!; // Bank A — an enrolled recipient (kyc_leaf)
-    let unspent = await spendableNotes(me.ownerPk);
+    let chain = await buildChainTree();
+    let unspent = await spendableNotes(me.ownerPk, chain);
     steps.push(ok('Scan spendable notes (live)', `${me.label} has ${unspent.length} spendable note(s).`));
 
     // AUTO-PREPARE (option 1): a fixed 2-in transfer needs 2 notes. If you have
@@ -228,7 +239,8 @@ export async function runTransfer(rawAmount: bigint): Promise<OpResult> {
       for (let i = 0; i < needed; i++) {
         await doShield(rawAmount, steps, `Auto-shield note ${i + 1}/${needed}`);
       }
-      unspent = await spendableNotes(me.ownerPk);
+      chain = await buildChainTree();
+      unspent = await spendableNotes(me.ownerPk, chain);
     }
     if (unspent.length < 2) {
       return done([...steps, err('Select 2 input notes', `could not prepare 2 spendable notes (have ${unspent.length}).`)]);
@@ -241,7 +253,7 @@ export async function runTransfer(rawAmount: bigint): Promise<OpResult> {
       return done([...steps, err('Validate amount', `amount must be in (0, ${sum}] raw (sum of your 2 input notes).`)]);
     }
     const changeVal = sum - rawAmount;
-    const tree = reconstructLiveTree();
+    const tree = chain.tree; // live tree from on-chain events
     const outRecipient = { assetId: asset.assetId, value: rawAmount, ownerPk: recipientAcct.ownerPk, rho: randFr(), rNote: randFr() };
     const outChange = { assetId: asset.assetId, value: changeVal, ownerPk: me.ownerPk, rho: randFr(), rNote: randFr() };
     steps.push(ok('Select 2 input notes + build outputs', `spend leaves ${in0.leafIndex},${in1.leafIndex} (${sum} raw) → ${rawAmount} to ${recipientAcct.label} + ${changeVal} change to ${me.label}.`));
