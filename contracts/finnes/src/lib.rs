@@ -25,6 +25,7 @@
 //! ("verify before effects").
 
 mod errors;
+mod events;
 mod merkle;
 mod sac;
 mod state;
@@ -37,7 +38,7 @@ mod test;
 #[cfg(test)]
 mod test_vectors;
 
-use soroban_sdk::{contract, contractimpl, Address, Env};
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env};
 
 use crate::errors::Error;
 use crate::state::RECENT_ROOTS_CAPACITY;
@@ -148,7 +149,15 @@ impl FinnesContract {
         sac::pull_deposit(&env, &pi.asset_id, &depositor, &pi.amount)?;
         merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root, 1)?;
         state::bump_instance_ttl(&env);
-        // TODO: emit event (cm_out_0, c_auditor, c_recipient) for the indexer.
+        events::shield(
+            &env,
+            &pi.asset_id,
+            &pi.amount,
+            &pi.cm_out_0,
+            &pi.new_root,
+            &pi.c_auditor,
+            &pi.c_recipient,
+        );
         Ok(())
     }
 
@@ -205,7 +214,16 @@ impl FinnesContract {
         state::insert_nullifier(&env, &pi.nf_in_1);
         merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root, 2)?;
         state::bump_instance_ttl(&env);
-        // TODO: emit event (nf_in_0, nf_in_1, cm_out_0, cm_out_1, ciphertexts).
+        events::transfer(
+            &env,
+            &pi.nf_in_0,
+            &pi.nf_in_1,
+            &pi.cm_out_0,
+            &pi.cm_out_1,
+            &pi.new_root,
+            &pi.c_auditor,
+            &pi.c_recipient,
+        );
         Ok(())
     }
 
@@ -272,7 +290,14 @@ impl FinnesContract {
         state::insert_nullifier(&env, &pi.nf_leg_y_0);
         merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root, 2)?;
         state::bump_instance_ttl(&env);
-        // TODO: emit event for both legs (nullifiers, cm_out_X/Y, ciphertexts).
+        events::dvp(
+            &env,
+            &pi.nf_leg_x_0,
+            &pi.nf_leg_y_0,
+            &pi.cm_out_x,
+            &pi.cm_out_y,
+            &pi.new_root,
+        );
         Ok(())
     }
 
@@ -349,7 +374,17 @@ impl FinnesContract {
         // revealed (asset_id, amount). Atomic with the rest of the tx (FIN-010).
         sac::pay_out(&env, &pi.asset_id, &recipient_addr, &pi.amount)?;
         state::bump_instance_ttl(&env);
-        // TODO: emit event (nf_in_0, asset_id, amount, recipient, cm_change_0).
+        events::unshield(
+            &env,
+            &pi.nf_in_0,
+            &pi.asset_id,
+            &pi.amount,
+            &pi.recipient,
+            &pi.cm_change_0,
+            &pi.new_root,
+            &pi.c_auditor,
+            &pi.c_recipient,
+        );
         Ok(())
     }
 
@@ -362,6 +397,7 @@ impl FinnesContract {
         require_issuer(&env)?;
         state::set_kyc_root(&env, &new_root);
         state::bump_instance_ttl(&env);
+        events::root_updated(&env, symbol_short!("kyc"), &new_root);
         Ok(())
     }
 
@@ -370,6 +406,7 @@ impl FinnesContract {
         require_issuer(&env)?;
         state::set_sanction_root(&env, &new_root);
         state::bump_instance_ttl(&env);
+        events::root_updated(&env, symbol_short!("sanction"), &new_root);
         Ok(())
     }
 
@@ -378,6 +415,7 @@ impl FinnesContract {
         require_issuer(&env)?;
         state::set_assets_root(&env, &new_root);
         state::bump_instance_ttl(&env);
+        events::root_updated(&env, symbol_short!("assets"), &new_root);
         Ok(())
     }
 
@@ -393,6 +431,7 @@ impl FinnesContract {
         require_issuer(&env)?;
         state::set_asset_sac(&env, &asset_id, &sac);
         state::bump_instance_ttl(&env);
+        events::asset_registered(&env, &asset_id, &sac);
         Ok(())
     }
 
@@ -404,6 +443,7 @@ impl FinnesContract {
         require_issuer(&env)?;
         state::set_transparent_addr(&env, &recipient, &addr);
         state::bump_instance_ttl(&env);
+        events::transparent_registered(&env, &recipient, &addr);
         Ok(())
     }
 
@@ -434,7 +474,7 @@ impl FinnesContract {
         // issuer; the contract performs NO hashing - invariant #11).
         state::set_frozen_root(&env, &new_frozen_root);
         state::bump_instance_ttl(&env);
-        // TODO: emit Freeze event (cm_target, new_frozen_root).
+        events::freeze(&env, &cm_target, &new_frozen_root);
         Ok(())
     }
 
@@ -448,8 +488,12 @@ impl FinnesContract {
     pub fn mint_recovery(env: Env, proof: Proof, pi: ShieldPublicInputs) -> Result<(), Error> {
         require_issuer(&env)?;
         // Reuse the shield circuit/VK for the recovery mint (asset_id/amount
-        // public; opens to the recovered value). Same ordered checks as shield,
+        // public; opens to the recovered value). Same compliance checks as shield,
         // minus the depositor SAC pull (value originates from the frozen note).
+        // The shield circuit binds `kyc_root`, so the recovery mint is held to the
+        // same windowed freshness check as shield (parity — adversarial-review fix);
+        // a recovery note holder must be compliant just like a shield depositor.
+        check_kyc_root(&env, &pi.kyc_root)?;
         check_assets_root(&env, &pi.assets_root)?;
         check_auditor_pk(&env, &pi.auditor_pk)?;
         if !merkle::check_old_frontier(&env, &pi.old_frontier)? {
@@ -463,7 +507,7 @@ impl FinnesContract {
         // Recovery mints one note => advance leaf count by 1.
         merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root, 1)?;
         state::bump_instance_ttl(&env);
-        // TODO: emit Clawback/Recovery event (cm_out_0, ciphertexts).
+        events::recovery(&env, &pi.cm_out_0, &pi.new_root);
         Ok(())
     }
 
@@ -519,33 +563,43 @@ fn check_frozen_root_strict(env: &Env, supplied: &Root) -> Result<(), Error> {
     }
 }
 
-// The windowed compliance roots change rarely and benignly. For this scaffold a
-// single current value is stored; we accept an exact match. A future revision
-// can replace each with a per-root recent-window (like the commitment-root ring)
-// without touching the entrypoint flow - that is the intent of the windowed
-// policy in invariant #6. TODO: widen to a windowed match if root churn during
-// proving latency becomes an issue.
+// Windowed compliance roots (FIN-011, invariant #6). kyc/sanction/assets change
+// rarely and benignly, so each is accepted if it appears anywhere in its recent
+// window (seeded at `init`, appended on every admin update). This lets a proof
+// built against the immediately-prior root still validate while proving latency
+// elapses, without weakening soundness — the root is still bound in the proof and
+// matched to state, just against a short window instead of the single latest
+// value. `frozen_root` is the exception: matched STRICTLY (immediacy of clawback).
 fn check_kyc_root(env: &Env, supplied: &Root) -> Result<(), Error> {
-    match state::get_kyc_root(env) {
-        Some(c) if &c == supplied => Ok(()),
-        Some(_) => Err(Error::StaleKycRoot),
-        None => Err(Error::NotInitialized),
+    if state::get_kyc_root(env).is_none() {
+        return Err(Error::NotInitialized);
+    }
+    if state::kyc_root_in_window(env, supplied) {
+        Ok(())
+    } else {
+        Err(Error::StaleKycRoot)
     }
 }
 
 fn check_sanction_root(env: &Env, supplied: &Root) -> Result<(), Error> {
-    match state::get_sanction_root(env) {
-        Some(c) if &c == supplied => Ok(()),
-        Some(_) => Err(Error::StaleSanctionRoot),
-        None => Err(Error::NotInitialized),
+    if state::get_sanction_root(env).is_none() {
+        return Err(Error::NotInitialized);
+    }
+    if state::sanction_root_in_window(env, supplied) {
+        Ok(())
+    } else {
+        Err(Error::StaleSanctionRoot)
     }
 }
 
 fn check_assets_root(env: &Env, supplied: &Root) -> Result<(), Error> {
-    match state::get_assets_root(env) {
-        Some(c) if &c == supplied => Ok(()),
-        Some(_) => Err(Error::StaleAssetsRoot),
-        None => Err(Error::NotInitialized),
+    if state::get_assets_root(env).is_none() {
+        return Err(Error::NotInitialized);
+    }
+    if state::assets_root_in_window(env, supplied) {
+        Ok(())
+    } else {
+        Err(Error::StaleAssetsRoot)
     }
 }
 

@@ -29,10 +29,35 @@ use crate::types::{Circuit, Commitment, Nullifier, Root, Scalar, VerifyingKey};
 /// storage cost. TODO: tune against expected block cadence / proving latency.
 pub const RECENT_ROOTS_CAPACITY: u32 = 64;
 
-/// TTL bump targets (in ledgers) for persistent entries. Placeholder values;
-/// TODO: set from the deployed network's archival parameters.
-pub const PERSISTENT_TTL_THRESHOLD: u32 = 17_280; // ~1 day at 5s ledgers
-pub const PERSISTENT_TTL_EXTEND: u32 = 60_480; // ~7 days
+/// Recent-roots window for the WINDOWED compliance roots (kyc/sanction/assets).
+/// They change rarely and benignly (invariant #6), so a short window is enough to
+/// keep an in-flight proof valid across a root update while proving latency
+/// elapses. `frozen_root` is deliberately NOT windowed (strict — the immediacy of
+/// clawback). Bound separately from the commitment-tree anchor window above.
+pub const COMPLIANCE_WINDOW_CAPACITY: u32 = 16;
+
+/// Approx ledgers/day at the ~5s close cadence; the basis for the TTL bumps below.
+pub const LEDGERS_PER_DAY: u32 = 17_280;
+
+/// TTL bump targets (in ledgers), grounded in Soroban's rent model (FIN-011). On
+/// every mutation we extend an entry whose remaining runway has fallen below
+/// `*_THRESHOLD` out to `*_EXTEND`, so any entry touched within the extend horizon
+/// never archives. Under Protocol 23 archived persistent entries auto-restore on
+/// access, so these bounds are liveness/cost tuning, NOT a safety boundary
+/// (nullifiers stay correct either way, invariant #4).
+///
+/// `*_EXTEND` MUST stay ≤ the deployed network's `max_entry_ttl` or the host
+/// TRAPS the `extend_ttl` — which would brick EVERY mutating entrypoint (incl.
+/// `init`). The 30-day extend below sits well under the standard Soroban network
+/// persistent max (~6 months on testnet/futurenet/mainnet), so it is safe on the
+/// usual targets; a custom/quickstart network with a smaller `max_entry_ttl` MUST
+/// lower these. PRODUCTION should promote these to validated `InitConfig` params
+/// checked against the live `max_entry_ttl` at init rather than compile-time consts.
+pub const PERSISTENT_TTL_THRESHOLD: u32 = 7 * LEDGERS_PER_DAY; // bump when <7 days left
+pub const PERSISTENT_TTL_EXTEND: u32 = 30 * LEDGERS_PER_DAY; // extend out to 30 days
+/// Instance entry (config/VKs, always loaded with the contract). Same horizon.
+pub const INSTANCE_TTL_THRESHOLD: u32 = 7 * LEDGERS_PER_DAY;
+pub const INSTANCE_TTL_EXTEND: u32 = 30 * LEDGERS_PER_DAY;
 
 /// All storage keys. `#[contracttype]` makes each variant a distinct ScVal key.
 #[contracttype]
@@ -45,12 +70,18 @@ pub enum DataKey {
     AuditorPk,
     /// Issuer authority - the **write** authority (freeze/clawback, root updates).
     IssuerAuthority,
-    /// KYC-approved set root (membership). Windowed.
+    /// KYC-approved set root (membership). Latest value; window in `KycWindow`.
     KycRoot,
-    /// Sanctioned set root (non-membership). Windowed.
+    /// Sanctioned set root (non-membership). Latest; window in `SanctionWindow`.
     SanctionRoot,
-    /// Authorized-assets registry root. Windowed.
+    /// Authorized-assets registry root. Latest; window in `AssetsWindow`.
     AssetsRoot,
+    /// Recent-roots window (`Vec<Root>`) for windowed `kyc_root` acceptance (#6).
+    KycWindow,
+    /// Recent-roots window for windowed `sanction_root` acceptance (#6).
+    SanctionWindow,
+    /// Recent-roots window for windowed `assets_root` acceptance (#6).
+    AssetsWindow,
     /// Issuer-managed frozen-commitment set root (non-membership). **Strict.**
     FrozenRoot,
     /// Current commitment-tree root (latest published).
@@ -123,25 +154,86 @@ pub fn get_issuer_authority(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::IssuerAuthority)
 }
 
+// Windowed compliance roots (FIN-011, invariant #6). The setter records the
+// latest value AND appends it to a small recent-roots window so a proof anchored
+// to the immediately-prior root still validates while proving latency elapses;
+// the checker accepts any root within that window. `init` seeds the window with
+// one entry (the setter runs once); each admin update appends, evicting the
+// oldest past `COMPLIANCE_WINDOW_CAPACITY`. `frozen_root` is NOT windowed.
+
+/// Append `r` to a compliance-root window (instance storage; small, always loaded),
+/// evicting oldest-first past capacity. De-dups against membership ANYWHERE in the
+/// window, not just the tail: a root that is already accepted must not consume a
+/// second slot, or a toggling update pattern (A → B → A) would fill the window
+/// with duplicates and prematurely evict still-valid distinct roots.
+fn push_compliance_window(env: &Env, key: DataKey, r: &Root) {
+    let mut v: Vec<Root> = env
+        .storage()
+        .instance()
+        .get(&key)
+        .unwrap_or_else(|| Vec::new(env));
+    // Already in the window ⇒ still accepted; nothing to do (no duplicate slot).
+    for existing in v.iter() {
+        if &existing == r {
+            return;
+        }
+    }
+    v.push_back(r.clone());
+    while v.len() > COMPLIANCE_WINDOW_CAPACITY {
+        v.remove(0);
+    }
+    env.storage().instance().set(&key, &v);
+}
+
+/// True if `candidate` appears anywhere in the compliance-root window at `key`.
+fn compliance_window_contains(env: &Env, key: DataKey, candidate: &Root) -> bool {
+    match env.storage().instance().get::<DataKey, Vec<Root>>(&key) {
+        Some(v) => {
+            for r in v.iter() {
+                if &r == candidate {
+                    return true;
+                }
+            }
+            false
+        }
+        None => false,
+    }
+}
+
 pub fn set_kyc_root(env: &Env, r: &Root) {
     env.storage().instance().set(&DataKey::KycRoot, r);
+    push_compliance_window(env, DataKey::KycWindow, r);
 }
 pub fn get_kyc_root(env: &Env) -> Option<Root> {
     env.storage().instance().get(&DataKey::KycRoot)
 }
+/// Windowed acceptance for `kyc_root` (invariant #6).
+pub fn kyc_root_in_window(env: &Env, candidate: &Root) -> bool {
+    compliance_window_contains(env, DataKey::KycWindow, candidate)
+}
 
 pub fn set_sanction_root(env: &Env, r: &Root) {
     env.storage().instance().set(&DataKey::SanctionRoot, r);
+    push_compliance_window(env, DataKey::SanctionWindow, r);
 }
 pub fn get_sanction_root(env: &Env) -> Option<Root> {
     env.storage().instance().get(&DataKey::SanctionRoot)
 }
+/// Windowed acceptance for `sanction_root` (invariant #6).
+pub fn sanction_root_in_window(env: &Env, candidate: &Root) -> bool {
+    compliance_window_contains(env, DataKey::SanctionWindow, candidate)
+}
 
 pub fn set_assets_root(env: &Env, r: &Root) {
     env.storage().instance().set(&DataKey::AssetsRoot, r);
+    push_compliance_window(env, DataKey::AssetsWindow, r);
 }
 pub fn get_assets_root(env: &Env) -> Option<Root> {
     env.storage().instance().get(&DataKey::AssetsRoot)
+}
+/// Windowed acceptance for `assets_root` (invariant #6).
+pub fn assets_root_in_window(env: &Env, candidate: &Root) -> bool {
+    compliance_window_contains(env, DataKey::AssetsWindow, candidate)
 }
 
 pub fn set_frozen_root(env: &Env, r: &Root) {
@@ -297,5 +389,5 @@ pub fn init_recent_roots(env: &Env, seed: &Root) {
 pub fn bump_instance_ttl(env: &Env) {
     env.storage()
         .instance()
-        .extend_ttl(PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND);
+        .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND);
 }

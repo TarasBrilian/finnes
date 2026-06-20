@@ -14,14 +14,16 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 # soroban-sdk provides the contract macros, env, storage, crypto host-fn
 # bindings (incl. `env.crypto().bls12_381()`), and types (Bytes, BytesN, Vec).
-# TODO: pin to the exact SDK version matching the target Protocol (22/23) once
-# the toolchain is available; BLS12-381 host fns require a recent SDK.
-soroban-sdk = "22"
+# PINNED (FIN-011) to the exact patch matching the target Protocol 22/23 toolchain
+# (BLS12-381 host fns, CAP-0059). Bump deliberately + re-test against the deployed
+# protocol; never float, so a transitive SDK bump can't silently change host-fn
+# semantics or the serialized storage/event layout.
+soroban-sdk = "=22.0.11"
 
 [dev-dependencies]
 # Enables the in-memory test environment (`Env::default()`), test utilities, and
-# host-fn emulation used by `src/test.rs`.
-soroban-sdk = { version = "22", features = ["testutils"] }
+# host-fn emulation used by `src/test.rs`. Same pin as the runtime dependency.
+soroban-sdk = { version = "=22.0.11", features = ["testutils"] }
 
 [features]
 # `testutils` is required by integration tests that register the contract and

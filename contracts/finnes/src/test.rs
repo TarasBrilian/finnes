@@ -230,30 +230,22 @@ fn transfer_correct_next_index_passes_gate_then_hits_verifier() {
     assert_eq!(res, Err(Ok(Error::VerifyingKeyArityMismatch)));
 }
 
-// TODO: positive `confidential_transfer` - needs (a) a real Transfer VK, (b) a
-//       proof + public inputs from the prover for a 2-in/2-out witness, (c)
-//       `verifier::verify_groth16` implemented. Until then this path returns
-//       Error::InvalidProof by construction (the verifier placeholder refuses).
+// The ordered pre-proof checks (unknown anchor, double-spend, stale frozen_root,
+// windowed kyc) are covered by the FIN-011 tests at the bottom of this file; the
+// Groth16 verify itself (FIN-009) is exercised directly in the verifier section
+// above against a real BLS12-381 proof.
 //
-// TODO: negative - double-spend: submit a transfer reusing a nullifier already
-//       inserted; expect Error::NullifierAlreadyUsed (this check runs BEFORE the
-//       proof, so it is testable without real proof math once we can insert a
-//       nullifier via a successful prior transfer or a test seam).
-//
-// TODO: negative - stale frozen_root: supply a frozen_root != state; expect
-//       Error::StaleFrozenRoot (also pre-proof; testable now with a test seam to
-//       set public inputs).
-//
-// TODO: negative - unknown anchor root: supply an anchor_root not in the window;
-//       expect Error::UnknownAnchorRoot.
-//
-// TODO: unshield - assert frozen_root strict + zero-recipient rejection
-//       (Error::RecipientNotAuthorised), then the full happy path once proofs land.
+// TODO: positive `confidential_transfer` end-to-end through the entrypoint - needs
+//       a real D=20 Transfer VK + a proof/public-inputs for a 2-in/2-out witness
+//       (the heavier D=20 ceremony, FIN-007 production note). The pre-proof gate
+//       and the verify math are each already tested; only their composition awaits
+//       the ceremony.
 //
 // TODO: settle_dvp - assert both `require_auth`s are demanded and a single proof
 //       path is taken (invariant #7).
 //
-// TODO: freeze - assert AlreadyFrozen on a repeat, and that frozen_root advances.
+// TODO: freeze - assert AlreadyFrozen on a repeat (the happy path + event are now
+//       covered by `freeze_emits_event_for_the_indexer`).
 
 // ---------------------------------------------------------------------------
 // Groth16 verifier (FIN-009) - exercises `verifier::verify_groth16` directly
@@ -571,4 +563,210 @@ fn unshield_registered_recipient_passes_gate_then_hits_verifier() {
     let pi = unshield_pi(&env, asset_id, amount_scalar(&env, 700), recipient_field);
     let res = client.try_unshield(&dummy_proof(&env), &pi);
     assert_eq!(res, Err(Ok(Error::VerifyingKeyArityMismatch)));
+}
+
+// ---------------------------------------------------------------------------
+// FIN-011: ordered checks, windowed compliance roots, and indexer events.
+//
+// These exercise the pre-proof half of the canonical order (invariant #9):
+//   anchor window -> nullifier unused -> compliance roots -> (verify) -> mutate.
+// Each fails at exactly its own step (the dummy VK means a flow that passes all
+// pre-proof checks lands on VerifyingKeyArityMismatch at the verify step, which
+// is the marker for "reached the verifier"). Event emission is tested on the
+// admin paths (freeze / root update), which are not proof-gated.
+// ---------------------------------------------------------------------------
+
+use crate::events as ev;
+use crate::state;
+use soroban_sdk::testutils::Events;
+use soroban_sdk::{symbol_short, vec, IntoVal};
+
+#[test]
+fn ordered_unknown_anchor_root_rejected_first() {
+    let env = Env::default();
+    let (client, _admin, _issuer) = setup(&env);
+    let mut pi = transfer_pi(&env, zero32(&env));
+    pi.anchor_root = tagged32(&env, 0xEE); // not in the recent-roots window
+    assert_eq!(
+        client.try_confidential_transfer(&dummy_proof(&env), &pi),
+        Err(Ok(Error::UnknownAnchorRoot))
+    );
+}
+
+#[test]
+fn ordered_double_spent_nullifier_rejected_before_proof() {
+    let env = Env::default();
+    let (client, _admin, _issuer) = setup(&env);
+    let contract_id = client.address.clone();
+    // Seed nf_in_0 (0x55, from transfer_pi) as already spent, then reuse it.
+    env.as_contract(&contract_id, || {
+        state::insert_nullifier(&env, &tagged32(&env, 0x55));
+    });
+    let pi = transfer_pi(&env, zero32(&env));
+    assert_eq!(
+        client.try_confidential_transfer(&dummy_proof(&env), &pi),
+        Err(Ok(Error::NullifierAlreadyUsed))
+    );
+}
+
+#[test]
+fn ordered_stale_frozen_root_rejected_strictly() {
+    let env = Env::default();
+    let (client, _admin, _issuer) = setup(&env);
+    let mut pi = transfer_pi(&env, zero32(&env));
+    pi.frozen_root = tagged32(&env, 0xEE); // frozen_root is STRICT (invariant #6)
+    assert_eq!(
+        client.try_confidential_transfer(&dummy_proof(&env), &pi),
+        Err(Ok(Error::StaleFrozenRoot))
+    );
+}
+
+#[test]
+fn windowed_kyc_root_accepts_prior_root_after_update() {
+    let env = Env::default();
+    let (client, _admin, _issuer) = setup(&env);
+    // Rotate the kyc root; the prior value (0x01) must stay within the window.
+    client.update_kyc_root(&tagged32(&env, 0x21));
+
+    let mut pi = transfer_pi(&env, zero32(&env)); // kyc_root = 0x01 (prior)
+                                                  // Prior root still accepted -> flow proceeds past compliance to the verifier.
+    assert_eq!(
+        client.try_confidential_transfer(&dummy_proof(&env), &pi),
+        Err(Ok(Error::VerifyingKeyArityMismatch))
+    );
+    // The new root is accepted too.
+    pi.kyc_root = tagged32(&env, 0x21);
+    assert_eq!(
+        client.try_confidential_transfer(&dummy_proof(&env), &pi),
+        Err(Ok(Error::VerifyingKeyArityMismatch))
+    );
+    // A never-published root is windowed-out (StaleKycRoot).
+    pi.kyc_root = tagged32(&env, 0xEE);
+    assert_eq!(
+        client.try_confidential_transfer(&dummy_proof(&env), &pi),
+        Err(Ok(Error::StaleKycRoot))
+    );
+}
+
+#[test]
+fn freeze_emits_event_for_the_indexer() {
+    let env = Env::default();
+    let (client, _admin, _issuer) = setup(&env);
+    let cm = tagged32(&env, 0xC1);
+    let new_frozen = tagged32(&env, 0x44);
+    client.freeze(&cm, &new_frozen);
+    assert_eq!(
+        env.events().all(),
+        vec![
+            &env,
+            (
+                client.address.clone(),
+                (symbol_short!("freeze"),).into_val(&env),
+                ev::FreezeEvent {
+                    cm_target: cm,
+                    new_frozen_root: new_frozen,
+                }
+                .into_val(&env),
+            ),
+        ]
+    );
+}
+
+#[test]
+fn update_kyc_root_emits_event_for_the_indexer() {
+    let env = Env::default();
+    let (client, _admin, _issuer) = setup(&env);
+    let new_kyc = tagged32(&env, 0x21);
+    client.update_kyc_root(&new_kyc);
+    assert_eq!(
+        env.events().all(),
+        vec![
+            &env,
+            (
+                client.address.clone(),
+                (symbol_short!("rootupd"),).into_val(&env),
+                ev::RootUpdatedEvent {
+                    kind: symbol_short!("kyc"),
+                    new_root: new_kyc,
+                }
+                .into_val(&env),
+            ),
+        ]
+    );
+}
+
+#[test]
+fn windowed_assets_root_is_independent_of_kyc() {
+    let env = Env::default();
+    let (client, _admin, _issuer) = setup(&env);
+    // Rotate the ASSETS root; rotating KYC must not touch the assets window.
+    client.update_assets_root(&tagged32(&env, 0x33));
+    client.update_kyc_root(&tagged32(&env, 0x21));
+
+    // A transfer with the PRIOR assets root (0x03) AND the new kyc root (0x21)
+    // passes both windowed checks -> reaches the verifier (arity mismatch).
+    let mut pi = transfer_pi(&env, zero32(&env));
+    pi.assets_root = tagged32(&env, 0x03);
+    pi.kyc_root = tagged32(&env, 0x21);
+    assert_eq!(
+        client.try_confidential_transfer(&dummy_proof(&env), &pi),
+        Err(Ok(Error::VerifyingKeyArityMismatch))
+    );
+    // A never-published assets root is windowed-out (per-key window, not shared).
+    pi.assets_root = tagged32(&env, 0xEE);
+    assert_eq!(
+        client.try_confidential_transfer(&dummy_proof(&env), &pi),
+        Err(Ok(Error::StaleAssetsRoot))
+    );
+}
+
+#[test]
+fn compliance_window_dedups_nonconsecutive_repeat_and_evicts_oldest() {
+    let env = Env::default();
+    let (client, _admin, _issuer) = setup(&env); // kyc window = [0x01]
+    let mut pi = transfer_pi(&env, zero32(&env));
+
+    // Non-consecutive repeat of 0x21 must NOT consume a second slot (membership
+    // dedup, not tail-only) — else duplicates would evict 0x01 early below.
+    client.update_kyc_root(&tagged32(&env, 0x21)); // [0x01,0x21]
+    client.update_kyc_root(&tagged32(&env, 0x22)); // [0x01,0x21,0x22]
+    client.update_kyc_root(&tagged32(&env, 0x21)); // dedup -> unchanged (3 distinct)
+
+    // Add 0x23..=0x2f (13 distinct) -> 16 distinct total == capacity; 0x01 retained.
+    for t in 0x23u8..=0x2f {
+        client.update_kyc_root(&tagged32(&env, t));
+    }
+    pi.kyc_root = tagged32(&env, 0x01);
+    assert_eq!(
+        client.try_confidential_transfer(&dummy_proof(&env), &pi),
+        Err(Ok(Error::VerifyingKeyArityMismatch)),
+        "the original root must survive: the repeated 0x21 must not have evicted it"
+    );
+
+    // One more distinct root (17th) evicts the oldest (0x01).
+    client.update_kyc_root(&tagged32(&env, 0x30));
+    assert_eq!(
+        client.try_confidential_transfer(&dummy_proof(&env), &pi),
+        Err(Ok(Error::StaleKycRoot))
+    );
+}
+
+#[test]
+fn register_asset_emits_event_for_the_indexer() {
+    let env = Env::default();
+    let (client, _admin, _issuer) = setup(&env);
+    let asset_id: Scalar = tagged32(&env, 0x77);
+    let sac = Address::generate(&env);
+    client.register_asset(&asset_id, &sac);
+    assert_eq!(
+        env.events().all(),
+        vec![
+            &env,
+            (
+                client.address.clone(),
+                (symbol_short!("regasset"),).into_val(&env),
+                ev::AssetRegisteredEvent { asset_id, sac }.into_val(&env),
+            ),
+        ]
+    );
 }
