@@ -71,12 +71,12 @@ export interface Note {
  * by the Groth16 proof (invariant #5). The contract stores it verbatim and
  * never hashes it.
  *
- * NOTE: The encryption scheme is a SCAFFOLD TODO (docs/PUBLIC_IO.md §"Ciphertext
- * binding"). The field packing (`fields`) and its length (`K_a` / `K_r`) are not
- * yet fixed; `raw` is an optional transport representation.
+ * The encryption scheme is LOCKED (FIN-001 scheme A, docs/PUBLIC_IO.md
+ * §"Ciphertext binding"): an additive Poseidon keystream with `K_a = K_r = 5`
+ * field-packed slots (sdk/src/encrypt.ts). `raw` is an optional transport rep.
  */
 export interface Ciphertext {
-  /** Field-packed representation used as circuit public inputs (length K_a/K_r, TODO). */
+  /** Field-packed circuit public inputs (length `K_a`/`K_r` = 5; LOCKED FIN-001). */
   readonly fields: readonly Fr[];
   /** Optional raw byte transport representation (off-chain only). */
   readonly raw?: Uint8Array;
@@ -138,11 +138,12 @@ export interface StateRoots {
 }
 
 /**
- * Auditor (regulator) view public key. Representation is a SCAFFOLD TODO until
- * the encryption scheme is fixed (docs/PUBLIC_IO.md: "auditor_pk_* TODO").
+ * Auditor (regulator) view public key, LOCKED (FIN-001): a SINGLE field element
+ * `auditor_pk = Poseidon(k_view)` (docs/PUBLIC_IO.md — not `_x`/`_y`), bound
+ * in-circuit and matched exactly against contract state on every transfer.
  */
 export interface AuditorPublicKey {
-  /** Single field-element placeholder; may expand to `_x`/`_y` once scheme fixed. */
+  /** `auditor_pk = Poseidon(k_view)`; single field (sdk/src/encrypt.ts). */
   readonly pk: Fr;
 }
 

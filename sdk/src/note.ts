@@ -29,18 +29,67 @@ import { poseidonBLS, toField } from './poseidon.js';
 /** Max raw value permitted by the 64-bit range check (invariant #2). */
 export const MAX_NOTE_VALUE: bigint = (1n << 64n) - 1n;
 
+/** RFC 4648 base32 alphabet used by Stellar StrKey (no padding in the 56-char form). */
+const STRKEY_BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
+/** Decode a Stellar StrKey (`G…`/`C…`, 56 base32 chars → 35 bytes). */
+function decodeStrKey(s: string): Uint8Array {
+  let bits = 0;
+  let value = 0;
+  const out: number[] = [];
+  for (const ch of s) {
+    const idx = STRKEY_BASE32.indexOf(ch);
+    if (idx === -1) throw new Error('sacAddressToField: invalid StrKey character');
+    value = (value << 5) | idx;
+    bits += 5;
+    if (bits >= 8) {
+      bits -= 8;
+      out.push((value >>> bits) & 0xff);
+    }
+  }
+  return Uint8Array.from(out);
+}
+
 /**
- * Encode a Stellar Asset Contract address into a field element for hashing.
+ * Encode an SAC address into the single field element fed to
+ * `asset_id = Poseidon(sac_address)`. The circuit (`circuits/lib/note.circom`
+ * `AssetId`) only ever sees this `Fr`; the string → `Fr` map lives off-circuit
+ * here and in the contract's admin asset registry (`register_asset`), which must
+ * stay in lockstep so an `asset_id` resolves to the same SAC everywhere.
  *
- * TODO(crypto): define the canonical, circuit-matching encoding of an SAC
- * address (a Stellar contract `C...` / StrKey) into one or more `Fr` elements
- * and feed it to Poseidon exactly as `circuits/lib/note.circom` does. Throws
- * until fixed - must not guess an encoding that disagrees with the circuit.
+ * Two accepted forms:
+ *   - a field-element literal (decimal or `0x…` hex) — the demo representation
+ *     used by `scripts/lib/*-scenario.ts` (`sac_address = 777n`), parsed verbatim;
+ *   - a real Stellar StrKey (`C…` contract / `G…` account, 56 base32 chars) — its
+ *     32-byte payload (version byte + payload + CRC; payload = bytes[1..33]) is
+ *     read big-endian into a bigint.
+ *
+ * PRODUCTION GAP (mirrors the `recipient` encoding in docs/PUBLIC_IO.md): a full
+ * 32-byte payload spans up to 2^256 > r, so reducing it mod `r` is not injective
+ * at the very top of the range. Production splits the address into two fields
+ * (hi/lo 16 bytes) or binds it via the SHA-256 host function (the one on-chain
+ * hash invariant #11 permits) — a fresh-ceremony change. The demo's contract IDs
+ * are assumed to fit `< r`.
  */
-export function sacAddressToField(_sacAddress: string): Fr {
+export function sacAddressToField(sacAddress: string): Fr {
+  const s = sacAddress.trim();
+  if (s.length === 0) throw new Error('sacAddressToField: empty address');
+
+  // Field-element literal (demo representation).
+  if (/^0x[0-9a-fA-F]+$/.test(s)) return toField(BigInt(s));
+  if (/^[0-9]+$/.test(s)) return toField(BigInt(s));
+
+  // Real Stellar StrKey: 56 base32 chars → 35 bytes (1 version + 32 payload + 2 CRC).
+  if (/^[A-Z2-7]{56}$/.test(s)) {
+    const raw = decodeStrKey(s);
+    let acc = 0n;
+    for (const b of raw.slice(1, 33)) acc = (acc << 8n) | BigInt(b);
+    return toField(acc);
+  }
+
   throw new Error(
-    'TODO: sacAddressToField encoding undefined. Define the SAC-address → Fr ' +
-      'encoding to match circuits/lib/note.circom before deriving asset_id.',
+    'sacAddressToField: unrecognised SAC address; expected a decimal/0x-hex ' +
+      'field element or a Stellar StrKey (C…/G…).',
   );
 }
 
