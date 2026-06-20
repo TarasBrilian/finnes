@@ -26,15 +26,13 @@ export function ComplianceStatus({ spending }: { spending: SpendingKeypair | nul
   }, [spending]);
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-      <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
-        Compliance
-      </span>
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-blue-100 pb-4">
+      <span className="eyebrow">Compliance</span>
 
-      {!state && <span className="text-sm text-ink-muted">Generate a key to check status.</span>}
-
-      {state && (
-        <>
+      {!state ? (
+        <span className="text-sm text-ink-muted">Generate a key to check status.</span>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
           <span className={state.kycApproved ? 'chip chip-good' : 'chip chip-bad'}>
             <Dot good={state.kycApproved} />
             KYC {state.kycApproved ? 'approved' : 'not approved'}
@@ -47,12 +45,14 @@ export function ComplianceStatus({ spending }: { spending: SpendingKeypair | nul
             <span className="chip border-blue-200 bg-white text-ink-muted">
               Per-tx limit
               <span className="font-mono font-semibold text-ink">
-                {formatRawAmount(state.perTxLimitRaw)}
+                {formatRawAmount(state.perTxLimitRaw)} TBOND
               </span>
             </span>
           )}
-        </>
+        </div>
       )}
+
+      <span className="ml-auto text-[11px] text-ink-faint">Proven in-circuit on every transfer.</span>
     </div>
   );
 }

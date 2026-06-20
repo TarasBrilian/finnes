@@ -52,27 +52,37 @@ export function KeyManager() {
 
   return (
     <div className="card">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h3 className="text-base font-bold text-ink">Shielded key</h3>
-          <p className="mt-0.5 text-xs text-ink-muted">
-            Spending + viewing key. In-memory only - never sent anywhere.
-          </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-blue-100 bg-blue-50 text-blue-600">
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="8" cy="15" r="4" />
+              <path d="M10.85 12.15 19 4M16 7l2 2M14 9l2 2" />
+            </svg>
+          </span>
+          <div>
+            <h3 className="text-base font-bold text-ink">Shielded key</h3>
+            <p className="mt-0.5 text-xs text-ink-muted">
+              Spending + viewing key. In-memory only.
+            </p>
+          </div>
         </div>
-        {kp ? (
+        {kp && (
           <button type="button" className="btn-ghost" onClick={() => clearKeys()}>
             Wipe
           </button>
-        ) : (
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() => setSpendingKeypair(generateSpendingKeypair())}
-          >
-            Generate key
-          </button>
         )}
       </div>
+
+      {!kp && (
+        <button
+          type="button"
+          className="btn-primary mt-4 w-full"
+          onClick={() => setSpendingKeypair(generateSpendingKeypair())}
+        >
+          Generate shielded key
+        </button>
+      )}
 
       {kp && (
         <div className="mt-3 space-y-2 rounded-xl bg-blue-50/70 p-3 text-xs">

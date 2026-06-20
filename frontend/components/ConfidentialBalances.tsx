@@ -38,17 +38,31 @@ export function ConfidentialBalances({ spending }: { spending: SpendingKeypair |
     };
   }, [spending]);
 
+  const totalNotes = balances?.reduce((n, b) => n + b.noteCount, 0) ?? 0;
+
   return (
-    <section className="panel-navy p-7 sm:p-8">
+    <section className="panel-navy p-7 sm:p-9">
       {/* faint cloud watermark, bottom-right */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -bottom-8 -right-8 h-48 w-2/3 bg-contain bg-right-bottom bg-no-repeat opacity-40"
         style={{ backgroundImage: 'url(/mega-mendung.svg)' }}
       />
+      {/* top hairline glow */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent"
+      />
       <div className="relative">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <span className="eyebrow-light">Confidential position</span>
+          {spending && balances && balances.length > 0 && (
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-medium text-blue-100/80">
+              <span aria-hidden="true" className="inline-block h-1.5 w-1.5 animate-glowpulse rounded-full bg-accent" />
+              {balances.length} asset{balances.length === 1 ? '' : 's'} · {totalNotes} note
+              {totalNotes === 1 ? '' : 's'} · scanned client-side
+            </span>
+          )}
         </div>
 
         {!spending && (
@@ -58,7 +72,10 @@ export function ConfidentialBalances({ spending }: { spending: SpendingKeypair |
         )}
 
         {spending && loading && (
-          <p className="mt-5 text-sm text-blue-100/80">Scanning ciphertexts…</p>
+          <p className="mt-5 flex items-center gap-2 text-sm text-blue-100/80">
+            <span aria-hidden="true" className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-200/40 border-t-accent" />
+            Trial-decrypting ciphertexts…
+          </p>
         )}
 
         {spending && balances && balances.length === 0 && (
@@ -66,16 +83,19 @@ export function ConfidentialBalances({ spending }: { spending: SpendingKeypair |
         )}
 
         {spending && balances && balances.length > 0 && (
-          <div className="mt-6 grid gap-x-10 gap-y-7 sm:grid-cols-2">
+          <div className="mt-7 grid gap-x-12 gap-y-7 sm:grid-cols-2">
             {balances.map((b, i) => (
               <div
                 key={b.assetId.toString()}
-                className="animate-fade-up"
+                className="animate-fade-up border-l-2 border-accent/40 pl-4"
                 style={{ animationDelay: `${i * 70}ms` }}
               >
-                <p className="text-xs font-medium uppercase tracking-wide text-blue-200/80">
-                  {b.assetLabel}
-                </p>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[10px] font-semibold uppercase tracking-wide text-accent">
+                    {b.assetLabel.split(' ')[0]}
+                  </span>
+                  <span className="text-xs text-blue-200/70">{b.assetLabel}</span>
+                </div>
                 <p className="stat mt-1.5 text-white">{formatRawAmount(b.rawAmount)}</p>
                 <p className="mt-1 text-xs text-blue-200/60">
                   {b.noteCount} note{b.noteCount === 1 ? '' : 's'} · raw SAC units
