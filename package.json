@@ -24,6 +24,7 @@
     "shield:witness": "tsx scripts/test-shield-witness.ts",
     "unshield:witness": "tsx scripts/test-unshield-witness.ts",
     "transfer:prove": "tsx scripts/test-prove-transfer.ts",
+    "transfer:prove:d20": "tsx scripts/test-prove-transfer-d20.ts",
     "shield:prove": "tsx scripts/test-prove-shield.ts",
     "unshield:prove": "tsx scripts/test-prove-unshield.ts",
     "verifier:fixture": "tsx scripts/gen-verifier-fixture.ts",

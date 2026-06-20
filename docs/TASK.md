@@ -99,13 +99,14 @@ Wired FIN-003/004/005 into `transfer.circom`: inclusion + ownership, nullifier d
 
 ## Phase 3 — Trusted setup (demo)
 
-### [x] FIN-007 · P1 · Demo ceremony + VK export — DONE (depth-4 demo; D=20 production noted)
+### [x] FIN-007 · P1 · Demo ceremony + VK export — DONE (production D=20 VKs now exported + real proof verified)
 Real **BLS12-381** Groth16 trusted setup, machine-verified end-to-end with FIN-008.
 - **Curve/flag confirmed:** `snarkjs powersoftau new bls12381 …` works (snarkjs 0.7.5); the exported VK reports `protocol: groth16, curve: bls12381`.
-- **PTAU sizing corrected:** snarkjs needs `2^PTAU_POWER ≥ 2·nConstraints` (not just `≥ nConstraints`). Production `transfer` (D=20) has ~295k constraints → `2·295k = 590k` → **2^20**. `scripts/setup-ceremony.sh` default fixed to `PTAU_POWER=20` with the rule documented.
-- **Runnable demo:** the D=20 2^20 BLS12-381 ceremony (heavy `prepare phase2` + ~1GB ptau) did not finish in reasonable time on a 16GB laptop, so `scripts/setup-demo-ceremony.sh` (`npm run setup:demo`) runs the SAME pipeline on the **depth-4** harness (`transfer_test4`, ~115k constraints, 2^18) and produces a real `transfer_test4.zkey` + `vk_transfer_test4.json` (curve bls12381, nPublic 41). Loud DEMO-ONLY warnings printed; `.zkey`/`.ptau` stay gitignored (invariant #10).
-- **Production note:** the only delta for D=20 is `PTAU_POWER=20` + a bigger machine (or optimising the unoptimised HadesMiMC Poseidon, FIN-002 follow-up, to slash constraints).
-**Acceptance:** ✅ real BLS12-381 `.zkey` + public VK produced; demo warning printed; `.zkey`/`.ptau` gitignored. (Demo at depth 4; production procedure identical at `PTAU_POWER=20`.)
+- **PTAU sizing corrected (twice):** snarkjs needs `2^PTAU_POWER ≥ 2·nConstraints`. The earlier "~295k constraints → 2^20" estimate was WRONG: the actual compiled `transfer` at **D=20 is 73,740 constraints** (shield 18,233; unshield 44,520) — measured via `snarkjs r1cs info`. So `2·73,740 ≈ 147k` → **2^18 (262,144) suffices**, not 2^20. The "needs a big machine" blocker was an artifact of the bad estimate.
+- **Production D=20 ceremony DONE:** the full 2^18 BLS12-381 ceremony for shield/transfer/unshield ran in **~13 minutes** on a 22GB Railway Pro container (`setup/ceremony.Dockerfile` — circom + snarkjs, driven over `railway ssh`). Exported the real **production verifying keys** `setup/build/{shield,transfer,unshield}/vk_*.json` (curve bls12381; nPublic **59 / 73 / 64** — the exact contract layouts). `.zkey`/`.ptau` stay gitignored (invariant #10); the ceremony is single-party DEMO-ONLY (not mainnet-secure), fine for a real testnet proof.
+- **Real D=20 proof verified (capstone):** `scripts/test-prove-transfer-d20.ts` (`npm run transfer:prove:d20`) builds a real `Transfer(20,5,5)` witness via the SDK, `groth16.fullProve`s it against the production `transfer.zkey`, and verifies it against `vk_transfer.json`: **73 public signals, verify accepts, a tampered signal is rejected**. This is the genuine (non-simulated) proof the deployed contract verifies.
+- **dvp excluded:** `dvp.circom` does not yet compile (FIN-016 backlog); the ceremony covers the 3 ready circuits.
+**Acceptance:** ✅ real production-D=20 BLS12-381 VKs produced (59/73/64), `.zkey`/`.ptau` gitignored; a real D=20 transfer proof verifies + tamper-rejects. This **unblocks the on-chain half** of FIN-009/010/011/015 (a production proof now exists to verify on-chain).
 **Deps:** FIN-006.
 
 ---
