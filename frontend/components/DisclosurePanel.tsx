@@ -60,7 +60,9 @@ export function DisclosurePanel({ tx }: { tx: OnChainTxSummary | null }) {
         <div className="mt-4 space-y-4">
           <div className="rounded-xl bg-blue-50/70 p-3.5 text-xs">
             <div className="flex items-center justify-between gap-2">
-              <span className="font-mono font-medium text-ink">{tx.txHash}</span>
+              <span className="font-mono font-medium text-ink">
+                {tx.txHash.length <= 18 ? tx.txHash : `${tx.txHash.slice(0, 10)}…${tx.txHash.slice(-6)}`}
+              </span>
               <span className="badge border border-blue-200 bg-white capitalize text-blue-700">
                 {tx.circuit}
               </span>

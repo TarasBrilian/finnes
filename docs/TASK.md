@@ -448,8 +448,48 @@ Escrow / two-phase settlement (each party single-party-spends into an intent-own
 ### [ ] FIN-018 · P3 · Clawback / freeze flow + UI
 Frozen-commitment set management; two-phase two-key (auditor identifies `cm_target`, issuer freezes + mints recovery note); optional dual-signature freeze tx (invariant #14). Frontend freeze/clawback panel.
 
-### [ ] FIN-019 · P3 · Backend tier (indexer / API / relayer)
+### [~] FIN-019 · P3 · Backend tier (indexer / API / relayer) — INDEXER DONE + LIVE-VERIFIED; API/relayer deferred
 Indexer (event subscription, off-chain tree reconstruction, ciphertext store), API (paths/roots/ciphertexts), relayer (fee-bump submission; per-asset `fee` term is 0 in demo). Replaces the frontend's mock/stubbed reads.
+- **Done (indexer — event subscription + tree + ciphertext store, LIVE-VERIFIED):**
+  `frontend/lib/indexer.ts` now does a full single-pass event replay over Soroban
+  RPC and reconstructs, in on-chain order: the commitment leaves (the tree — already
+  used by the write-path via `buildChainTree`), the per-output **auditor
+  ciphertexts** (sliced `K_a`-wide from the `c_auditor` event vector: transfer = 2
+  notes, shield/unshield = 1, exact-spend unshield = 0 via the `cm_change_0 == 0`
+  sentinel), and the spent-input **nullifiers**. New `indexTransactions()` yields the
+  regulator's ledger as REAL on-chain records.
+- **Done (replaces a named stub):** `finnes-client.listOnChainTransactions()` now
+  reads `indexTransactions()` (REAL chain data, `isMock: false`), falling back to the
+  `demo-data.ts` fixture ONLY when no events are in range (RPC down / past Testnet's
+  ~22h retention / empty contract), flagged honestly. The regulator page shows a
+  Live/Demo source chip; an exact-spend unshield (no confidential output) reports
+  "nothing to disclose" instead of a misleading wrong-key error.
+- **Done (tree-reconstruction correctness — aged-out prefix, write-path fix):** a
+  stateless RPC re-read only sees events within Testnet's ~22h retention, so the
+  **genesis shield (leaf 0) had aged out** — `buildChainTree` was silently dropping
+  it, mis-rooting the tree and shifting every leaf index (so the institution
+  write-path would build wrong inclusion paths → on-chain proof failure). Fixed:
+  `buildChainTree` now splices the confirmed aged-out prefix from the canonical demo
+  seed (`liveSeedCommitments` in `live-notes.ts`) — but ONLY when continuity is
+  provable (the first in-window leaf equals a known seed leaf at `p > 0`), so a
+  fresh/redeployed contract is never wrongly seeded. (A production indexer is a
+  stateful service that persists the tree and never re-reads from genesis; this seed
+  is the demo stand-in.)
+- **Verified on LIVE testnet (`npm run indexer:verify:live`,
+  `scripts/verify-indexer-live.ts`):** indexed 12 events off the deployed contract
+  `CDIWXQSWIP6G…AP55G7IA`; (a) the reconstructed tree (9 in-window + 1 aged-out
+  genesis seed = **10 leaves**) roots to `1e98da06…`, **byte-equal to the contract's
+  current `new_root`** (write-path anchor sound); and (b) the regulator view key
+  decrypted **7 confidential txs** to full plaintext — e.g. transfer `bf6f54f0…` →
+  recipient 1500 (Cendrawasih/Bank B) + change 500 (Meridian/Bank A), matching the
+  FIN-025 on-chain record exactly. The 3-tx local fixture is now a fallback, not the
+  source. `tsc` clean (only the pre-existing snarkjs-resolution errors), `next build`
+  GREEN (8/8 routes).
+- **Remaining (deferred, not blocking the demo):** a standalone API service
+  (paths/roots/ciphertexts over HTTP) and the relayer (fee-bump submission; `fee` is
+  0 in demo). The frontend reads RPC directly, so neither is needed for the demo
+  path; institution-side **recipient**-ciphertext scanning from chain still needs the
+  on-chain `c_recipient` key provenance (the balances panel keeps its demo fixture).
 
 ### [ ] FIN-020 · P3 · Threshold / multi-auditor view keys
 No single auditor honeypot — split the view key across authorities.

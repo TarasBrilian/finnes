@@ -7,6 +7,11 @@ function shortCm(c: bigint): string {
   return hex.length <= 10 ? `0x${hex}` : `0x${hex.slice(0, 6)}…${hex.slice(-4)}`;
 }
 
+/** Compact display of a tx hash — real Testnet hashes are 64 hex chars. */
+function shortHash(h: string): string {
+  return h.length <= 18 ? h : `${h.slice(0, 10)}…${h.slice(-6)}`;
+}
+
 /**
  * Lists on-chain transactions as the PUBLIC sees them: opaque commitments,
  * nullifiers, and ciphertext references - no amounts, no parties. Selecting a
@@ -47,7 +52,7 @@ export function TxList({
                 ].join(' ')}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono text-xs font-medium text-ink">{tx.txHash}</span>
+                  <span className="font-mono text-xs font-medium text-ink">{shortHash(tx.txHash)}</span>
                   <span className="badge border border-blue-200 bg-white capitalize text-blue-700">
                     {tx.circuit}
                   </span>

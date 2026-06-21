@@ -15,14 +15,23 @@ import { listOnChainTransactions, type OnChainTxSummary } from '@/lib/finnes-cli
 export default function RegulatorPage() {
   const [txs, setTxs] = useState<OnChainTxSummary[]>([]);
   const [selected, setSelected] = useState<OnChainTxSummary | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    listOnChainTransactions().then((t) => !cancelled && setTxs(t));
+    listOnChainTransactions().then((t) => {
+      if (cancelled) return;
+      setTxs(t);
+      setLoaded(true);
+    });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  // The ledger is REAL on-chain data when the indexer returned live events
+  // (FIN-019); it falls back to the deterministic demo fixture otherwise.
+  const live = txs.length > 0 && !txs[0]!.isMock;
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-6 py-10">
@@ -38,6 +47,24 @@ export default function RegulatorPage() {
           ← Switch to Institution
         </a>
       </header>
+
+      {loaded && (
+        <p className="-mt-4 text-[11px] text-ink-faint">
+          {live ? (
+            <>
+              <span className="chip chip-good mr-2">Live</span>
+              On-chain ledger reconstructed from the deployed contract&apos;s events over Soroban RPC
+              (FIN-019).
+            </>
+          ) : (
+            <>
+              <span className="chip mr-2">Demo</span>
+              Showing the deterministic demo fixture — no live events in range (RPC unavailable or
+              past Testnet&apos;s ~22h event retention). Crypto is still genuine.
+            </>
+          )}
+        </p>
+      )}
 
       {/* Step 1: the read authority. */}
       <AuditorKeyInput />

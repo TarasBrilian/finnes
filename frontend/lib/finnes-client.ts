@@ -63,6 +63,7 @@ import {
   resolveAsset,
   resolveParty,
 } from './demo-data.js';
+import { indexTransactions } from './indexer.js';
 import { readCurrentRoot, submitInvocation } from './soroban.js';
 import { fetchSpendableUnshield, runShield, runTransfer, runUnshield } from './write-flow.js';
 
@@ -327,11 +328,35 @@ export interface DecryptedAuditView {
  * List on-chain transactions (regulator view). PUBLIC data only - the regulator
  * sees the same opaque records as everyone else until they decrypt.
  *
- * The records are a local DEMO fixture (`demo-data.ts`, an indexer stand-in,
- * FIN-019) but carry GENUINE Poseidon commitments + auditor ciphertexts, so the
- * disclosure below is a real decryption, not a faked reveal.
+ * REAL (FIN-019): reads the deployed contract's events over Soroban RPC and
+ * reconstructs each transaction's nullifiers + per-output (commitment, auditor
+ * ciphertext) — the genuine on-chain ledger the live shield/transfer/unshield
+ * txs produced. The mandatory auditor ciphertexts are decrypted below with the
+ * demo view key (`auditor_pk = Poseidon(k_view)` is what the contract enforces),
+ * so the disclosure is a real decryption of live chain data.
+ *
+ * Falls back to the deterministic demo fixture (`demo-data.ts`) ONLY when the
+ * chain read yields nothing (RPC unavailable, events aged out of Testnet's ~22h
+ * retention, or a fresh/empty contract) — flagged `isMock: true` so the UI never
+ * misrepresents fixture data as live.
  */
 export async function listOnChainTransactions(): Promise<OnChainTxSummary[]> {
+  try {
+    const live = await indexTransactions();
+    if (live.length) {
+      return live.map((t) => ({
+        txHash: t.txHash,
+        timestamp: t.timestamp,
+        circuit: t.circuit,
+        nullifiers: t.nullifiers,
+        outputs: t.outputs.map((o) => ({ commitment: o.commitment, cAuditor: o.cAuditor })),
+        isMock: false,
+      }));
+    }
+  } catch {
+    // RPC failure → fall through to the offline fixture below.
+  }
+
   return buildDemoTransactions().map((t) => ({
     txHash: t.txHash,
     timestamp: t.timestamp,
@@ -365,6 +390,15 @@ export async function decryptAuditorView(
   tx: OnChainTxSummary,
   auditor: AuditorKeypair,
 ): Promise<DecryptedAuditView> {
+  // An exact-spend unshield (cm_change_0 == 0) mints no confidential change note,
+  // so there is nothing to disclose — it already reveals asset/amount/recipient
+  // publicly. Surface that honestly rather than as a key failure.
+  if (tx.outputs.length === 0) {
+    throw new Error(
+      'This transaction has no confidential output notes to disclose (an exact-spend unshield reveals its asset, amount, and recipient publicly on-chain).',
+    );
+  }
+
   const disclosed = discloseTransaction(
     { circuit: tx.circuit, nullifiers: [], outputs: tx.outputs.map((o) => ({ commitment: o.commitment, cAuditor: o.cAuditor })) },
     auditor.sk,

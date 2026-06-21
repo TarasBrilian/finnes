@@ -59,6 +59,17 @@ export function reconstructLiveTree(): IncrementalMerkleTree {
   return t;
 }
 
+/**
+ * Commitments of the canonical on-chain demo leaves, in leaf order. The indexer
+ * uses this as the seed for leaves that have aged out of RPC event retention
+ * (~22h on Testnet): the genesis shield is older than the window, so a pure
+ * event re-read would miss leaf 0 and mis-root the tree. PUBLIC data only — these
+ * are commitments, never openings (invariant #8).
+ */
+export function liveSeedCommitments(): readonly Fr[] {
+  return LIVE_NOTES.map((l) => commitNote(l.note));
+}
+
 /** Live tree state the write-path anchors to: root / frontier / leaf count. */
 export function liveTreeState(): { root: Fr; frontier: readonly Fr[]; leafCount: number } {
   const t = reconstructLiveTree();
