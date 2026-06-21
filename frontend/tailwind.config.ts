@@ -1,11 +1,11 @@
 import type { Config } from 'tailwindcss';
 
 /**
- * Finnes - blue & white institutional palette.
+ * Finnes, blue & white institutional palette.
  *
  * Strictly three families: light blue, dark blue (navy), and white. The Cirebon
  * Mega Mendung cloud motif lives in `public/mega-mendung.svg` (a real asset),
- * used deliberately as the navy hero banner - never as a full-page wallpaper.
+ * used deliberately as the navy hero banner, never as a full-page wallpaper.
  */
 const config: Config = {
   content: [

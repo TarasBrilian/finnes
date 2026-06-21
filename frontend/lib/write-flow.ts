@@ -2,14 +2,14 @@
 
 /**
  * Real write-path execution (FIN-027, option 2). Each flow ACTUALLY runs the
- * pipeline — assemble a contract-acceptable witness from the live state, prove it
- * in the browser, and submit the real Soroban tx — reporting genuine per-step
+ * pipeline, assemble a contract-acceptable witness from the live state, prove it
+ * in the browser, and submit the real Soroban tx, reporting genuine per-step
  * status (ok / error), never a static TODO list. Steps that need an operator
  * prerequisite fail HONESTLY: the prove step errors if the `.zkey` isn't served,
  * the submit step errors if Freighter isn't connected, and transfer errors if
  * there aren't enough spendable notes on-chain.
  *
- * The session acts as an ENROLLED demo identity (Bank B) — a random session key is
+ * The session acts as an ENROLLED demo identity (Bank B), a random session key is
  * not in `kyc_root`, so the in-circuit KYC check would (correctly) reject it. This
  * is the demo's stand-in for admin KYC enrollment; the check is never dropped.
  *
@@ -97,7 +97,7 @@ const proveHint =
 const submitHint = 'Connect a funded Testnet Freighter account (it signs + pays).';
 
 /**
- * The single spendable on-chain note for the demo identity (or null) — so the
+ * The single spendable on-chain note for the demo identity (or null), so the
  * Unshield form can show the max and pre-fill the amount instead of letting the
  * user submit an over-the-note value that the witness builder would reject.
  */
@@ -118,10 +118,10 @@ export interface LiveOwnedNote {
 
 /**
  * The session identity's REAL confidential position: every note it owns whose
- * commitment is a live on-chain leaf (matched by local opening — demo seeds + the
+ * commitment is a live on-chain leaf (matched by local opening, demo seeds + the
  * notes this wallet shielded/kept-as-change) and whose nullifier is not yet spent.
  * These are exactly the notes the Transfer/Unshield tabs can spend, so the balance
- * shown equals what is actually spendable — no recipient-ciphertext key agreement
+ * shown equals what is actually spendable, no recipient-ciphertext key agreement
  * needed (the wallet keeps its own openings; cross-party scan-from-chain remains a
  * key-provenance gap, see FIN-019). LIVE chain data: throws if the indexer/RPC is
  * unavailable so the caller can fall back honestly.
@@ -144,7 +144,7 @@ interface Spendable {
  * Live spendable notes: match each known opening (demo seeds + this wallet's
  * shielded notes) to its leaf in the ON-CHAIN tree (the indexer), then keep the
  * ones not yet nullified. Re-matching by commitment means we never rely on a stale
- * hardcoded index — the on-chain events are the source of truth.
+ * hardcoded index, the on-chain events are the source of truth.
  */
 async function spendableNotes(ownerPk: bigint, chain: ChainTree): Promise<Spendable[]> {
   const out: Spendable[] = [];
@@ -255,14 +255,14 @@ export async function runTransfer(rawAmount: bigint): Promise<OpResult> {
   const steps: OpStep[] = [];
   try {
     const { st, me, asset } = identity();
-    const recipientAcct = st.accounts[0]!; // Bank A — an enrolled recipient (kyc_leaf)
+    const recipientAcct = st.accounts[0]!; // Bank A, an enrolled recipient (kyc_leaf)
     let chain = await buildChainTree();
     let unspent = await spendableNotes(me.ownerPk, chain);
     steps.push(ok('Scan spendable notes (live)', `${me.label} has ${unspent.length} spendable note(s).`));
 
     // AUTO-PREPARE (option 1): a fixed 2-in transfer needs 2 notes. If you have
     // fewer, shield the missing ones automatically (each = the transfer amount, so
-    // the two inputs cover it) — so you never have to press Shield manually first.
+    // the two inputs cover it), so you never have to press Shield manually first.
     // Each auto-shield is its own on-chain tx (approve each in your wallet).
     const needed = 2 - unspent.length;
     if (needed > 0) {

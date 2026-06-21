@@ -20,9 +20,9 @@ import { OpResultPanel } from './OpResultPanel';
  * One professional settlement console for the three shielded-domain operations,
  * selected with a segmented control instead of separate cards:
  *
- *  - Transfer  (shielded A → shielded B, 2-in / 2-out)
- *  - Shield    (transparent RWA → note; binds the note to the deposited asset, #18)
- *  - Unshield  (note → transparent; proves frozen non-membership + recipient KYC, #19)
+ *  Transfer  (shielded A → shielded B, 2-in / 2-out)
+ *  Shield    (transparent RWA → note; binds the note to the deposited asset, #18)
+ *  Unshield  (note → transparent; proves frozen non-membership + recipient KYC, #19)
  *
  * The left side is the form; the right side is a disclosure preview (what the
  * public sees, what stays hidden) and a client-side proof pipeline, so the form

@@ -5,12 +5,12 @@
  * `Buffer`), so the frontend can convert a client-side snarkjs proof + public
  * signals into the EXACT uncompressed big-endian encoding the BLS12-381 host
  * functions consume (the same `verifier.rs` decodes):
- *   - Fr (32B):  be(scalar, 32)
- *   - G1 (96B):  be(X, 48) ‖ be(Y, 48)
- *   - G2 (192B): be(X_c1, 48) ‖ be(X_c0, 48) ‖ be(Y_c1, 48) ‖ be(Y_c0, 48)
- *     (snarkjs stores Fp2 as [c0, c1]; the host wants c1 FIRST — we swap.)
+ *   Fr (32B):  be(scalar, 32)
+ *   G1 (96B):  be(X, 48) ‖ be(Y, 48)
+ *   G2 (192B): be(X_c1, 48) ‖ be(X_c0, 48) ‖ be(Y_c1, 48) ‖ be(Y_c0, 48)
+ *     (snarkjs stores Fp2 as [c0, c1]; the host wants c1 FIRST, we swap.)
  *
- * Output is hex (no `0x`) — the form the stellar-sdk ScVal builders take for
+ * Output is hex (no `0x`), the form the stellar-sdk ScVal builders take for
  * BytesN<32>/Bytes. PUBLIC data only (a proof reveals nothing secret).
  */
 

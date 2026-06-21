@@ -5,7 +5,7 @@
  * contract id is the one recorded in setup/build/deploy.testnet.json (FIN-015);
  * override any value via NEXT_PUBLIC_* env vars for a different deployment.
  *
- * PUBLIC data only — a contract id, RPC URL, and artifact URLs are not secret.
+ * PUBLIC data only, a contract id, RPC URL, and artifact URLs are not secret.
  */
 
 const env = (k: string, fallback: string): string =>
@@ -40,14 +40,14 @@ export const TBOND_ISSUER = env(
   'GB66GONTENMTB5L5QXO7ARYR6HN7FAQG7MX6KCAJGHJIYUXE44JW37TD',
 );
 
-/** Horizon (classic) endpoint — for trustlines + the faucet payment. */
+/** Horizon (classic) endpoint, for trustlines + the faucet payment. */
 export const HORIZON_URL = env('NEXT_PUBLIC_HORIZON_URL', 'https://horizon-testnet.stellar.org');
 
 /**
- * Base URL for the in-browser proving artifacts (option 2 — client-side snarkjs).
+ * Base URL for the in-browser proving artifacts (option 2, client-side snarkjs).
  * Each circuit loads `${ARTIFACT_BASE}/<circuit>/<circuit>.wasm` and
  * `${ARTIFACT_BASE}/<circuit>/<circuit>.zkey`. These are served as STATIC files
- * from `frontend/public/artifacts/` (gitignored — the operator copies the D=20
+ * from `frontend/public/artifacts/` (gitignored, the operator copies the D=20
  * .wasm/.zkey there; the .zkey are large: shield 31MB / unshield 64MB /
  * transfer 110MB, and demo-only per invariant #10, so never committed).
  */

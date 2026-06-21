@@ -11,8 +11,8 @@ import { useAuditorKeypair } from '@/lib/use-keys';
 
 /**
  * The demo's climax: with the auditor view key, decrypt the mandatory auditor
- * ciphertext for the selected tx and reveal the FULL transaction - amount,
- * asset, parties - that the public cannot see.
+ * ciphertext for the selected tx and reveal the FULL transaction, amount,
+ * asset, parties, that the public cannot see.
  *
  * SECURITY: the view key and the decrypted plaintext stay in this tab; never
  * logged or sent to a backend (invariant #8).

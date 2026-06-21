@@ -9,7 +9,7 @@ function hex(f: bigint): string {
 }
 
 /**
- * Holds the auditor (regulator) view key. SECRET - lives in this tab only,
+ * Holds the auditor (regulator) view key. SECRET, lives in this tab only,
  * never logged/persisted/transmitted (invariant #8). This key is the "read
  * authority": it can decrypt every transaction's auditor ciphertext.
  */

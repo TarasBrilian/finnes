@@ -4,10 +4,10 @@
  * Deterministic DEMO fixtures built with the REAL @finnes/sdk crypto.
  *
  * These stand in for what a production indexer would serve (FIN-019): genuine
- * on-chain-shaped records — real Poseidon commitments and real additive-keystream
+ * on-chain-shaped records, real Poseidon commitments and real additive-keystream
  * ciphertexts. Because they are produced by the same SDK the prover/circuit use,
  * the regulator's `discloseTransaction` and the institution's `scanForOwnedNotes`
- * genuinely decrypt them — this is NOT a faked "reveal". Only the SOURCE of the
+ * genuinely decrypt them, this is NOT a faked "reveal". Only the SOURCE of the
  * data is local/demo; the cryptography is real.
  *
  * The auditor ciphertexts are keyed by a FIXED demo view key so the regulator can
@@ -87,7 +87,7 @@ const IMT_MAX: Fr = FR_MODULUS - 1n;
 /**
  * Compute the four compliance roots deterministically, matching what the
  * post-deploy `init` stored on-chain (kyc membership of the demo banks; empty
- * sanction/frozen IMTs; the assets registry). Real SDK Poseidon/Merkle — the same
+ * sanction/frozen IMTs; the assets registry). Real SDK Poseidon/Merkle, the same
  * roots a proof must anchor to. These change rarely (config), so they are derived
  * here rather than read per-call; the LIVE tree `anchor_root` is read from chain.
  */
@@ -160,7 +160,7 @@ const [TBOND, EUSD] = ASSETS as [DemoAsset, DemoAsset];
 /**
  * Build the demo transaction ledger with GENUINE commitments + auditor
  * ciphertexts. Each transfer mints a recipient note (output 0) and a change note
- * back to the sender (output 1), exactly as `transfer.circom` does — so the
+ * back to the sender (output 1), exactly as `transfer.circom` does, so the
  * regulator recovers both parties.
  */
 export function buildDemoTransactions(): DemoTransaction[] {

@@ -31,7 +31,7 @@ function shortShieldedKey(f: bigint): string {
 /**
  * Generates and holds the institution's shielded spending/viewing key in memory
  * (lib/keys.ts). NEVER persisted to a server (invariant #8). The secret
- * `owner_sk` is intentionally NOT displayed in full - only a short public
+ * `owner_sk` is intentionally NOT displayed in full, only a short public
  * fingerprint of `owner_pk`.
  */
 export function KeyManager() {

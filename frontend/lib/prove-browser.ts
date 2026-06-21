@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * In-browser Groth16 proving (FIN-027, option 2 — client-side snarkjs).
+ * In-browser Groth16 proving (FIN-027, option 2, client-side snarkjs).
  *
  * Runs `groth16.fullProve` entirely in the browser, loading the circuit `.wasm`
  * (witness generator) and `.zkey` (proving key) from static URLs (config.ts →

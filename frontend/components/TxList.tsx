@@ -14,7 +14,7 @@ function shortHash(h: string): string {
 
 /**
  * Lists on-chain transactions as the PUBLIC sees them: opaque commitments,
- * nullifiers, and ciphertext references - no amounts, no parties. Selecting a
+ * nullifiers, and ciphertext references, no amounts, no parties. Selecting a
  * row feeds the DisclosurePanel, which (with the view key) reveals everything.
  */
 export function TxList({

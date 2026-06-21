@@ -3,16 +3,16 @@
 /**
  * Real Soroban contract client for the deployed Finnes contract (FIN-027).
  *
- * - READ: `readCurrentRoot` simulates the read-only `current_root` view over RPC
- *   (no wallet, no fee) — the live tree root the UI anchors to.
- * - WRITE: `submitInvocation` encodes the entrypoint args via the contract's OWN
+ * READ: `readCurrentRoot` simulates the read-only `current_root` view over RPC
+ *   (no wallet, no fee), the live tree root the UI anchors to.
+ * WRITE: `submitInvocation` encodes the entrypoint args via the contract's OWN
  *   spec (frontend/lib/contract-spec.json, extracted from the deployed contract),
  *   prepares the transaction over RPC, signs it with Freighter (the transparent
- *   leg / submitter), sends it, and polls for the result — returning a REAL tx
+ *   leg / submitter), sends it, and polls for the result, returning a REAL tx
  *   hash. Only PUBLIC data (proof, public inputs, ciphertexts) is ever sent.
  *
  * The arg encoding is validated against the live contract by an offline simulate
- * check (it decodes to contract logic, not an encoding error). PUBLIC data only —
+ * check (it decodes to contract logic, not an encoding error). PUBLIC data only, 
  * a witness or key MUST NEVER reach this module (invariant #8).
  */
 
@@ -173,7 +173,7 @@ export async function submitInvocation(
 /**
  * Submit the issuer `freeze(cm_target, new_frozen_root)` clawback tx (FIN-018,
  * invariant #14). Both args are `BytesN<32>`, so we encode them directly as
- * `ScVal::Bytes` — no contract-spec entry needed. `freeze` calls
+ * `ScVal::Bytes`, no contract-spec entry needed. `freeze` calls
  * `require_auth(issuer_authority)` on-chain, so the connected Freighter account
  * MUST be the issuer (admin=issuer=deployer in the demo); otherwise the tx fails
  * with an auth error, surfaced honestly. PUBLIC data only (a commitment + a root).

@@ -5,7 +5,7 @@
  * the openings of the notes IT created so it can later spend them; this is that,
  * backed by localStorage. After a successful in-browser `shield`, the new note's
  * opening (value/rho/r_note/owner) + its leaf index are saved here, so a later
- * `unshield`/`transfer` can find and spend it — making the demo repeatable without
+ * `unshield`/`transfer` can find and spend it, making the demo repeatable without
  * a full indexer.
  *
  * SECURITY (invariant #8): these are demo openings; in a real wallet the store is

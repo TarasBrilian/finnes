@@ -72,8 +72,8 @@ export function BatikTexture({
  * the midnight theme with a dark scrim so headline text stays readable.
  *
  * `focus` controls where the scrim keeps the surface dark for text:
- *  - 'left'  , hero (text anchored left)
- *  - 'center', closing CTA (text centred)
+ *  'left'  , hero (text anchored left)
+ *  'center', closing CTA (text centred)
  *
  * Decorative: aria-hidden.
  */

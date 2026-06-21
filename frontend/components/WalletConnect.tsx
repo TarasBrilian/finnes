@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
  * and submitting `shield` / `unshield` transactions (ARCHITECTURE.md → Frontend).
  *
  * SECURITY: Freighter holds the user's transparent Stellar (Ed25519) key in the
- * extension - the frontend never sees it. This is SEPARATE from the shielded
+ * extension, the frontend never sees it. This is SEPARATE from the shielded
  * spending/viewing keys (lib/keys.ts), which are field elements generated for the
  * ZK layer and likewise never leave the client zone.
  */
@@ -54,7 +54,7 @@ export function WalletConnect({
         (await (freighter as any).getPublicKey?.());
       const net = (await (freighter as any).getNetwork?.())?.network ?? 'TESTNET';
 
-      // Finnes settles on Stellar Testnet only - refuse a wallet pointed at
+      // Finnes settles on Stellar Testnet only, refuse a wallet pointed at
       // mainnet (Freighter reports it as the "PUBLIC" network).
       if (String(net).toUpperCase() !== 'TESTNET') {
         throw new Error(`Wrong network (${net}). Switch Freighter to Testnet and reconnect.`);

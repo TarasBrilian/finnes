@@ -3,22 +3,22 @@
 /**
  * On-chain indexer (FIN-019, the real backend-tier read). Reconstructs the live
  * commitment tree AND the regulator's transaction ledger by replaying the
- * contract's events over RPC — the exact effects the contract committed, in
- * order — instead of a hardcoded seed or a local fixture (both of which drift the
+ * contract's events over RPC, the exact effects the contract committed, in
+ * order, instead of a hardcoded seed or a local fixture (both of which drift the
  * moment anyone transacts).
  *
  * Each effect event (events.rs, FIN-011) carries everything the indexer needs to
  * mirror state WITHOUT re-hashing (the contract does none, invariant #11):
- *   - shield    → cm_out (1 leaf)        + c_auditor[5]  + c_recipient[5]
- *   - transfer  → cm_out_0, cm_out_1 (2) + c_auditor[10] + c_recipient[10] + nf_in_0/1
- *   - unshield  → cm_change_0 if non-zero (0/1) + c_auditor[5] + c_recipient[5] + nf_in_0
- *   - recovery  → cm_out (1 leaf)        (issuer-minted; no ciphertext)
+ *   shield    → cm_out (1 leaf)        + c_auditor[5]  + c_recipient[5]
+ *   transfer  → cm_out_0, cm_out_1 (2) + c_auditor[10] + c_recipient[10] + nf_in_0/1
+ *   unshield  → cm_change_0 if non-zero (0/1) + c_auditor[5] + c_recipient[5] + nf_in_0
+ *   recovery  → cm_out (1 leaf)        (issuer-minted; no ciphertext)
  * Replaying them in ledger order gives both the leaf list (the tree built from it
  * matches the on-chain root exactly, verified) and the per-tx auditor ciphertexts
  * the regulator decrypts.
  *
  * Only PUBLIC data crosses here (commitments, nullifiers, roots, and the
- * field-packed ciphertexts — already public inputs, invariant #5). Note openings
+ * field-packed ciphertexts, already public inputs, invariant #5). Note openings
  * (to actually SPEND) come from the local note store / demo seeds, matched to a
  * leaf by commitment; the auditor PLAINTEXT is recovered client-side in the
  * regulator's own trust zone with the view key (invariant #8).
@@ -115,7 +115,7 @@ export interface ChainTree {
 /**
  * Bridge any aged-out leaf prefix. A stateless RPC re-read only sees events
  * within Testnet's ~22h retention, so leaves committed before the window
- * (notably the genesis shield at leaf 0) are missing — which would mis-root the
+ * (notably the genesis shield at leaf 0) are missing, which would mis-root the
  * tree and shift every leaf index. We splice the confirmed aged-out prefix from
  * the canonical seed, but ONLY when continuity is provable: the first in-window
  * leaf must equal a known seed leaf at position `p > 0`, so `seed[0..p)` is

@@ -7,7 +7,7 @@ import type { SpendingKeypair } from '@/lib/keys';
 /**
  * KYC / sanctions / per-asset limit status, as a slim inline chip strip. In the
  * demo, KYC enrollment is mocked (admin script enrolls all demo accounts into
- * `kyc_root`) - the in-circuit membership check still happens on every transfer;
+ * `kyc_root`), the in-circuit membership check still happens on every transfer;
  * only enrollment is mocked (CLAUDE.md → Out of scope / KYC).
  */
 export function ComplianceStatus({ spending }: { spending: SpendingKeypair | null }) {

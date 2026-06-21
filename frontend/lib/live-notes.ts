@@ -24,7 +24,7 @@ const TBOND = st.assets[0]!.assetId;
 const BANK_A = st.accounts[0]!; // Meridian
 const BANK_B = st.accounts[1]!; // Cendrawasih
 
-/** The on-chain notes, in leaf order (index 0..4) — the live commitment tree. */
+/** The on-chain notes, in leaf order (index 0..4), the live commitment tree. */
 export interface LiveNote {
   readonly leafIndex: number;
   readonly note: Note;
@@ -41,7 +41,7 @@ export const LIVE_NOTES: readonly LiveNote[] = [
 ];
 
 /** The seed notes (leaves 0..4) + any notes this frontend later shielded (leaf 5+,
- *  from the local note store), in on-chain leaf order — the full live note set. */
+ *  from the local note store), in on-chain leaf order, the full live note set. */
 export function allLiveNotes(): readonly LiveNote[] {
   const stored: LiveNote[] = loadStoredNotes().map((s) => ({
     leafIndex: s.leafIndex,
@@ -63,7 +63,7 @@ export function reconstructLiveTree(): IncrementalMerkleTree {
  * Commitments of the canonical on-chain demo leaves, in leaf order. The indexer
  * uses this as the seed for leaves that have aged out of RPC event retention
  * (~22h on Testnet): the genesis shield is older than the window, so a pure
- * event re-read would miss leaf 0 and mis-root the tree. PUBLIC data only — these
+ * event re-read would miss leaf 0 and mis-root the tree. PUBLIC data only, these
  * are commitments, never openings (invariant #8).
  */
 export function liveSeedCommitments(): readonly Fr[] {
@@ -76,7 +76,7 @@ export function liveTreeState(): { root: Fr; frontier: readonly Fr[]; leafCount:
   return { root: t.root(), frontier: t.frontier(), leafCount: t.size };
 }
 
-/** The nullifier (hex, 0x-less) of a live note — to check spent status on-chain. */
+/** The nullifier (hex, 0x-less) of a live note, to check spent status on-chain. */
 export function liveNoteNullifier(l: LiveNote): string {
   return deriveNullifier(l.note.rho, l.ownerSk).toString(16).padStart(64, '0');
 }

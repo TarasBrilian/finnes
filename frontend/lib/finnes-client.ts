@@ -8,26 +8,26 @@
  * TRUST BOUNDARY (ARCHITECTURE.md → Frontend; CLAUDE.md invariant #8)
  * ============================================================================
  * Everything secret stays here, client-side:
- *   - key material (lib/keys.ts), note plaintext, the witness, owner_sk/rho/r.
+ *   key material (lib/keys.ts), note plaintext, the witness, owner_sk/rho/r.
  * This wrapper:
- *   - builds intents from LOCAL notes,
- *   - assembles the witness and calls the prover (which runs client-side),
- *   - submits ONLY public data (proof, public inputs, ciphertexts) to the chain.
+ *   builds intents from LOCAL notes,
+ *   assembles the witness and calls the prover (which runs client-side),
+ *   submits ONLY public data (proof, public inputs, ciphertexts) to the chain.
  * It may fetch PUBLIC data (Merkle paths, roots, ciphertext blobs) from the API,
  * but it MUST NEVER send a witness, a key, or note plaintext to the backend.
  *
  * STATUS (FIN-027/019): the READ paths are REAL over LIVE chain state, with a
  * deterministic demo fixture as an honest fallback when RPC is unavailable:
- *   - scanConfidentialBalances → the session's unspent on-chain notes (live tree
+ *   scanConfidentialBalances → the session's unspent on-chain notes (live tree
  *                                via the indexer + live `is_nullifier_used`),
- *   - listOnChainTransactions  → indexTransactions (live contract events),
- *   - decryptAuditorView       → discloseTransaction (real auditor decrypt).
+ *   listOnChainTransactions  → indexTransactions (live contract events),
+ *   decryptAuditorView       → discloseTransaction (real auditor decrypt).
  *
- * STATUS (FIN-027, option 2 — in-browser proving): the WRITE-path INFRASTRUCTURE
+ * STATUS (FIN-027, option 2, in-browser proving): the WRITE-path INFRASTRUCTURE
  * is now real and verified against the deployed contract:
- *   - fetchStateRoots  → live `current_root` over Soroban RPC (soroban.ts),
- *   - proveInBrowser   → client-side snarkjs groth16.fullProve (prove-browser.ts),
- *   - submitToContract → real Soroban invocation, spec-encoded + Freighter-signed
+ *   fetchStateRoots  → live `current_root` over Soroban RPC (soroban.ts),
+ *   proveInBrowser   → client-side snarkjs groth16.fullProve (prove-browser.ts),
+ *   submitToContract → real Soroban invocation, spec-encoded + Freighter-signed
  *                        + RPC-sent (soroban.ts; arg encoding validated by a live
  *                        simulate that decodes to contract logic, not an error).
  * What remains for a one-click arbitrary-input write (reported honestly per step,
@@ -79,7 +79,7 @@ import {
 export { fetchSpendableUnshield };
 
 // ---------------------------------------------------------------------------
-// Result envelope - operations report a real, honest status.
+// Result envelope, operations report a real, honest status.
 // ---------------------------------------------------------------------------
 
 export type StepStatus = 'ok' | 'todo' | 'error';
@@ -127,7 +127,7 @@ function summarise(steps: OpStep[], txHash?: string): OpResult {
  * REAL: `anchorRoot` is read LIVE from the deployed contract's `current_root`
  * view over Soroban RPC (read-only simulate, no wallet/fee). The four compliance
  * roots are the deterministic demo-state values the post-deploy `init` stored
- * (`demoComplianceRoots`, real SDK Poseidon/Merkle) — they change rarely (config),
+ * (`demoComplianceRoots`, real SDK Poseidon/Merkle), they change rarely (config),
  * the tree root is what moves. A proof built against these will match contract
  * state. Returns `isMock: false`; an empty tree yields `anchorRoot = 0`.
  */
@@ -148,7 +148,7 @@ export async function fetchAuditorPublicKey(): Promise<{ pk: AuditorPublicKey; i
 }
 
 // ---------------------------------------------------------------------------
-// Scanning - discover owned notes by trial-decrypting on-chain ciphertexts.
+// Scanning, discover owned notes by trial-decrypting on-chain ciphertexts.
 // Runs client-side with the viewing secret (invariant #8).
 // ---------------------------------------------------------------------------
 
@@ -166,7 +166,7 @@ function aggregateByAsset(
   notes: readonly { assetId: Fr; value: bigint }[],
   isMock: boolean,
 ): ConfidentialBalance[] {
-  // Aggregate per asset (NEVER summed across assets — invariant #3/#16).
+  // Aggregate per asset (NEVER summed across assets, invariant #3/#16).
   const byAsset = new Map<Fr, { rawAmount: bigint; noteCount: number }>();
   for (const n of notes) {
     const acc = byAsset.get(n.assetId) ?? { rawAmount: 0n, noteCount: 0 };
@@ -187,7 +187,7 @@ function aggregateByAsset(
  * Scan + aggregate the institution's confidential balances.
  *
  * REAL & LIVE (FIN-027): the position is the session identity's unspent on-chain
- * notes — each note whose Poseidon commitment is a live leaf in the contract's
+ * notes, each note whose Poseidon commitment is a live leaf in the contract's
  * event-reconstructed tree (FIN-019) and whose nullifier is not yet spent (read
  * live via `is_nullifier_used`). These are exactly the notes the Transfer/Unshield
  * tabs can spend, so the balance shown equals what is actually spendable. The
@@ -356,19 +356,19 @@ export interface DecryptedAuditView {
 }
 
 /**
- * List on-chain transactions (regulator view). PUBLIC data only - the regulator
+ * List on-chain transactions (regulator view). PUBLIC data only, the regulator
  * sees the same opaque records as everyone else until they decrypt.
  *
  * REAL (FIN-019): reads the deployed contract's events over Soroban RPC and
  * reconstructs each transaction's nullifiers + per-output (commitment, auditor
- * ciphertext) — the genuine on-chain ledger the live shield/transfer/unshield
+ * ciphertext), the genuine on-chain ledger the live shield/transfer/unshield
  * txs produced. The mandatory auditor ciphertexts are decrypted below with the
  * demo view key (`auditor_pk = Poseidon(k_view)` is what the contract enforces),
  * so the disclosure is a real decryption of live chain data.
  *
  * Falls back to the deterministic demo fixture (`demo-data.ts`) ONLY when the
  * chain read yields nothing (RPC unavailable, events aged out of Testnet's ~22h
- * retention, or a fresh/empty contract) — flagged `isMock: true` so the UI never
+ * retention, or a fresh/empty contract), flagged `isMock: true` so the UI never
  * misrepresents fixture data as live.
  */
 export async function listOnChainTransactions(): Promise<OnChainTxSummary[]> {
@@ -403,7 +403,7 @@ function partyLabel(ownerPk: Fr): string {
 }
 
 /**
- * Decrypt the auditor ciphertexts for a selected tx - the demo's climax
+ * Decrypt the auditor ciphertexts for a selected tx, the demo's climax
  * ("public sees nothing, regulator sees everything").
  *
  * REAL (FIN-014/015): runs the SDK's `discloseTransaction`, decrypting every
@@ -422,7 +422,7 @@ export async function decryptAuditorView(
   auditor: AuditorKeypair,
 ): Promise<DecryptedAuditView> {
   // An exact-spend unshield (cm_change_0 == 0) mints no confidential change note,
-  // so there is nothing to disclose — it already reveals asset/amount/recipient
+  // so there is nothing to disclose, it already reveals asset/amount/recipient
   // publicly. Surface that honestly rather than as a key failure.
   if (tx.outputs.length === 0) {
     throw new Error(
@@ -489,7 +489,7 @@ export async function submitToContract(
 }
 
 // ---------------------------------------------------------------------------
-// Clawback / freeze (FIN-018, invariant #14) — two-phase, two-key.
+// Clawback / freeze (FIN-018, invariant #14), two-phase, two-key.
 //   Phase 1 (read, auditor): identify cm_target by decrypting with the view key.
 //   Phase 2 (write, issuer): add cm_target to the frozen set + advance frozen_root.
 // This wrapper drives phase 2: the cm_target comes from the regulator's disclosed

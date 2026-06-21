@@ -11,7 +11,7 @@ import {
 
 /**
  * Reactive access to the in-memory key store (lib/keys.ts). Re-renders when keys
- * change. The store lives in module memory - browser-tab lifetime only, never
+ * change. The store lives in module memory, browser-tab lifetime only, never
  * persisted (invariant #8).
  */
 export function useSpendingKeypair(): SpendingKeypair | null {

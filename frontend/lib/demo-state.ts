@@ -1,18 +1,18 @@
 'use client';
 
 /**
- * Frontend port of scripts/lib/demo-state.ts — the deterministic compliance state
+ * Frontend port of scripts/lib/demo-state.ts, the deterministic compliance state
  * the deployed contract was init'd with (FIN-027). Exposes the enrolled demo bank
  * identities (with their KYC inclusion paths) and the authorized assets (with
  * their registry paths), so the write-path can assemble a REAL witness that the
  * contract accepts. Built with the same @finnes/sdk Poseidon/Merkle the prover and
- * circuit use, at the production depth — so its roots equal the on-chain init roots
+ * circuit use, at the production depth, so its roots equal the on-chain init roots
  * (verified: `demoComplianceRoots` parity).
  *
  * SECURITY (invariant #8): the per-account `ownerSk` and the auditor `k_view` are
  * THROWAWAY demo constants, identical to scripts/lib/demo-state.ts (kept in
  * lockstep). A random session key is NOT enrolled here, so any real write must act
- * as one of these enrolled identities — the demo's stand-in for admin KYC
+ * as one of these enrolled identities, the demo's stand-in for admin KYC
  * enrollment (the in-circuit KYC check is never dropped).
  */
 

@@ -6,13 +6,13 @@
  * The issuer-managed frozen set is an Indexed Merkle Tree (IMT): every spend
  * proves NON-MEMBERSHIP of each spent commitment against `frozen_root`, so a
  * frozen note simply becomes unspendable. The contract does NO hashing
- * (invariant #11) — it stores the issuer-supplied `new_frozen_root` verbatim and
+ * (invariant #11), it stores the issuer-supplied `new_frozen_root` verbatim and
  * matches it STRICTLY on every transfer. So the off-chain side MUST compute the
  * exact same root the circuit proves against.
  *
  * We rebuild the IMT from the SORTED frozen commitments as `[head, …cms, tail]`,
  * byte-for-byte the construction in scripts/lib/*-scenario.ts (`buildImt`) and the
- * demo's empty IMT — so an empty set reproduces the genesis `frozen_root` exactly
+ * demo's empty IMT, so an empty set reproduces the genesis `frozen_root` exactly
  * (zero drift for the untouched demo) and each freeze advances it consistently.
  *
  * SECURITY (invariant #8): these are PUBLIC commitments + roots, never openings.
@@ -73,7 +73,7 @@ export function computeFreeze(
 /**
  * Non-membership witness for `cmSpend` against the live frozen set: the bracketing
  * low leaf `{value < cmSpend < nextValue}` + its inclusion path + the live
- * `frozen_root`. THROWS if `cmSpend` is itself frozen — a frozen note's
+ * `frozen_root`. THROWS if `cmSpend` is itself frozen, a frozen note's
  * non-membership is unprovable, which is exactly why it can no longer be spent
  * (invariant #14/#19). The empty-set case returns the head low `{0 → MAX}` at
  * index 0, byte-identical to the demo's genesis frozen witness (zero regression).

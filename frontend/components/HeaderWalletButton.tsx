@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react';
 
 /**
  * Compact header "Connect wallet" button. Connects a Stellar wallet (Freighter)
- * for the TRANSPARENT side only - the same flow as <WalletConnect>, sized for the
+ * for the TRANSPARENT side only, the same flow as <WalletConnect>, sized for the
  * top nav. Freighter holds the user's Ed25519 key in the extension; the frontend
  * never sees it, and it is SEPARATE from the shielded spending/viewing keys
  * (lib/keys.ts).
@@ -32,7 +32,7 @@ export function HeaderWalletButton() {
       const allowed = await (freighter as any).requestAccess?.();
       if (allowed && allowed.error) throw new Error(String(allowed.error));
 
-      // Finnes settles on Stellar Testnet only - refuse a wallet pointed at
+      // Finnes settles on Stellar Testnet only, refuse a wallet pointed at
       // mainnet (Freighter reports it as the "PUBLIC" network).
       const net = (await (freighter as any).getNetwork?.())?.network ?? 'TESTNET';
       if (String(net).toUpperCase() !== 'TESTNET') {
