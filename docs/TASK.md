@@ -496,8 +496,28 @@ Two-leg combined circuit (demo single-witness, labelled non-production). Consent
   stays FIN-017. Binding a nonce + output commitments into the `require_auth` payload is a
   remaining hardening TODO in `settle_dvp`.
 
-### [ ] FIN-017 · P3 · Production DvP via escrow
+### [~] FIN-017 · P3 · Production DvP via escrow — DESIGN (Phase A) + CIRCUITS/GATES (Phase B) DONE; contract/ceremony/on-chain deferred
 Escrow / two-phase settlement (each party single-party-spends into an intent-owned escrow note; settlement spends both and mints swapped outputs). Atomic-via-escrow with timeout refund.
+- **Done (Phase A — design):** `docs/DVP_ESCROW.md` specifies the model (create_intent
+  → escrow_deposit×2 → settle / timeout refund), the crux decisions (fresh shared
+  `sk_intent`; domain separation via a SEPARATE escrow tree so ordinary
+  `confidential_transfer` can't drain an escrow; timelock + intent-pinned outputs),
+  the component breakdown, 5 open questions, and the phasing.
+- **Done (Phase B — circuits + witness gates, verifiable locally, no chain):**
+  `circuits/lib/escrow_leg.circom` (`EscrowLeg(D,K_a,K_r,CHECK_RECIPIENT)`, 1-in/1-out,
+  reuses the FIN-003/004/005 gadgets + single-insert transition). `escrow_deposit.circom`
+  (`…,0` — output to the intent, recipient KYC OFF; frozen NM of the spent note ON) and
+  `escrow_refund.circom` (`…,1` — output to a KYC'd depositor) compile at D=20 (61
+  public signals). **`settle` reuses the existing `dvp.circom`** (both escrow inputs
+  owned by `sk_intent`, escrow-root anchor → swap outputs) — no new circuit. SDK
+  `buildEscrowLegWitness`; `npm run escrow:witness` (added to CI) drives depth-6
+  harnesses: valid accepted + one rejection per constraint class (#3/#5/#12/#14/#19) — 9/9.
+  `npm run typecheck` clean.
+- **Deferred (Phases C/D — substantial, re-touches the deployed contract):** the escrow
+  commitment tree + `Intent` state machine + 4 entrypoints (`create_intent` /
+  `escrow_deposit` / `settle_intent` / `escrow_refund`) with timelock + dual-`require_auth`
+  + `cargo` tests (Phase C); the per-circuit D=20 ceremony + a fresh contract redeploy +
+  live escrow DvP on testnet (Phase D, Railway). Tracked in `docs/DVP_ESCROW.md`.
 
 ### [~] FIN-018 · P3 · Clawback / freeze flow + UI — FREEZE FLOW + UI DONE; recovery-mint deferred
 Frozen-commitment set management; two-phase two-key (auditor identifies `cm_target`, issuer freezes + mints recovery note); optional dual-signature freeze tx (invariant #14). Frontend freeze/clawback panel.

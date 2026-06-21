@@ -112,3 +112,5 @@ jobs:
         run: npm run unshield:witness
       - name: dvp.circom pass/fail witnesses (two-leg settlement, invariant #15)
         run: npm run dvp:witness
+      - name: escrow DvP pass/fail witnesses (deposit/refund/settle, FIN-017)
+        run: npm run escrow:witness

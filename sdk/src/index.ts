@@ -90,6 +90,8 @@ export type {
   DvpWitnessDerived,
   DvpWitnessInput,
   DvpWitnessResult,
+  EscrowLegWitnessInput,
+  EscrowLegWitnessResult,
   ImtLowLeaf,
   ShieldWitnessDerived,
   ShieldWitnessInput,
@@ -103,6 +105,7 @@ export type {
 } from './witness.js';
 export {
   buildDvpWitness,
+  buildEscrowLegWitness,
   buildShieldWitness,
   buildTransferWitness,
   buildUnshieldWitness,

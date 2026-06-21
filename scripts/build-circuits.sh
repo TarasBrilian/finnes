@@ -18,8 +18,9 @@ CIRCUITS_DIR="${ROOT_DIR}/circuits"
 BUILD_DIR="${CIRCUITS_DIR}/build"
 LIB_DIR="${CIRCUITS_DIR}/lib"
 
-# Canonical circuit list (see docs/PUBLIC_IO.md).
-CIRCUITS=(shield transfer unshield dvp)
+# Canonical circuit list (see docs/PUBLIC_IO.md). escrow_deposit/escrow_refund are
+# the production escrow-DvP boundary circuits (FIN-017); settle reuses dvp.
+CIRCUITS=(shield transfer unshield dvp escrow_deposit escrow_refund)
 
 # --- tool checks ------------------------------------------------------------
 if ! command -v circom >/dev/null 2>&1; then

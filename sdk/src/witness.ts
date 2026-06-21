@@ -696,3 +696,112 @@ export function buildDvpWitness(input: DvpWitnessInput): DvpWitnessResult {
 
   return { witness, derived: { nf, cmOut, newRoot, newFrontier } };
 }
+
+// ===========================================================================
+// escrow_deposit.circom / escrow_refund.circom - production escrow DvP (FIN-017)
+// One-in/one-out single-asset spend (EscrowLeg). Uniform witness shape for both;
+// the recipient-compliance witnesses (kyc/sanction) are CONSTRAINED only when the
+// circuit is EscrowLeg(...,1) (refund) — pass dummies for deposit (...,0).
+// settle = the dvp circuit (buildDvpWitness with both owner_sk = sk_intent).
+// ===========================================================================
+
+/** Fully-resolved inputs for an escrow-leg witness (deposit or refund). SECRET. */
+export interface EscrowLegWitnessInput {
+  readonly anchorRoot: Fr;      // tree the SPENT note is in
+  readonly kycRoot: Fr;         // recipient KYC (refund); dummy ok for deposit
+  readonly sanctionRoot: Fr;
+  readonly assetsRoot: Fr;
+  readonly frozenRoot: Fr;      // frozen non-membership of the SPENT note
+  readonly auditorPk: Fr;
+  readonly kView: Fr;
+  readonly inNote: Note;
+  readonly ownerSk: Fr;         // depositor (deposit) or sk_intent (refund)
+  readonly inPath: MerklePath;
+  readonly frozenLow: ImtLowLeaf;
+  readonly frozenPath: MerklePath;
+  /** Minted note (owner = pk_intent for deposit, refund_pk for refund). */
+  readonly outNote: Note;
+  readonly sacAddress: Fr;
+  readonly decimals: Fr;
+  readonly perTxLimitRaw: Fr;
+  readonly assetsPath: MerklePath;
+  // recipient compliance (constrained only for refund); pass dummies for deposit
+  readonly kycPath: MerklePath;
+  readonly sanctionLow: ImtLowLeaf;
+  readonly sanctionPath: MerklePath;
+  readonly oldFrontier: readonly Fr[]; // frontier of the INSERT tree
+  readonly nextIndex: number;
+  readonly fee: Fr;
+  readonly kPair: Fr;
+  readonly rhoEncAuditor: Fr;
+  readonly rhoEncRecipient: Fr;
+}
+
+export interface EscrowLegWitnessResult {
+  readonly witness: CircomWitness;
+  readonly derived: { readonly nf: Fr; readonly cmOut: Fr; readonly newRoot: Fr; readonly newFrontier: readonly Fr[] };
+}
+
+/** Assemble an `EscrowLeg(D,5,5,CHECK_RECIPIENT)` witness (uniform for deposit/refund). */
+export function buildEscrowLegWitness(input: EscrowLegWitnessInput): EscrowLegWitnessResult {
+  const depth = input.oldFrontier.length;
+  const out: Note = { ...input.outNote, assetId: input.inNote.assetId }; // circuit uses in_asset_id
+  const nf = deriveNullifier(input.inNote.rho, input.ownerSk as OwnerSk);
+  const cmOut = commitNote(out);
+  const cAud = encryptToAuditor(out, input.kView, { rhoEnc: input.rhoEncAuditor }).fields;
+  const cRec = encryptToRecipient(out, input.kPair, { rhoEnc: input.rhoEncRecipient }).fields;
+  const { newFrontier, newRoot } = applyFrontierTransition(input.oldFrontier, input.nextIndex, [cmOut], depth);
+
+  const witness: CircomWitness = {
+    anchor_root: S(input.anchorRoot),
+    kyc_root: S(input.kycRoot),
+    sanction_root: S(input.sanctionRoot),
+    assets_root: S(input.assetsRoot),
+    frozen_root: S(input.frozenRoot),
+    auditor_pk: S(input.auditorPk),
+    nf_in_0: S(nf),
+    cm_out_0: S(cmOut),
+    new_root: S(newRoot),
+    fee: S(input.fee),
+    next_index: String(input.nextIndex),
+    old_frontier: input.oldFrontier.map(String),
+    new_frontier: newFrontier.map(String),
+    c_auditor: cAud.map(String),
+    c_recipient: cRec.map(String),
+
+    in_asset_id: S(input.inNote.assetId),
+    in_value: S(input.inNote.value),
+    in_owner_pk: S(input.inNote.ownerPk),
+    in_rho: S(input.inNote.rho),
+    in_r_note: S(input.inNote.rNote),
+    owner_sk: S(input.ownerSk),
+    in_path_elements: pe(input.inPath),
+    in_path_indices: pi(input.inPath),
+    frozen_low_value: S(input.frozenLow.value),
+    frozen_low_next_index: S(input.frozenLow.nextIndex),
+    frozen_low_next_value: S(input.frozenLow.nextValue),
+    frozen_path_elements: pe(input.frozenPath),
+    frozen_path_indices: pi(input.frozenPath),
+    out_value: S(out.value),
+    out_owner_pk: S(out.ownerPk),
+    out_rho: S(out.rho),
+    out_r_note: S(out.rNote),
+    sac_address: S(input.sacAddress),
+    decimals: S(input.decimals),
+    per_tx_limit_raw: S(input.perTxLimitRaw),
+    assets_path_elements: pe(input.assetsPath),
+    assets_path_indices: pi(input.assetsPath),
+    kyc_path_elements: pe(input.kycPath),
+    kyc_path_indices: pi(input.kycPath),
+    sanction_low_value: S(input.sanctionLow.value),
+    sanction_low_next_index: S(input.sanctionLow.nextIndex),
+    sanction_low_next_value: S(input.sanctionLow.nextValue),
+    sanction_path_elements: pe(input.sanctionPath),
+    sanction_path_indices: pi(input.sanctionPath),
+    k_view: S(input.kView),
+    k_pair: S(input.kPair),
+    rho_enc_auditor: S(input.rhoEncAuditor),
+    rho_enc_recipient: S(input.rhoEncRecipient),
+  };
+  return { witness, derived: { nf, cmOut, newRoot, newFrontier } };
+}
