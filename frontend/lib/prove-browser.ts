@@ -40,12 +40,18 @@ export async function proveInBrowser(
   witness: Record<string, unknown>,
 ): Promise<BrowserProof> {
   const { wasmUrl, zkeyUrl } = artifactUrls(circuit);
-  const { proof, publicSignals } = (await groth16.fullProve(witness, wasmUrl, zkeyUrl)) as {
-    proof: SnarkProof;
-    publicSignals: string[];
-  };
+  // snarkjs types the witness as its narrower `CircuitInput`; our flat circom
+  // record (incl. nested `string[][]` signals) is a valid superset at runtime, so
+  // cast to the exact param type (mirrors prover/src/prove.ts).
+  const { proof, publicSignals } = await groth16.fullProve(
+    witness as Parameters<typeof groth16.fullProve>[0],
+    wasmUrl,
+    zkeyUrl,
+  );
+  // snarkjs's Groth16Proof uses general `string[]`; `SnarkProof` is the fixed
+  // 3-element tuple shape proofToHost consumes (groth16 always emits that shape).
   return {
-    hostProof: proofToHost(proof),
+    hostProof: proofToHost(proof as unknown as SnarkProof),
     publicSignals,
     publicHex: publicSignals.map((s) => frToHex(s)),
   };

@@ -1,13 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // SCAFFOLD: @finnes/sdk and @finnes/prover are consumed as raw TS source and are
-  // full of intentional TODO stubs with incomplete cross-package types (e.g. the
-  // snarkjs ambient shim is scoped to the prover's own tsconfig). Don't let that
-  // block `next build`/dev. Canonical type checking is per-package (`npm run
-  // typecheck`); revisit once the sibling packages are implemented.
-  typescript: { ignoreBuildErrors: true },
-  eslint: { ignoreDuringBuilds: true },
+  // FIN-023: type errors now BLOCK the build (no `ignoreBuildErrors`). The
+  // snarkjs ambient shim (prover/src/snarkjs.d.ts) is included by this app's
+  // tsconfig, so the consumed sibling TS source typechecks cleanly here. ESLint
+  // is not configured in this app; `next build` skips lint, and canonical type
+  // checking is `npm run typecheck` (sdk/prover) + `tsc --noEmit` (frontend).
   // The sibling workspace packages ship TypeScript source (scaffold), so let
   // Next transpile them directly rather than expecting a prebuilt `dist/`.
   transpilePackages: ['@finnes/sdk', '@finnes/prover'],

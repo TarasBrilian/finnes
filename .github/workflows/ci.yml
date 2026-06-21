@@ -40,6 +40,9 @@ jobs:
       - run: npm ci
       - name: Typecheck (sdk + prover)
         run: npm run typecheck
+      - name: Typecheck (frontend, FIN-023 — type errors block the build)
+        working-directory: frontend
+        run: npx tsc --noEmit
       - name: Workspace tests (sdk incl. invariant #13 Poseidon parity gate)
         run: npm test
 

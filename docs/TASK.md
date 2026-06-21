@@ -593,7 +593,21 @@ Replace the single-party demo ceremony with a multi-party contribution + transcr
 ## Cleanup (do alongside the above)
 
 - [x] FIN-022 · P2 · Prover: import ordered public-input builders from `@finnes/sdk`; delete the duplicated `PUBLIC_IO_ORDER` constant. — DONE (folded into FIN-008).
-- [ ] FIN-023 · P3 · Remove `typescript.ignoreBuildErrors` / `eslint.ignoreDuringBuilds` from `frontend/next.config.mjs` once sibling packages typecheck cleanly; rely on per-package `npm run typecheck`.
+- [x] FIN-023 · P3 · Remove `typescript.ignoreBuildErrors` / `eslint.ignoreDuringBuilds` from `frontend/next.config.mjs` once sibling packages typecheck cleanly; rely on per-package `npm run typecheck`. — DONE
+  - **Root cause:** the frontend tsconfig's `include` was scoped to `frontend/`, so it
+    never loaded the `snarkjs` ambient shim (`prover/src/snarkjs.d.ts`) → 4 "Cannot find
+    module 'snarkjs'" errors masked by `ignoreBuildErrors`. Added that single `.d.ts`
+    to the frontend `include` (single-source, no duplication).
+  - **Surfaced + fixed 2 real masked errors** in `lib/prove-browser.ts` (revealed once
+    snarkjs was typed): cast the witness to `Parameters<typeof groth16.fullProve>[0]`
+    (mirrors `prover/src/prove.ts`) and the proof to `SnarkProof` via `unknown` (snarkjs
+    types `pi_*` as general `string[]`; `SnarkProof` is the fixed 3-tuple proofToHost
+    consumes).
+  - **Removed both flags** from `next.config.mjs`; ESLint isn't configured in this app so
+    `next build` skips lint (no `ignoreDuringBuilds` needed). **Enforcement proven:** an
+    injected type error makes `next build` FAIL (EXIT 1) — it would have passed before.
+  - **CI:** added a `frontend npx tsc --noEmit` gate to the `js` job so this stays clean.
+  - Verified: `frontend tsc --noEmit` 0 errors; `next build` GREEN (all 6 routes).
 - [x] FIN-024 · P3 · Add CI: `npm test` (incl. the Poseidon parity gate), `cargo test`, `cargo clippy`, circuit pass/fail witnesses. — DONE
   `.github/workflows/ci.yml` (push to `main` + every PR, cancel-in-progress) runs
   three independent jobs, ALL verified green locally before commit:
