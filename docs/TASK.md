@@ -529,4 +529,21 @@ Replace the single-party demo ceremony with a multi-party contribution + transcr
 
 - [x] FIN-022 · P2 · Prover: import ordered public-input builders from `@finnes/sdk`; delete the duplicated `PUBLIC_IO_ORDER` constant. — DONE (folded into FIN-008).
 - [ ] FIN-023 · P3 · Remove `typescript.ignoreBuildErrors` / `eslint.ignoreDuringBuilds` from `frontend/next.config.mjs` once sibling packages typecheck cleanly; rely on per-package `npm run typecheck`.
-- [ ] FIN-024 · P3 · Add CI: `npm test` (incl. the Poseidon parity gate), `cargo test`, `cargo clippy`, circuit pass/fail witnesses.
+- [x] FIN-024 · P3 · Add CI: `npm test` (incl. the Poseidon parity gate), `cargo test`, `cargo clippy`, circuit pass/fail witnesses. — DONE
+  `.github/workflows/ci.yml` (push to `main` + every PR, cancel-in-progress) runs
+  three independent jobs, ALL verified green locally before commit:
+  - **js** — `npm ci` → `npm run typecheck` (sdk+prover) → `npm test` (26 sdk tests
+    incl. the locked **Poseidon-BLS parity vector**, invariant #13).
+  - **contract** — `rustup` (from `rust-toolchain.toml`) → `cargo fmt --all --check`
+    → `cargo clippy --all-targets --workspace -- -D warnings` (warnings = errors per
+    CLAUDE.md) → `cargo test --workspace` (26 passed; real Groth16 verifier vectors).
+  - **circuits** — installs the pinned **circom v2.2.3** linux binary (BLS12-381
+    prime, invariant #1) + repo snarkjs, then runs the 7 circuit↔SDK parity gates
+    (`poseidon|note|merkle|comparator|nonmembership|enc|assets`) and the 3 pass/fail
+    witness gates (`transfer|shield|unshield:witness` — one rejection per constraint
+    class). The gates compile their own small-depth test circuits, so no committed
+    artifacts or ceremony are needed.
+  - **Fixed pre-existing fmt drift** the new gate caught: `lib.rs` + the generated
+    `test_vectors.rs` were not rustfmt-clean (`cargo fmt`); and
+    `scripts/gen-verifier-fixture.ts` now `cargo fmt`s its output so a regeneration
+    can't re-break the gate.

@@ -1,0 +1,105 @@
+name: CI
+
+# FIN-024 — continuous integration gates. Three independent jobs:
+#   js        — typecheck + workspace tests (incl. the locked Poseidon-BLS parity
+#               vector, invariant #13).
+#   contract  — Soroban contract: rustfmt + clippy (warnings = errors, per
+#               CLAUDE.md) + cargo test (real Groth16 verifier vectors).
+#   circuits  — circom↔SDK parity gates + circuit pass/fail witness gates
+#               (every gadget proven to actually constrain).
+#
+# The circuits job installs the circom binary (>= 2.2, BLS12-381 prime support,
+# invariant #1) and uses the repo's snarkjs (hoisted from prover). The
+# parity/witness scripts compile their own small-depth test circuits, so no
+# committed artifacts or trusted-setup ceremony are needed.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  js:
+    name: JS/TS (typecheck + tests, incl. Poseidon parity vector)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Typecheck (sdk + prover)
+        run: npm run typecheck
+      - name: Workspace tests (sdk incl. invariant #13 Poseidon parity gate)
+        run: npm test
+
+  contract:
+    name: Soroban contract (fmt + clippy + test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain (from rust-toolchain.toml)
+        run: |
+          rustup show
+          rustup component add clippy rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts
+      - name: rustfmt (check)
+        run: cargo fmt --all --check
+      - name: clippy (warnings = errors)
+        run: cargo clippy --all-targets --workspace -- -D warnings
+      - name: cargo test
+        run: cargo test --workspace
+
+  circuits:
+    name: Circuits (circom↔SDK parity + pass/fail witnesses)
+    runs-on: ubuntu-latest
+    env:
+      CIRCOM_VERSION: v2.2.3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Install circom ${{ env.CIRCOM_VERSION }} (BLS12-381 prime, invariant #1)
+        run: |
+          # /usr/local/bin is root-owned on hosted runners → download to cwd then sudo mv.
+          curl -fsSL -o circom \
+            "https://github.com/iden3/circom/releases/download/${CIRCOM_VERSION}/circom-linux-amd64"
+          chmod +x circom
+          sudo mv circom /usr/local/bin/circom
+          circom --version
+      - name: Poseidon parity (circuit ↔ SDK, invariant #13)
+        run: npm run poseidon:parity
+      - name: Note commitment / nullifier parity
+        run: npm run note:parity
+      - name: Merkle frontier-transition parity (invariant #12)
+        run: npm run merkle:parity
+      - name: Full-field comparator parity (r-aware AliasCheck)
+        run: npm run comparator:parity
+      - name: IMT non-membership parity (invariants #14/#19)
+        run: npm run nonmembership:parity
+      - name: Auditor/recipient encryption parity (invariant #5)
+        run: npm run enc:parity
+      - name: Assets-registry membership parity (invariants #17/#18)
+        run: npm run assets:parity
+      - name: transfer.circom pass/fail witnesses (one rejection per constraint class)
+        run: npm run transfer:witness
+      - name: shield.circom pass/fail witnesses
+        run: npm run shield:witness
+      - name: unshield.circom pass/fail witnesses (invariant #19)
+        run: npm run unshield:witness

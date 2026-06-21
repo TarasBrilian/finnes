@@ -439,7 +439,11 @@ impl FinnesContract {
     /// `recipient` field (FIN-010, the demo account registry). `unshield` resolves
     /// `pi.recipient` to this address for the SAC payout; the in-circuit proof
     /// binds the recipient's KYC/non-sanction to the same field.
-    pub fn register_transparent(env: Env, recipient: BytesN<32>, addr: Address) -> Result<(), Error> {
+    pub fn register_transparent(
+        env: Env,
+        recipient: BytesN<32>,
+        addr: Address,
+    ) -> Result<(), Error> {
         require_issuer(&env)?;
         state::set_transparent_addr(&env, &recipient, &addr);
         state::bump_instance_ttl(&env);

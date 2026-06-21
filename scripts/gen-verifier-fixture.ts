@@ -19,6 +19,7 @@
 //
 // Run: `npx tsx scripts/gen-verifier-fixture.ts` (npm run verifier:fixture).
 
+import { execSync } from 'node:child_process';
 import { existsSync, writeFileSync, readFileSync } from 'node:fs';
 
 import { buildTransferScenario } from './lib/transfer-scenario.js';
@@ -124,5 +125,14 @@ const out =
   '\n';
 
 writeFileSync(outPath, out);
+
+// Keep the generated file rustfmt-clean so the CI `cargo fmt --check` gate
+// (FIN-024) stays green after a regeneration. Non-fatal if rustfmt is absent.
+try {
+  execSync('cargo fmt --manifest-path contracts/Cargo.toml -p finnes', { stdio: 'inherit' });
+} catch {
+  console.warn('Note: `cargo fmt` did not run; run it on contracts/ before committing.');
+}
+
 console.log(`Wrote ${outPath} (${ic.length} IC points, ${sigs.length} public signals).`);
 console.log('Next: cargo test (FIN-009 verifier tests).');
