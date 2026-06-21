@@ -418,21 +418,44 @@ for real. `fetchStateRoots` must read live contract/indexer state instead of MOC
   (Bank B) — a random key isn't in `kyc_root`. `is_nullifier_used` is read live to
   pick spendable notes; `unshield` spends the one remaining note, `transfer` errors
   honestly (`1 < 2` spendable). `next build` GREEN.
+- **Done (institution balances now LIVE, not a fixture — honesty fix):** the
+  `ConfidentialBalances` panel previously read a static demo ciphertext fixture yet
+  reported `isMock: false` (misleading). `scanConfidentialBalances`
+  (`frontend/lib/finnes-client.ts`) now returns the session identity's **unspent
+  on-chain notes** — new `fetchLiveOwnedNotes()` (`write-flow.ts`) matches each
+  locally-held opening (demo seeds + notes this wallet shielded/kept-as-change) to a
+  live leaf in the contract's event-reconstructed tree (`buildChainTree`, FIN-019)
+  and filters by live `is_nullifier_used`. So the balance shown == exactly what the
+  Transfer/Unshield tabs can spend (no recipient-ciphertext key agreement needed; the
+  wallet holds its own openings). Falls back to the deterministic fixture (real SDK
+  `scanForOwnedNotes` trial-decrypt) ONLY when RPC is unavailable, flagged
+  `isMock: true`; the panel shows a **live on-chain / demo fixture** source chip and
+  honest copy ("Reading your on-chain notes…"). `tsc` adds no new errors (only the
+  pre-existing snarkjs-resolution ones, FIN-023); `next build` GREEN (all routes).
 - **Remaining = operator RUNTIME prerequisites only (no more code for the demo
   path):** (1) place the PRODUCTION D=20 `.zkey` under `public/artifacts/<circuit>/`
   (from the Railway ceremony — the LOCAL `shield.zkey` is a different ceremony and a
   proof from it is rejected on-chain; only the Railway zkeys match the deployed VK);
   (2) connect a funded Testnet Freighter (it signs + pays); (3) `transfer` needs ≥2
-  spendable notes — shield twice first (each shield UI press mints one). Full
-  arbitrary-input UX still wants the real indexer (FIN-019).
+  spendable notes — shield twice first (each shield UI press mints one).
+- **Known gap (not FIN-027 — needs a key-agreement scheme):** cross-party
+  recipient-ciphertext **scan-from-chain** (discovering a note someone ELSE sent you,
+  from only on-chain data) stays parked. The demo recipient ciphertext is keyed by an
+  out-of-band pairwise key that the write-path throws away (`kPair: randFr()`), so an
+  on-chain `c_recipient` is not recipient-recoverable without ECDH/note-encryption
+  keys — a circuit-touching crypto change (RecipientEncCheck is bound in-circuit),
+  tracked with FIN-019/production note encryption. The owned-notes balance path above
+  does NOT depend on it.
 **Deps:** FIN-015, FIN-019 (indexer for paths/roots/ciphertexts; can stub via RPC).
 
-### [ ] FIN-028 · P3 · Fix `scripts/deploy.sh` wasm path + record contract id
-`deploy.sh` looks for `contracts/finnes/target/wasm32-unknown-unknown/release/finnes.wasm`,
+### [x] FIN-028 · P3 · Fix `scripts/deploy.sh` wasm path + record contract id — DONE
+`deploy.sh` looked for `contracts/finnes/target/wasm32-unknown-unknown/release/finnes.wasm`,
 but the cargo **workspace** emits to `contracts/target/`, and Soroban needs the
 **`wasm32v1-none`** target (the `unknown-unknown` build trips
-`reference-types not enabled`). Update `WASM_PATH` to
-`contracts/target/wasm32v1-none/release/finnes.wasm`.
+`reference-types not enabled`).
+- **Done:** `WASM_PATH` now `${ROOT_DIR}/contracts/target/wasm32v1-none/release/finnes.wasm`
+  (verified the artifact exists there, 43086 bytes). Build comment + not-found error
+  message de-staled to point at the workspace target dir. `bash -n scripts/deploy.sh` clean.
 **Deps:** none.
 
 ---
@@ -488,8 +511,11 @@ Indexer (event subscription, off-chain tree reconstruction, ciphertext store), A
 - **Remaining (deferred, not blocking the demo):** a standalone API service
   (paths/roots/ciphertexts over HTTP) and the relayer (fee-bump submission; `fee` is
   0 in demo). The frontend reads RPC directly, so neither is needed for the demo
-  path; institution-side **recipient**-ciphertext scanning from chain still needs the
-  on-chain `c_recipient` key provenance (the balances panel keeps its demo fixture).
+  path. The institution **balances** panel now reads the session's unspent on-chain
+  notes live (FIN-027, owned-by-local-opening); the remaining gap is cross-party
+  **recipient**-ciphertext scanning from chain (discovering a note someone else sent
+  you), which needs an on-chain-recoverable `c_recipient` key (ECDH/note-encryption,
+  not the demo's throwaway pairwise key) — a circuit-touching crypto change.
 
 ### [ ] FIN-020 · P3 · Threshold / multi-auditor view keys
 No single auditor honeypot — split the view key across authorities.

@@ -16,9 +16,11 @@
  * It may fetch PUBLIC data (Merkle paths, roots, ciphertext blobs) from the API,
  * but it MUST NEVER send a witness, a key, or note plaintext to the backend.
  *
- * STATUS (FIN-014/015): the READ paths are REAL over a local demo fixture
- * (`demo-data.ts`, an indexer stand-in) with genuine SDK crypto:
- *   - scanConfidentialBalances → scanForOwnedNotes (real trial-decrypt),
+ * STATUS (FIN-027/019): the READ paths are REAL over LIVE chain state, with a
+ * deterministic demo fixture as an honest fallback when RPC is unavailable:
+ *   - scanConfidentialBalances → the session's unspent on-chain notes (live tree
+ *                                via the indexer + live `is_nullifier_used`),
+ *   - listOnChainTransactions  → indexTransactions (live contract events),
  *   - decryptAuditorView       → discloseTransaction (real auditor decrypt).
  *
  * STATUS (FIN-027, option 2 — in-browser proving): the WRITE-path INFRASTRUCTURE
@@ -65,7 +67,13 @@ import {
 } from './demo-data.js';
 import { indexTransactions } from './indexer.js';
 import { readCurrentRoot, submitInvocation } from './soroban.js';
-import { fetchSpendableUnshield, runShield, runTransfer, runUnshield } from './write-flow.js';
+import {
+  fetchLiveOwnedNotes,
+  fetchSpendableUnshield,
+  runShield,
+  runTransfer,
+  runUnshield,
+} from './write-flow.js';
 
 export { fetchSpendableUnshield };
 
@@ -150,44 +158,63 @@ export interface ConfidentialBalance {
   readonly isMock: boolean;
 }
 
-/**
- * Scan + aggregate the institution's confidential balances.
- *
- * REAL (FIN-014/015): runs the SDK's `scanForOwnedNotes` — trial-decrypts each
- * observed recipient ciphertext with the session's spending key and ACCEPTS a
- * note only when the recomputed Poseidon commitment matches (foreign/garbled
- * ciphertexts are silently skipped). Per-asset figures are never summed across
- * assets (invariant #3/#16). The ciphertext SOURCE is a local demo fixture
- * (`demo-data.ts`, an indexer stand-in, FIN-019); the decryption is genuine.
- *
- * SECURITY (invariant #8): `owner_sk` and recovered plaintext stay in this tab.
- */
-export async function scanConfidentialBalances(
-  spending: SpendingKeypair,
-): Promise<ConfidentialBalance[]> {
-  // Indexer stand-in: ciphertexts the institution would fetch from the backend.
-  const observed = buildDemoOwnedCiphertexts(spending.ownerPk);
-  const discovered = scanForOwnedNotes(observed, {
-    ownerSk: spending.ownerSk,
-    recipientKey: DEMO_PAIRWISE_KEY,
-  });
-
-  // Aggregate per asset (never across assets).
+function aggregateByAsset(
+  notes: readonly { assetId: Fr; value: bigint }[],
+  isMock: boolean,
+): ConfidentialBalance[] {
+  // Aggregate per asset (NEVER summed across assets — invariant #3/#16).
   const byAsset = new Map<Fr, { rawAmount: bigint; noteCount: number }>();
-  for (const d of discovered) {
-    const acc = byAsset.get(d.note.assetId) ?? { rawAmount: 0n, noteCount: 0 };
-    acc.rawAmount += d.note.value;
+  for (const n of notes) {
+    const acc = byAsset.get(n.assetId) ?? { rawAmount: 0n, noteCount: 0 };
+    acc.rawAmount += n.value;
     acc.noteCount += 1;
-    byAsset.set(d.note.assetId, acc);
+    byAsset.set(n.assetId, acc);
   }
-
   return [...byAsset.entries()].map(([assetId, agg]) => ({
     assetId,
     assetLabel: resolveAsset(assetId)?.label ?? `asset ${assetId.toString()}`,
     rawAmount: agg.rawAmount,
     noteCount: agg.noteCount,
-    isMock: false,
+    isMock,
   }));
+}
+
+/**
+ * Scan + aggregate the institution's confidential balances.
+ *
+ * REAL & LIVE (FIN-027): the position is the session identity's unspent on-chain
+ * notes — each note whose Poseidon commitment is a live leaf in the contract's
+ * event-reconstructed tree (FIN-019) and whose nullifier is not yet spent (read
+ * live via `is_nullifier_used`). These are exactly the notes the Transfer/Unshield
+ * tabs can spend, so the balance shown equals what is actually spendable. The
+ * wallet recognises a note by holding its own opening (notes it shielded or kept as
+ * change), so no recipient-ciphertext key agreement is required; cross-party
+ * scan-from-chain stays a key-provenance gap (FIN-019). `isMock: false`.
+ *
+ * FALLBACK: if the indexer/RPC is unavailable, fall back to the deterministic demo
+ * fixture (`demo-data.ts`) via the SDK's genuine `scanForOwnedNotes` trial-decrypt,
+ * flagged `isMock: true` so the UI never misrepresents fixture data as live.
+ *
+ * SECURITY (invariant #8): `owner_sk` and any recovered plaintext stay in this tab.
+ */
+export async function scanConfidentialBalances(
+  spending: SpendingKeypair,
+): Promise<ConfidentialBalance[]> {
+  try {
+    const owned = await fetchLiveOwnedNotes(); // live on-chain, unspent
+    return aggregateByAsset(owned, false);
+  } catch {
+    // Indexer/RPC unavailable → deterministic fixture (real crypto, demo source).
+    const observed = buildDemoOwnedCiphertexts(spending.ownerPk);
+    const discovered = scanForOwnedNotes(observed, {
+      ownerSk: spending.ownerSk,
+      recipientKey: DEMO_PAIRWISE_KEY,
+    });
+    return aggregateByAsset(
+      discovered.map((d) => ({ assetId: d.note.assetId, value: d.note.value })),
+      true,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -19,8 +19,11 @@ NETWORK="${STELLAR_NETWORK:-testnet}"
 # configured `stellar keys` identity (e.g. `stellar keys generate deployer`).
 SOURCE_ACCOUNT="${STELLAR_SOURCE:-deployer}"
 
-# WASM output path (cargo target dir, release profile).
-WASM_PATH="${CONTRACT_DIR}/target/wasm32-unknown-unknown/release/finnes.wasm"
+# WASM output path. The contracts/ cargo WORKSPACE emits to contracts/target/
+# (not contracts/finnes/target/), and Soroban needs the `wasm32v1-none` target —
+# the `wasm32-unknown-unknown` build trips `reference-types not enabled` in the
+# Soroban VM (FIN-028).
+WASM_PATH="${ROOT_DIR}/contracts/target/wasm32v1-none/release/finnes.wasm"
 
 # Where to record the deployed contract id for downstream tooling (demo, SDK).
 DEPLOY_OUT="${ROOT_DIR}/setup/build/deploy.testnet.json"
@@ -46,12 +49,12 @@ echo "Source  : ${SOURCE_ACCOUNT}"
 # --- build ------------------------------------------------------------------
 echo "==> Building contract WASM"
 # Build from within the crate. `stellar contract build` wraps cargo and produces
-# an optimised wasm32-unknown-unknown release artifact.
+# an optimised `wasm32v1-none` release artifact under the workspace target dir.
 ( cd "${CONTRACT_DIR}" && stellar contract build )
 
 if [[ ! -f "${WASM_PATH}" ]]; then
   echo "ERROR: expected WASM not found at ${WASM_PATH}" >&2
-  echo "  TODO: confirm the crate name / output path (finnes.wasm) once Cargo.toml is final." >&2
+  echo "  The contracts/ workspace emits to contracts/target/wasm32v1-none/release/finnes.wasm." >&2
   exit 1
 fi
 echo "    -> ${WASM_PATH}"

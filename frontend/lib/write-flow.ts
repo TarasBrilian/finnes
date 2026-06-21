@@ -108,6 +108,30 @@ export async function fetchSpendableUnshield(): Promise<{ rawAmount: bigint; lea
   return s ? { rawAmount: s.note.value, leafIndex: s.leafIndex, assetLabel: asset.label } : null;
 }
 
+/** One unspent on-chain note the session identity owns: asset, value, live leaf. */
+export interface LiveOwnedNote {
+  readonly assetId: bigint;
+  readonly value: bigint;
+  readonly leafIndex: number;
+}
+
+/**
+ * The session identity's REAL confidential position: every note it owns whose
+ * commitment is a live on-chain leaf (matched by local opening — demo seeds + the
+ * notes this wallet shielded/kept-as-change) and whose nullifier is not yet spent.
+ * These are exactly the notes the Transfer/Unshield tabs can spend, so the balance
+ * shown equals what is actually spendable — no recipient-ciphertext key agreement
+ * needed (the wallet keeps its own openings; cross-party scan-from-chain remains a
+ * key-provenance gap, see FIN-019). LIVE chain data: throws if the indexer/RPC is
+ * unavailable so the caller can fall back honestly.
+ */
+export async function fetchLiveOwnedNotes(): Promise<LiveOwnedNote[]> {
+  const { me } = identity();
+  const chain = await buildChainTree();
+  const unspent = await spendableNotes(me.ownerPk, chain);
+  return unspent.map((s) => ({ assetId: s.note.assetId, value: s.note.value, leafIndex: s.leafIndex }));
+}
+
 /** A spendable note: its opening + the LIVE leaf index (matched on-chain). */
 interface Spendable {
   readonly note: ReturnType<typeof allLiveNotes>[number]['note'];

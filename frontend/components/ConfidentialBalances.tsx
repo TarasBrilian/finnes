@@ -9,19 +9,21 @@ import {
 import type { SpendingKeypair } from '@/lib/keys';
 
 /**
- * The institution's confidential position - discovered by scanning on-chain
- * ciphertexts with the viewing key (ARCHITECTURE.md → Frontend). Rendered as the
- * dashboard's primary anchor: a deep navy panel with large per-asset figures.
- * The institution sees only its OWN notes.
+ * The institution's confidential position — its unspent notes on the live
+ * commitment tree (ARCHITECTURE.md → Frontend). Rendered as the dashboard's
+ * primary anchor: a deep navy panel with large per-asset figures. The institution
+ * sees only its OWN notes.
  *
- * REAL (FIN-014/015): balances come from the SDK's scanForOwnedNotes — a genuine
- * trial-decrypt + commitment re-derivation over a local demo ciphertext fixture
- * (indexer stand-in). Per-asset figures are NOT summed across assets (invariant
- * #3 spirit - no cross-asset total).
+ * REAL & LIVE (FIN-027/019): balances are the session identity's unspent on-chain
+ * notes — commitments present in the contract's event-reconstructed tree and not
+ * yet nullified (read live), i.e. exactly what the Transfer/Unshield tabs can
+ * spend. Per-asset figures are NOT summed across assets (invariant #3/#16). Falls
+ * back to a deterministic demo fixture (flagged "Demo") only if RPC is unavailable.
  */
 export function ConfidentialBalances({ spending }: { spending: SpendingKeypair | null }) {
   const [balances, setBalances] = useState<ConfidentialBalance[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const isMock = balances?.some((b) => b.isMock) ?? false;
 
   useEffect(() => {
     if (!spending) {
@@ -58,28 +60,33 @@ export function ConfidentialBalances({ spending }: { spending: SpendingKeypair |
           <span className="eyebrow-light">Confidential position</span>
           {spending && balances && balances.length > 0 && (
             <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-medium text-blue-100/80">
-              <span aria-hidden="true" className="inline-block h-1.5 w-1.5 animate-glowpulse rounded-full bg-accent" />
+              <span
+                aria-hidden="true"
+                className={`inline-block h-1.5 w-1.5 rounded-full ${isMock ? 'bg-amber-300' : 'animate-glowpulse bg-accent'}`}
+              />
               {balances.length} asset{balances.length === 1 ? '' : 's'} · {totalNotes} note
-              {totalNotes === 1 ? '' : 's'} · scanned client-side
+              {totalNotes === 1 ? '' : 's'} · {isMock ? 'demo fixture (RPC offline)' : 'live on-chain'}
             </span>
           )}
         </div>
 
         {!spending && (
           <p className="mt-5 max-w-md text-sm text-blue-100/80">
-            Generate a shielded key to scan on-chain ciphertexts and reveal the notes you own.
+            Generate a shielded key to load your unspent notes on the live commitment tree.
           </p>
         )}
 
         {spending && loading && (
           <p className="mt-5 flex items-center gap-2 text-sm text-blue-100/80">
             <span aria-hidden="true" className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-200/40 border-t-accent" />
-            Trial-decrypting ciphertexts…
+            Reading your on-chain notes…
           </p>
         )}
 
         {spending && balances && balances.length === 0 && (
-          <p className="mt-5 text-sm text-blue-100/80">No owned notes discovered.</p>
+          <p className="mt-5 text-sm text-blue-100/80">
+            No unspent notes on-chain yet. Shield a deposit to mint your first confidential note.
+          </p>
         )}
 
         {spending && balances && balances.length > 0 && (
@@ -106,9 +113,10 @@ export function ConfidentialBalances({ spending }: { spending: SpendingKeypair |
         )}
 
         <p className="relative mt-7 max-w-2xl border-t border-white/10 pt-4 text-[11px] leading-relaxed text-blue-200/60">
-          Discovered by trial-decrypting on-chain ciphertexts client-side. Amounts are raw SAC units
-          formatted with display decimals; the ZK layer never rescales (invariant #16). Balances are
-          per-asset and never summed across assets.
+          Your unspent notes on the live commitment tree — each commitment present on-chain and not
+          yet nullified, matched client-side to a note you hold. Amounts are raw SAC units formatted
+          with display decimals; the ZK layer never rescales (invariant #16). Balances are per-asset
+          and never summed across assets.
         </p>
       </div>
     </section>
