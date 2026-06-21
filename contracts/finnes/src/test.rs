@@ -20,8 +20,8 @@ use soroban_sdk::{Address, BytesN, Env, Vec};
 use crate::errors::Error;
 use crate::sac;
 use crate::types::{
-    InitConfig, Proof, Root, Scalar, ShieldPublicInputs, TransferPublicInputs,
-    UnshieldPublicInputs, VerifyingKey, TREE_DEPTH,
+    DvpPublicInputs, EscrowLegPublicInputs, InitConfig, IntentRecord, Proof, Root, Scalar,
+    ShieldPublicInputs, TransferPublicInputs, UnshieldPublicInputs, VerifyingKey, TREE_DEPTH,
 };
 use crate::{FinnesContract, FinnesContractClient};
 
@@ -98,6 +98,8 @@ fn setup(env: &Env) -> (FinnesContractClient<'static>, Address, Address) {
         vk_transfer: dummy_vk(env),
         vk_unshield: dummy_vk(env),
         vk_dvp: dummy_vk(env),
+        vk_escrow_deposit: dummy_vk(env),
+        vk_escrow_refund: dummy_vk(env),
     };
     client.init(&cfg);
 
@@ -136,6 +138,8 @@ fn double_init_rejected() {
         vk_transfer: dummy_vk(&env),
         vk_unshield: dummy_vk(&env),
         vk_dvp: dummy_vk(&env),
+        vk_escrow_deposit: dummy_vk(&env),
+        vk_escrow_refund: dummy_vk(&env),
     };
     client.init(&cfg);
 }
@@ -769,4 +773,221 @@ fn register_asset_emits_event_for_the_indexer() {
             ),
         ]
     );
+}
+
+// ---------------------------------------------------------------------------
+// Production escrow DvP (FIN-017) — intent state machine + ordered gates.
+// The full verify path needs a real D=20 proof (ceremony friction, like the
+// other entrypoints); these cover create/deposit/settle/refund pre-proof gates.
+// A call that passes ALL pre-proof gates reaches the verifier and returns
+// VerifyingKeyArityMismatch with the dummy VK — proving the gates accepted.
+// ---------------------------------------------------------------------------
+
+/// A 61-signal escrow-leg PI whose roots match `setup` state so a deposit reaches
+/// the verifier; `cm_out_0` selects the leg / triggers the mismatch path.
+fn escrow_pi(env: &Env, anchor: u8, cm_out_0: BytesN<32>) -> EscrowLegPublicInputs {
+    let mut ct: Vec<Scalar> = Vec::new(env);
+    for _ in 0..5u32 {
+        ct.push_back(zero32(env));
+    }
+    EscrowLegPublicInputs {
+        anchor_root: tagged32(env, anchor),
+        kyc_root: tagged32(env, 0x01),
+        sanction_root: tagged32(env, 0x02),
+        assets_root: tagged32(env, 0x03),
+        frozen_root: tagged32(env, 0x04),
+        auditor_pk: tagged32(env, 0xAA),
+        nf_in_0: tagged32(env, 0x91),
+        cm_out_0,
+        new_root: tagged32(env, 0x33),
+        fee: zero32(env),
+        next_index: zero32(env), // escrow tree leaf count == 0 (deposit) / main for refund
+        old_frontier: empty_frontier(env),
+        new_frontier: empty_frontier(env),
+        c_auditor: ct.clone(),
+        c_recipient: ct,
+    }
+}
+
+/// An intent with the given deadline; escrow/swap/refund commitments are tagged
+/// so tests can match or mismatch them.
+fn intent_with_deadline(env: &Env, deadline: u32) -> IntentRecord {
+    IntentRecord {
+        deadline,
+        settled: false,
+        escrow_a_cm: tagged32(env, 0xE1),
+        escrow_b_cm: tagged32(env, 0xE2),
+        out_a_cm: tagged32(env, 0xA1),
+        out_b_cm: tagged32(env, 0xB1),
+        refund_a_cm: tagged32(env, 0xF1),
+        refund_b_cm: tagged32(env, 0xF2),
+        deposited_a: false,
+        deposited_b: false,
+        refunded_a: false,
+        refunded_b: false,
+    }
+}
+
+#[test]
+fn create_intent_rejects_past_deadline() {
+    let env = Env::default();
+    let (client, _admin, _issuer) = setup(&env);
+    let a = Address::generate(&env);
+    let b = Address::generate(&env);
+    let id = tagged32(&env, 0xC1);
+    // Env::default() ledger sequence is 0; deadline 0 is not in the future.
+    let res = client.try_create_intent(&a, &b, &id, &intent_with_deadline(&env, 0));
+    assert_eq!(res, Err(Ok(Error::DeadlineInPast)));
+}
+
+#[test]
+fn create_intent_rejects_duplicate() {
+    let env = Env::default();
+    let (client, _admin, _issuer) = setup(&env);
+    let a = Address::generate(&env);
+    let b = Address::generate(&env);
+    let id = tagged32(&env, 0xC2);
+    client.create_intent(&a, &b, &id, &intent_with_deadline(&env, 100));
+    let res = client.try_create_intent(&a, &b, &id, &intent_with_deadline(&env, 100));
+    assert_eq!(res, Err(Ok(Error::IntentExists)));
+}
+
+#[test]
+fn escrow_deposit_wrong_commitment_rejected() {
+    let env = Env::default();
+    let (client, _admin, _issuer) = setup(&env);
+    let (a, b, id) = (
+        Address::generate(&env),
+        Address::generate(&env),
+        tagged32(&env, 0xC3),
+    );
+    client.create_intent(&a, &b, &id, &intent_with_deadline(&env, 100));
+    // cm_out_0 matches neither escrow_a_cm (0xE1) nor escrow_b_cm (0xE2).
+    let pi = escrow_pi(&env, 0x10, tagged32(&env, 0xDD));
+    let res = client.try_escrow_deposit(&a, &id, &dummy_proof(&env), &pi);
+    assert_eq!(res, Err(Ok(Error::EscrowCmMismatch)));
+}
+
+#[test]
+fn escrow_deposit_leg_a_passes_gates_then_hits_verifier() {
+    let env = Env::default();
+    let (client, _admin, _issuer) = setup(&env);
+    let (a, b, id) = (
+        Address::generate(&env),
+        Address::generate(&env),
+        tagged32(&env, 0xC4),
+    );
+    client.create_intent(&a, &b, &id, &intent_with_deadline(&env, 100));
+    // cm_out_0 == escrow_a_cm (0xE1), anchor in the MAIN window, roots match state,
+    // escrow old_frontier/next_index match the (empty) escrow tree => reaches verify.
+    let pi = escrow_pi(&env, 0x10, tagged32(&env, 0xE1));
+    let res = client.try_escrow_deposit(&a, &id, &dummy_proof(&env), &pi);
+    assert_eq!(res, Err(Ok(Error::VerifyingKeyArityMismatch)));
+}
+
+#[test]
+fn escrow_deposit_unknown_anchor_rejected() {
+    let env = Env::default();
+    let (client, _admin, _issuer) = setup(&env);
+    let (a, b, id) = (
+        Address::generate(&env),
+        Address::generate(&env),
+        tagged32(&env, 0xC5),
+    );
+    client.create_intent(&a, &b, &id, &intent_with_deadline(&env, 100));
+    // Correct leg cm, but a stale anchor not in the MAIN recent-roots window.
+    let pi = escrow_pi(&env, 0x77, tagged32(&env, 0xE1));
+    let res = client.try_escrow_deposit(&a, &id, &dummy_proof(&env), &pi);
+    assert_eq!(res, Err(Ok(Error::UnknownAnchorRoot)));
+}
+
+#[test]
+fn settle_requires_both_deposits() {
+    let env = Env::default();
+    let (client, _admin, _issuer) = setup(&env);
+    let (a, b, id) = (
+        Address::generate(&env),
+        Address::generate(&env),
+        tagged32(&env, 0xC6),
+    );
+    client.create_intent(&a, &b, &id, &intent_with_deadline(&env, 100));
+    // Fresh intent: neither leg deposited => NotFullyDeposited before any PI checks.
+    let mut ct: Vec<Scalar> = Vec::new(&env);
+    for _ in 0..10u32 {
+        ct.push_back(zero32(&env));
+    }
+    let pi = DvpPublicInputs {
+        anchor_root: tagged32(&env, 0x10),
+        kyc_root: tagged32(&env, 0x01),
+        sanction_root: tagged32(&env, 0x02),
+        assets_root: tagged32(&env, 0x03),
+        frozen_root: tagged32(&env, 0x04),
+        auditor_pk: tagged32(&env, 0xAA),
+        nf_leg_x_0: tagged32(&env, 0x95),
+        nf_leg_y_0: tagged32(&env, 0x96),
+        cm_out_x: tagged32(&env, 0xB1),
+        cm_out_y: tagged32(&env, 0xA1),
+        new_root: tagged32(&env, 0x33),
+        fee_x: zero32(&env),
+        fee_y: zero32(&env),
+        next_index: zero32(&env),
+        old_frontier: empty_frontier(&env),
+        new_frontier: empty_frontier(&env),
+        c_auditor_x: ct.clone(),
+        c_auditor_y: ct.clone(),
+        c_recipient_x: ct.clone(),
+        c_recipient_y: ct,
+    };
+    let res = client.try_settle_intent(&id, &dummy_proof(&env), &pi);
+    assert_eq!(res, Err(Ok(Error::NotFullyDeposited)));
+}
+
+#[test]
+fn settle_unknown_intent_rejected() {
+    let env = Env::default();
+    let (client, _admin, _issuer) = setup(&env);
+    let mut ct: Vec<Scalar> = Vec::new(&env);
+    for _ in 0..10u32 {
+        ct.push_back(zero32(&env));
+    }
+    let pi = DvpPublicInputs {
+        anchor_root: tagged32(&env, 0x10),
+        kyc_root: tagged32(&env, 0x01),
+        sanction_root: tagged32(&env, 0x02),
+        assets_root: tagged32(&env, 0x03),
+        frozen_root: tagged32(&env, 0x04),
+        auditor_pk: tagged32(&env, 0xAA),
+        nf_leg_x_0: tagged32(&env, 0x95),
+        nf_leg_y_0: tagged32(&env, 0x96),
+        cm_out_x: tagged32(&env, 0xB1),
+        cm_out_y: tagged32(&env, 0xA1),
+        new_root: tagged32(&env, 0x33),
+        fee_x: zero32(&env),
+        fee_y: zero32(&env),
+        next_index: zero32(&env),
+        old_frontier: empty_frontier(&env),
+        new_frontier: empty_frontier(&env),
+        c_auditor_x: ct.clone(),
+        c_auditor_y: ct.clone(),
+        c_recipient_x: ct.clone(),
+        c_recipient_y: ct,
+    };
+    let res = client.try_settle_intent(&tagged32(&env, 0xEE), &dummy_proof(&env), &pi);
+    assert_eq!(res, Err(Ok(Error::IntentNotFound)));
+}
+
+#[test]
+fn refund_before_deadline_rejected() {
+    let env = Env::default();
+    let (client, _admin, _issuer) = setup(&env);
+    let (a, b, id) = (
+        Address::generate(&env),
+        Address::generate(&env),
+        tagged32(&env, 0xC7),
+    );
+    // Deadline 100; current ledger sequence is 0 => refund is premature.
+    client.create_intent(&a, &b, &id, &intent_with_deadline(&env, 100));
+    let pi = escrow_pi(&env, 0x10, tagged32(&env, 0xF1)); // refund_a_cm
+    let res = client.try_escrow_refund(&a, &id, &dummy_proof(&env), &pi);
+    assert_eq!(res, Err(Ok(Error::DeadlineNotReached)));
 }

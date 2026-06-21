@@ -17,7 +17,7 @@
 use soroban_sdk::{Env, Vec};
 
 use crate::errors::Error;
-use crate::state::{self, RECENT_ROOTS_CAPACITY};
+use crate::state::{self, Tree, RECENT_ROOTS_CAPACITY};
 use crate::types::{Root, Scalar, TREE_DEPTH};
 
 /// Check that the prover-supplied `old_frontier` matches stored state exactly.
@@ -29,11 +29,15 @@ use crate::types::{Root, Scalar, TREE_DEPTH};
 /// Length must be exactly `TREE_DEPTH`. On any mismatch returns
 /// `Error::MalformedPublicInputs` (wrong length) - the equality failure itself
 /// is surfaced as `false`/error by the caller's flow. We do not `unwrap`.
-pub fn check_old_frontier(env: &Env, old_frontier: &Vec<Scalar>) -> Result<bool, Error> {
+pub fn check_old_frontier(
+    env: &Env,
+    tree: Tree,
+    old_frontier: &Vec<Scalar>,
+) -> Result<bool, Error> {
     if old_frontier.len() != TREE_DEPTH {
         return Err(Error::MalformedPublicInputs);
     }
-    let stored = match state::get_frontier(env) {
+    let stored = match state::get_frontier(env, tree) {
         Some(f) => f,
         // No frontier yet means the contract is uninitialised for tree ops.
         None => return Err(Error::NotInitialized),
@@ -63,6 +67,7 @@ pub fn check_old_frontier(env: &Env, old_frontier: &Vec<Scalar>) -> Result<bool,
 /// verified the Groth16 proof, per the ordered flow in `lib.rs` (invariant #9).
 pub fn apply_transition(
     env: &Env,
+    tree: Tree,
     new_frontier: &Vec<Scalar>,
     new_root: &Root,
     n_inserts: u32,
@@ -71,10 +76,10 @@ pub fn apply_transition(
         return Err(Error::MalformedPublicInputs);
     }
     // Store verbatim - NO hashing.
-    state::set_frontier(env, new_frontier);
-    state::set_tree_root(env, new_root);
-    push_recent_root(env, new_root);
-    state::advance_leaf_count(env, n_inserts);
+    state::set_frontier(env, tree, new_frontier);
+    state::set_tree_root(env, tree, new_root);
+    push_recent_root(env, tree, new_root);
+    state::advance_leaf_count(env, tree, n_inserts);
     Ok(())
 }
 
@@ -83,8 +88,8 @@ pub fn apply_transition(
 /// Used for `anchor_root`. The compliance roots that are *windowed*
 /// (kyc/sanction/assets) use their own freshness policy in `lib.rs`; this helper
 /// is specifically the commitment-tree anchor window.
-pub fn is_recent_root(env: &Env, candidate: &Root) -> bool {
-    match state::get_recent_roots(env) {
+pub fn is_recent_root(env: &Env, tree: Tree, candidate: &Root) -> bool {
+    match state::get_recent_roots(env, tree) {
         Some(roots) => {
             for r in roots.iter() {
                 if &r == candidate {
@@ -100,11 +105,11 @@ pub fn is_recent_root(env: &Env, candidate: &Root) -> bool {
 /// Push `root` onto the recent-roots ring buffer, evicting the oldest entry once
 /// `RECENT_ROOTS_CAPACITY` is reached. Order is oldest-first; eviction drops
 /// index 0.
-fn push_recent_root(env: &Env, root: &Root) {
-    let mut roots = state::get_recent_roots(env).unwrap_or_else(|| Vec::new(env));
+fn push_recent_root(env: &Env, tree: Tree, root: &Root) {
+    let mut roots = state::get_recent_roots(env, tree).unwrap_or_else(|| Vec::new(env));
     roots.push_back(root.clone());
     while roots.len() > RECENT_ROOTS_CAPACITY {
         roots.remove(0);
     }
-    state::set_recent_roots(env, &roots);
+    state::set_recent_roots(env, tree, &roots);
 }

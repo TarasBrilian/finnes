@@ -496,7 +496,7 @@ Two-leg combined circuit (demo single-witness, labelled non-production). Consent
   stays FIN-017. Binding a nonce + output commitments into the `require_auth` payload is a
   remaining hardening TODO in `settle_dvp`.
 
-### [~] FIN-017 · P3 · Production DvP via escrow — DESIGN (Phase A) + CIRCUITS/GATES (Phase B) DONE; contract/ceremony/on-chain deferred
+### [~] FIN-017 · P3 · Production DvP via escrow — DESIGN (A) + CIRCUITS/GATES (B) + CONTRACT (C) DONE; ceremony/on-chain (D) deferred
 Escrow / two-phase settlement (each party single-party-spends into an intent-owned escrow note; settlement spends both and mints swapped outputs). Atomic-via-escrow with timeout refund.
 - **Done (Phase A — design):** `docs/DVP_ESCROW.md` specifies the model (create_intent
   → escrow_deposit×2 → settle / timeout refund), the crux decisions (fresh shared
@@ -513,11 +513,23 @@ Escrow / two-phase settlement (each party single-party-spends into an intent-own
   `buildEscrowLegWitness`; `npm run escrow:witness` (added to CI) drives depth-6
   harnesses: valid accepted + one rejection per constraint class (#3/#5/#12/#14/#19) — 9/9.
   `npm run typecheck` clean.
-- **Deferred (Phases C/D — substantial, re-touches the deployed contract):** the escrow
-  commitment tree + `Intent` state machine + 4 entrypoints (`create_intent` /
-  `escrow_deposit` / `settle_intent` / `escrow_refund`) with timelock + dual-`require_auth`
-  + `cargo` tests (Phase C); the per-circuit D=20 ceremony + a fresh contract redeploy +
-  live escrow DvP on testnet (Phase D, Railway). Tracked in `docs/DVP_ESCROW.md`.
+- **Done (Phase C — contract, `cargo test` 34 / clippy clean / wasm builds):** the
+  `Tree{Main,Escrow}` selector refactor (`state.rs` + `merkle.rs`; all 4 existing
+  entrypoints pass `Tree::Main`, 26 prior tests still green), the `IntentRecord` state
+  machine (`DataKey::Intent`), `EscrowLegPublicInputs` (61 signals, shared by
+  deposit/refund), and the 4 entrypoints: `create_intent` (dual `require_auth` +
+  future-deadline), `escrow_deposit` (leg derived from `cm_out_0`; spends MAIN, inserts
+  ESCROW), `settle_intent` (both deposited + `now<deadline` + swap-output pin; reuses
+  `vk_dvp`; inserts MAIN ×2), `escrow_refund` (`now>=deadline`; inserts MAIN ×1). Plus
+  `Circuit::{EscrowDeposit,EscrowRefund}` VKs (init stores empty placeholders until D),
+  4 events, 9 errors. Domain separation = per-tree recent-roots windows (an escrow note
+  can't be spent by `confidential_transfer`). 8 new tests cover the pre-proof gates
+  (past/duplicate deadline, wrong-cm, leg-a-reaches-verifier, unknown-anchor,
+  not-fully-deposited, unknown-intent, refund-before-deadline). `gen-init-config.ts`
+  carries the two new VK placeholders.
+- **Deferred (Phase D — Railway/redeploy):** per-circuit D=20 ceremony (escrow_deposit /
+  escrow_refund VKs; settle reuses vk_dvp) → wire real VKs into `init` → fresh redeploy +
+  live escrow DvP on testnet. Same procedure as transfer/dvp. Tracked in `docs/DVP_ESCROW.md`.
 
 ### [~] FIN-018 · P3 · Clawback / freeze flow + UI — FREEZE FLOW + UI DONE; recovery-mint deferred
 Frozen-commitment set management; two-phase two-key (auditor identifies `cm_target`, issuer freezes + mints recovery note); optional dual-signature freeze tx (invariant #14). Frontend freeze/clawback panel.

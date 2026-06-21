@@ -41,10 +41,10 @@ mod test_vectors;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env};
 
 use crate::errors::Error;
-use crate::state::RECENT_ROOTS_CAPACITY;
+use crate::state::{Tree, RECENT_ROOTS_CAPACITY};
 use crate::types::{
-    Circuit, DvpPublicInputs, InitConfig, Proof, Root, Scalar, ShieldPublicInputs,
-    TransferPublicInputs, UnshieldPublicInputs, TREE_DEPTH,
+    Circuit, DvpPublicInputs, EscrowLegPublicInputs, InitConfig, IntentRecord, Proof, Root, Scalar,
+    ShieldPublicInputs, TransferPublicInputs, UnshieldPublicInputs, TREE_DEPTH,
 };
 
 #[contract]
@@ -81,18 +81,23 @@ impl FinnesContract {
         state::set_assets_root(&env, &cfg.assets_root);
         state::set_frozen_root(&env, &cfg.frozen_root);
 
-        // Seed the commitment tree (empty-tree frontier/root) and the anchor ring.
-        state::set_frontier(&env, &cfg.initial_frontier);
-        state::set_tree_root(&env, &cfg.initial_root);
-        state::init_recent_roots(&env, &cfg.initial_root);
-        // Empty tree => 0 leaves. Advanced on every successful tree mutation and
-        // checked against each circuit's `next_index` public input.
-        state::set_leaf_count(&env, 0);
+        // Seed BOTH commitment trees (MAIN + ESCROW) with the empty-tree
+        // frontier/root + anchor ring. A fresh tree of the same depth has an
+        // identical empty frontier/root, so the escrow tree reuses cfg.initial_*
+        // (FIN-017). Each tree has its own leaf count + recent-roots window.
+        for tree in [Tree::Main, Tree::Escrow] {
+            state::set_frontier(&env, tree, &cfg.initial_frontier);
+            state::set_tree_root(&env, tree, &cfg.initial_root);
+            state::init_recent_roots(&env, tree, &cfg.initial_root);
+            state::set_leaf_count(&env, tree, 0);
+        }
 
         state::set_vk(&env, Circuit::Shield, &cfg.vk_shield);
         state::set_vk(&env, Circuit::Transfer, &cfg.vk_transfer);
         state::set_vk(&env, Circuit::Unshield, &cfg.vk_unshield);
         state::set_vk(&env, Circuit::Dvp, &cfg.vk_dvp);
+        state::set_vk(&env, Circuit::EscrowDeposit, &cfg.vk_escrow_deposit);
+        state::set_vk(&env, Circuit::EscrowRefund, &cfg.vk_escrow_refund);
 
         state::bump_instance_ttl(&env);
         Ok(())
@@ -132,10 +137,10 @@ impl FinnesContract {
         // 1'. Tree transition: old_frontier must equal state, and next_index must
         //     equal the stored leaf count so the in-circuit FrontierTransition
         //     inserts the new leaf at the true append position (#11/#12, FIN-012).
-        if !merkle::check_old_frontier(&env, &pi.old_frontier)? {
+        if !merkle::check_old_frontier(&env, Tree::Main, &pi.old_frontier)? {
             return Err(Error::UnknownAnchorRoot);
         }
-        check_next_index(&env, &pi.next_index)?;
+        check_next_index(&env, Tree::Main, &pi.next_index)?;
 
         // 4. Verify Groth16 (binds c_auditor - mandatory, invariant #5).
         let vk = state::get_vk(&env, Circuit::Shield).ok_or(Error::VerifyingKeyMissing)?;
@@ -147,7 +152,7 @@ impl FinnesContract {
         //    insufficient balance) the whole tx reverts atomically - no note is
         //    minted for value that never arrived (FIN-010).
         sac::pull_deposit(&env, &pi.asset_id, &depositor, &pi.amount)?;
-        merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root, 1)?;
+        merkle::apply_transition(&env, Tree::Main, &pi.new_frontier, &pi.new_root, 1)?;
         state::bump_instance_ttl(&env);
         events::shield(
             &env,
@@ -174,7 +179,7 @@ impl FinnesContract {
         ensure_initialized(&env)?;
 
         // 1. Validate anchor root (recent-roots window).
-        if !merkle::is_recent_root(&env, &pi.anchor_root) {
+        if !merkle::is_recent_root(&env, Tree::Main, &pi.anchor_root) {
             return Err(Error::UnknownAnchorRoot);
         }
 
@@ -195,10 +200,10 @@ impl FinnesContract {
         // 1'. Tree transition input: old_frontier must equal state, and
         //     next_index must equal the stored leaf count so the in-circuit
         //     FrontierTransition inserts at the true append position (#11/#12).
-        if !merkle::check_old_frontier(&env, &pi.old_frontier)? {
+        if !merkle::check_old_frontier(&env, Tree::Main, &pi.old_frontier)? {
             return Err(Error::UnknownAnchorRoot);
         }
-        check_next_index(&env, &pi.next_index)?;
+        check_next_index(&env, Tree::Main, &pi.next_index)?;
 
         // 4. Verify the single Groth16 proof. This binds the auditor/recipient
         //    ciphertexts (public inputs, invariant #5) and proves frozen-set
@@ -212,7 +217,7 @@ impl FinnesContract {
         //    for the indexer.
         state::insert_nullifier(&env, &pi.nf_in_0);
         state::insert_nullifier(&env, &pi.nf_in_1);
-        merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root, 2)?;
+        merkle::apply_transition(&env, Tree::Main, &pi.new_frontier, &pi.new_root, 2)?;
         state::bump_instance_ttl(&env);
         events::transfer(
             &env,
@@ -256,7 +261,7 @@ impl FinnesContract {
         party_b.require_auth();
 
         // 1. Anchor root window.
-        if !merkle::is_recent_root(&env, &pi.anchor_root) {
+        if !merkle::is_recent_root(&env, Tree::Main, &pi.anchor_root) {
             return Err(Error::UnknownAnchorRoot);
         }
 
@@ -276,10 +281,10 @@ impl FinnesContract {
 
         // 1'. Tree transition input: frontier + next_index pinned to state
         // (invariants #11/#12; FIN-016 — dvp.circom now exposes next_index).
-        if !merkle::check_old_frontier(&env, &pi.old_frontier)? {
+        if !merkle::check_old_frontier(&env, Tree::Main, &pi.old_frontier)? {
             return Err(Error::UnknownAnchorRoot);
         }
-        check_next_index(&env, &pi.next_index)?;
+        check_next_index(&env, Tree::Main, &pi.next_index)?;
 
         // 4. ONE Groth16 proof for both legs (invariant #7 - never two).
         let vk = state::get_vk(&env, Circuit::Dvp).ok_or(Error::VerifyingKeyMissing)?;
@@ -288,7 +293,7 @@ impl FinnesContract {
         // 5. Effects. Two output notes (one per leg) => advance leaf count by 2.
         state::insert_nullifier(&env, &pi.nf_leg_x_0);
         state::insert_nullifier(&env, &pi.nf_leg_y_0);
-        merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root, 2)?;
+        merkle::apply_transition(&env, Tree::Main, &pi.new_frontier, &pi.new_root, 2)?;
         state::bump_instance_ttl(&env);
         events::dvp(
             &env,
@@ -318,7 +323,7 @@ impl FinnesContract {
         ensure_initialized(&env)?;
 
         // 1. Anchor root window.
-        if !merkle::is_recent_root(&env, &pi.anchor_root) {
+        if !merkle::is_recent_root(&env, Tree::Main, &pi.anchor_root) {
             return Err(Error::UnknownAnchorRoot);
         }
 
@@ -348,10 +353,10 @@ impl FinnesContract {
         // 1'. Tree transition input: old_frontier == state, and next_index ==
         //     leaf count (the in-circuit FrontierTransition anchors the change
         //     insert - or the no-change no-op - at the true append index, #11/#12).
-        if !merkle::check_old_frontier(&env, &pi.old_frontier)? {
+        if !merkle::check_old_frontier(&env, Tree::Main, &pi.old_frontier)? {
             return Err(Error::UnknownAnchorRoot);
         }
-        check_next_index(&env, &pi.next_index)?;
+        check_next_index(&env, Tree::Main, &pi.next_index)?;
 
         // 4. Verify the single Groth16 proof (binds change-note ciphertext +
         //    frozen non-membership + recipient compliance).
@@ -369,7 +374,7 @@ impl FinnesContract {
         } else {
             1
         };
-        merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root, n_inserts)?;
+        merkle::apply_transition(&env, Tree::Main, &pi.new_frontier, &pi.new_root, n_inserts)?;
         // Transparent payout: move the real SAC token contract -> recipient for the
         // revealed (asset_id, amount). Atomic with the rest of the tx (FIN-010).
         sac::pay_out(&env, &pi.asset_id, &recipient_addr, &pi.amount)?;
@@ -500,16 +505,16 @@ impl FinnesContract {
         check_kyc_root(&env, &pi.kyc_root)?;
         check_assets_root(&env, &pi.assets_root)?;
         check_auditor_pk(&env, &pi.auditor_pk)?;
-        if !merkle::check_old_frontier(&env, &pi.old_frontier)? {
+        if !merkle::check_old_frontier(&env, Tree::Main, &pi.old_frontier)? {
             return Err(Error::UnknownAnchorRoot);
         }
         // Pin the recovery mint's insert position to state (#11/#12, FIN-012);
         // it reuses the shield circuit, which exposes `next_index`.
-        check_next_index(&env, &pi.next_index)?;
+        check_next_index(&env, Tree::Main, &pi.next_index)?;
         let vk = state::get_vk(&env, Circuit::Shield).ok_or(Error::VerifyingKeyMissing)?;
         verifier::verify_groth16(&env, &vk, &proof, &pi.to_scalars(&env))?;
         // Recovery mints one note => advance leaf count by 1.
-        merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root, 1)?;
+        merkle::apply_transition(&env, Tree::Main, &pi.new_frontier, &pi.new_root, 1)?;
         state::bump_instance_ttl(&env);
         events::recovery(&env, &pi.cm_out_0, &pi.new_root);
         Ok(())
@@ -522,10 +527,269 @@ impl FinnesContract {
     }
 
     // -----------------------------------------------------------------------
+    // Production escrow DvP (FIN-017). create_intent -> escrow_deposit x2 ->
+    // settle_intent / (timeout) escrow_refund. See docs/DVP_ESCROW.md. settle
+    // reuses the dvp circuit/VK; deposit/refund use the EscrowDeposit/EscrowRefund
+    // VKs. Domain separation: deposit spends from MAIN + inserts into ESCROW;
+    // settle/refund spend from ESCROW (anchor in the ESCROW window) + insert into
+    // MAIN. An escrow note's only valid anchor is an escrow root, so
+    // confidential_transfer (MAIN window) can never consume it.
+    // -----------------------------------------------------------------------
+
+    /// Phase 1: register a settlement intent. BOTH parties `require_auth` over the
+    /// concrete intent (all six commitments + deadline), binding consent to *this*
+    /// swap (invariant #15). `deadline` is a ledger sequence in the future.
+    pub fn create_intent(
+        env: Env,
+        party_a: Address,
+        party_b: Address,
+        intent_id: BytesN<32>,
+        record: IntentRecord,
+    ) -> Result<(), Error> {
+        ensure_initialized(&env)?;
+        party_a.require_auth();
+        party_b.require_auth();
+        if state::intent_exists(&env, &intent_id) {
+            return Err(Error::IntentExists);
+        }
+        if record.deadline <= env.ledger().sequence() {
+            return Err(Error::DeadlineInPast);
+        }
+        // Stored as freshly-opened: deposits/settle/refund flip the flags below.
+        let mut r = record;
+        r.settled = false;
+        r.deposited_a = false;
+        r.deposited_b = false;
+        r.refunded_a = false;
+        r.refunded_b = false;
+        state::set_intent(&env, &intent_id, &r);
+        state::bump_instance_ttl(&env);
+        events::intent_created(&env, &intent_id, r.deadline);
+        Ok(())
+    }
+
+    /// Phase 1: a party escrows its own note. Spends a MAIN-tree note (its own key)
+    /// and inserts an ESCROW note owned by the intent. The leg (A/B) is derived
+    /// from which expected escrow commitment `cm_out_0` matches.
+    pub fn escrow_deposit(
+        env: Env,
+        depositor: Address,
+        intent_id: BytesN<32>,
+        proof: Proof,
+        pi: EscrowLegPublicInputs,
+    ) -> Result<(), Error> {
+        ensure_initialized(&env)?;
+        depositor.require_auth();
+
+        let mut intent = state::get_intent(&env, &intent_id).ok_or(Error::IntentNotFound)?;
+        if intent.settled {
+            return Err(Error::IntentSettled);
+        }
+        // Derive the leg from the matched escrow commitment (must be undeposited).
+        let is_a = if pi.cm_out_0 == intent.escrow_a_cm && !intent.deposited_a {
+            true
+        } else if pi.cm_out_0 == intent.escrow_b_cm && !intent.deposited_b {
+            false
+        } else {
+            return Err(Error::EscrowCmMismatch);
+        };
+
+        // Spent note is in the MAIN tree.
+        if !merkle::is_recent_root(&env, Tree::Main, &pi.anchor_root) {
+            return Err(Error::UnknownAnchorRoot);
+        }
+        if state::nullifier_exists(&env, &pi.nf_in_0) {
+            return Err(Error::NullifierAlreadyUsed);
+        }
+        // Compliance: frozen STRICT (a frozen note can't be escrowed); assets +
+        // auditor as usual. No recipient KYC — the escrow output is intent-owned.
+        check_frozen_root_strict(&env, &pi.frozen_root)?;
+        check_assets_root(&env, &pi.assets_root)?;
+        check_auditor_pk(&env, &pi.auditor_pk)?;
+        // Escrow note inserts into the ESCROW tree (pin its frontier + next_index).
+        if !merkle::check_old_frontier(&env, Tree::Escrow, &pi.old_frontier)? {
+            return Err(Error::UnknownAnchorRoot);
+        }
+        check_next_index(&env, Tree::Escrow, &pi.next_index)?;
+
+        let vk = state::get_vk(&env, Circuit::EscrowDeposit).ok_or(Error::VerifyingKeyMissing)?;
+        verifier::verify_groth16(&env, &vk, &proof, &pi.to_scalars(&env))?;
+
+        state::insert_nullifier(&env, &pi.nf_in_0);
+        merkle::apply_transition(&env, Tree::Escrow, &pi.new_frontier, &pi.new_root, 1)?;
+        if is_a {
+            intent.deposited_a = true;
+        } else {
+            intent.deposited_b = true;
+        }
+        state::set_intent(&env, &intent_id, &intent);
+        state::bump_instance_ttl(&env);
+        events::escrow_deposited(
+            &env,
+            &intent_id,
+            &pi.nf_in_0,
+            &pi.cm_out_0,
+            &pi.new_root,
+            &pi.c_auditor,
+            &pi.c_recipient,
+        );
+        Ok(())
+    }
+
+    /// Phase 2: settle. Spends BOTH escrow notes (one dvp proof, one pairing -
+    /// invariant #7) and mints the consented swap outputs into the MAIN tree.
+    /// Requires both legs deposited and `now < deadline`. No extra auth: consent
+    /// was given at `create_intent`; anyone (e.g. a relayer) may trigger.
+    pub fn settle_intent(
+        env: Env,
+        intent_id: BytesN<32>,
+        proof: Proof,
+        pi: DvpPublicInputs,
+    ) -> Result<(), Error> {
+        ensure_initialized(&env)?;
+        let mut intent = state::get_intent(&env, &intent_id).ok_or(Error::IntentNotFound)?;
+        if intent.settled {
+            return Err(Error::IntentSettled);
+        }
+        if !(intent.deposited_a && intent.deposited_b) {
+            return Err(Error::NotFullyDeposited);
+        }
+        if env.ledger().sequence() >= intent.deadline {
+            return Err(Error::DeadlinePassed);
+        }
+        // Escrow notes are anchored in the ESCROW tree.
+        if !merkle::is_recent_root(&env, Tree::Escrow, &pi.anchor_root) {
+            return Err(Error::UnknownAnchorRoot);
+        }
+        if state::nullifier_exists(&env, &pi.nf_leg_x_0)
+            || state::nullifier_exists(&env, &pi.nf_leg_y_0)
+        {
+            return Err(Error::NullifierAlreadyUsed);
+        }
+        check_frozen_root_strict(&env, &pi.frozen_root)?;
+        check_kyc_root(&env, &pi.kyc_root)?;
+        check_sanction_root(&env, &pi.sanction_root)?;
+        check_assets_root(&env, &pi.assets_root)?;
+        check_auditor_pk(&env, &pi.auditor_pk)?;
+        // Outputs MUST equal the consented swap (X -> B, Y -> A).
+        //
+        // KNOWN LIMITATION (Phase-D hardening, see docs/DVP_ESCROW.md): we pin the
+        // OUTPUTS to the intent but NOT the spent INPUTS to `intent.escrow_a/b_cm`
+        // (the reused dvp circuit exposes nullifiers, not the spent commitments).
+        // This is THEFT-SAFE: spending an escrow note needs the intent's `sk_intent`
+        // (shared only by A & B) and minting these exact outputs needs their secret
+        // openings, so no outsider can settle. The only residual is intra-intent
+        // self-griefing (a party settling with foreign escrows it controls, burning
+        // its own value) — not a fund-safety issue. A tighter design exposes the
+        // spent escrow cms from a settle-specific circuit and checks them here.
+        if pi.cm_out_x != intent.out_b_cm || pi.cm_out_y != intent.out_a_cm {
+            return Err(Error::SwapOutputMismatch);
+        }
+        // Swap outputs insert into the MAIN tree.
+        if !merkle::check_old_frontier(&env, Tree::Main, &pi.old_frontier)? {
+            return Err(Error::UnknownAnchorRoot);
+        }
+        check_next_index(&env, Tree::Main, &pi.next_index)?;
+
+        let vk = state::get_vk(&env, Circuit::Dvp).ok_or(Error::VerifyingKeyMissing)?;
+        verifier::verify_groth16(&env, &vk, &proof, &pi.to_scalars(&env))?;
+
+        state::insert_nullifier(&env, &pi.nf_leg_x_0);
+        state::insert_nullifier(&env, &pi.nf_leg_y_0);
+        merkle::apply_transition(&env, Tree::Main, &pi.new_frontier, &pi.new_root, 2)?;
+        intent.settled = true;
+        state::set_intent(&env, &intent_id, &intent);
+        state::bump_instance_ttl(&env);
+        events::intent_settled(
+            &env,
+            &intent_id,
+            &pi.nf_leg_x_0,
+            &pi.nf_leg_y_0,
+            &pi.cm_out_x,
+            &pi.cm_out_y,
+            &pi.new_root,
+        );
+        Ok(())
+    }
+
+    /// Timeout path: after the deadline, a party reclaims its escrow note into a
+    /// MAIN-tree note paid to its consented refund commitment. The leg is derived
+    /// from which refund commitment `cm_out_0` matches (must be deposited + not yet
+    /// refunded). Recipient compliance is enforced in-circuit (refund goes to a
+    /// real KYC'd party); `escrow_refund` requires `now >= deadline` + unsettled.
+    pub fn escrow_refund(
+        env: Env,
+        refunder: Address,
+        intent_id: BytesN<32>,
+        proof: Proof,
+        pi: EscrowLegPublicInputs,
+    ) -> Result<(), Error> {
+        ensure_initialized(&env)?;
+        refunder.require_auth();
+
+        let mut intent = state::get_intent(&env, &intent_id).ok_or(Error::IntentNotFound)?;
+        if intent.settled {
+            return Err(Error::IntentSettled);
+        }
+        if env.ledger().sequence() < intent.deadline {
+            return Err(Error::DeadlineNotReached);
+        }
+        let is_a = if pi.cm_out_0 == intent.refund_a_cm && intent.deposited_a && !intent.refunded_a
+        {
+            true
+        } else if pi.cm_out_0 == intent.refund_b_cm && intent.deposited_b && !intent.refunded_b {
+            false
+        } else {
+            return Err(Error::EscrowCmMismatch);
+        };
+
+        // Escrow note is anchored in the ESCROW tree.
+        if !merkle::is_recent_root(&env, Tree::Escrow, &pi.anchor_root) {
+            return Err(Error::UnknownAnchorRoot);
+        }
+        if state::nullifier_exists(&env, &pi.nf_in_0) {
+            return Err(Error::NullifierAlreadyUsed);
+        }
+        check_frozen_root_strict(&env, &pi.frozen_root)?;
+        check_kyc_root(&env, &pi.kyc_root)?;
+        check_sanction_root(&env, &pi.sanction_root)?;
+        check_assets_root(&env, &pi.assets_root)?;
+        check_auditor_pk(&env, &pi.auditor_pk)?;
+        // Refund note inserts into the MAIN tree.
+        if !merkle::check_old_frontier(&env, Tree::Main, &pi.old_frontier)? {
+            return Err(Error::UnknownAnchorRoot);
+        }
+        check_next_index(&env, Tree::Main, &pi.next_index)?;
+
+        let vk = state::get_vk(&env, Circuit::EscrowRefund).ok_or(Error::VerifyingKeyMissing)?;
+        verifier::verify_groth16(&env, &vk, &proof, &pi.to_scalars(&env))?;
+
+        state::insert_nullifier(&env, &pi.nf_in_0);
+        merkle::apply_transition(&env, Tree::Main, &pi.new_frontier, &pi.new_root, 1)?;
+        if is_a {
+            intent.refunded_a = true;
+        } else {
+            intent.refunded_b = true;
+        }
+        state::set_intent(&env, &intent_id, &intent);
+        state::bump_instance_ttl(&env);
+        events::escrow_refunded(
+            &env,
+            &intent_id,
+            &pi.nf_in_0,
+            &pi.cm_out_0,
+            &pi.new_root,
+            &pi.c_auditor,
+            &pi.c_recipient,
+        );
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
     // Read-only views (handy for the indexer / tests).
     // -----------------------------------------------------------------------
     pub fn current_root(env: Env) -> Option<BytesN<32>> {
-        state::get_tree_root(&env)
+        state::get_tree_root(&env, Tree::Main)
     }
 
     pub fn recent_roots_capacity() -> u32 {
@@ -611,8 +875,8 @@ fn check_assets_root(env: &Env, supplied: &Root) -> Result<(), Error> {
 /// encoded as a big-endian `Fr` scalar (the count occupies the low 8 bytes).
 /// This pins the in-circuit `FrontierTransition` to the true append position
 /// (invariants #11/#12) - the index is contract-supplied, never prover-chosen.
-fn check_next_index(env: &Env, supplied: &Scalar) -> Result<(), Error> {
-    let count = state::get_leaf_count(env).ok_or(Error::NotInitialized)?;
+fn check_next_index(env: &Env, tree: Tree, supplied: &Scalar) -> Result<(), Error> {
+    let count = state::get_leaf_count(env, tree).ok_or(Error::NotInitialized)?;
     let mut expected = [0u8; 32];
     expected[24..32].copy_from_slice(&count.to_be_bytes());
     if supplied.to_array() == expected {

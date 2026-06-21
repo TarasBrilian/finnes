@@ -19,7 +19,7 @@
 
 use soroban_sdk::{contracttype, Address, BytesN, Env, Vec};
 
-use crate::types::{Circuit, Commitment, Nullifier, Root, Scalar, VerifyingKey};
+use crate::types::{Circuit, Commitment, IntentRecord, Nullifier, Root, Scalar, VerifyingKey};
 
 /// Size of the recent-roots ring buffer (windowed-root acceptance).
 ///
@@ -59,6 +59,19 @@ pub const PERSISTENT_TTL_EXTEND: u32 = 30 * LEDGERS_PER_DAY; // extend out to 30
 pub const INSTANCE_TTL_THRESHOLD: u32 = 7 * LEDGERS_PER_DAY;
 pub const INSTANCE_TTL_EXTEND: u32 = 30 * LEDGERS_PER_DAY;
 
+/// Which commitment tree a tree-state key refers to (FIN-017). The MAIN tree holds
+/// shielded notes (shield/transfer/unshield/dvp/mint_recovery); the ESCROW tree
+/// holds intent-owned escrow notes (escrow_deposit → settle/refund). Per-tree
+/// recent-roots windows give free domain separation: an escrow note's only valid
+/// anchor is an escrow root, which is NOT in the main window, so
+/// `confidential_transfer` can never consume it.
+#[contracttype]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Tree {
+    Main,
+    Escrow,
+}
+
 /// All storage keys. `#[contracttype]` makes each variant a distinct ScVal key.
 #[contracttype]
 #[derive(Clone)]
@@ -84,23 +97,25 @@ pub enum DataKey {
     AssetsWindow,
     /// Issuer-managed frozen-commitment set root (non-membership). **Strict.**
     FrozenRoot,
-    /// Current commitment-tree root (latest published).
-    TreeRoot,
-    /// Number of leaves inserted into the commitment tree so far (the next append
-    /// index). Checked against the circuits' `next_index` public input so the
+    /// Current commitment-tree root (latest published), per tree (#11/#12, FIN-017).
+    TreeRoot(Tree),
+    /// Number of leaves inserted into the given commitment tree so far (the next
+    /// append index). Checked against the circuits' `next_index` public input so the
     /// in-circuit `FrontierTransition` inserts at the true position (#11/#12).
-    LeafCount,
+    LeafCount(Tree),
     /// Groth16 verifying key for a given circuit.
     Vk(Circuit),
+    /// Intent record for a production escrow-DvP settlement (FIN-017).
+    Intent(BytesN<32>),
 
     // --- persistent (fund-critical / unbounded) ---
     /// Existence marker for a spent nullifier. Value is unit `()`; presence ==
     /// spent. One entry per nullifier (invariant #4).
     Nullifier(BytesN<32>),
-    /// Commitment-tree frontier (filled subtrees), `TREE_DEPTH` scalars.
-    Frontier,
-    /// Recent-roots ring buffer (commitment-tree roots) for windowed anchoring.
-    RecentRoots,
+    /// Commitment-tree frontier (filled subtrees), `TREE_DEPTH` scalars, per tree.
+    Frontier(Tree),
+    /// Recent-roots ring buffer (commitment-tree roots) for windowed anchoring, per tree.
+    RecentRoots(Tree),
     /// Membership marker for a commitment in the frozen set (existence check).
     /// Complements `FrozenRoot`: the contract stores the verbatim issuer-set root
     /// strictly, and also records which `cm`s were frozen for auditability.
@@ -243,28 +258,30 @@ pub fn get_frozen_root(env: &Env) -> Option<Root> {
     env.storage().instance().get(&DataKey::FrozenRoot)
 }
 
-pub fn set_tree_root(env: &Env, r: &Root) {
-    env.storage().instance().set(&DataKey::TreeRoot, r);
+pub fn set_tree_root(env: &Env, tree: Tree, r: &Root) {
+    env.storage().instance().set(&DataKey::TreeRoot(tree), r);
 }
-pub fn get_tree_root(env: &Env) -> Option<Root> {
-    env.storage().instance().get(&DataKey::TreeRoot)
+pub fn get_tree_root(env: &Env, tree: Tree) -> Option<Root> {
+    env.storage().instance().get(&DataKey::TreeRoot(tree))
 }
 
-/// Commitment-tree leaf count (the next append index). Instance storage: a small
-/// `u64` always loaded with config. Seeded to 0 at `init` (empty tree) and
+/// Commitment-tree leaf count (the next append index), per tree. Instance storage:
+/// a small `u64` always loaded with config. Seeded to 0 at `init` (empty tree) and
 /// advanced by `advance_leaf_count` on every successful tree mutation.
-pub fn set_leaf_count(env: &Env, count: u64) {
-    env.storage().instance().set(&DataKey::LeafCount, &count);
+pub fn set_leaf_count(env: &Env, tree: Tree, count: u64) {
+    env.storage()
+        .instance()
+        .set(&DataKey::LeafCount(tree), &count);
 }
-pub fn get_leaf_count(env: &Env) -> Option<u64> {
-    env.storage().instance().get(&DataKey::LeafCount)
+pub fn get_leaf_count(env: &Env, tree: Tree) -> Option<u64> {
+    env.storage().instance().get(&DataKey::LeafCount(tree))
 }
 
 /// Advance the leaf count by `n` newly-inserted leaves. Saturating add guards
 /// against wraparound (the tree caps at 2^TREE_DEPTH long before u64 overflow).
-pub fn advance_leaf_count(env: &Env, n: u32) {
-    let cur = get_leaf_count(env).unwrap_or(0);
-    set_leaf_count(env, cur.saturating_add(n as u64));
+pub fn advance_leaf_count(env: &Env, tree: Tree, n: u32) {
+    let cur = get_leaf_count(env, tree).unwrap_or(0);
+    set_leaf_count(env, tree, cur.saturating_add(n as u64));
 }
 
 pub fn set_vk(env: &Env, circuit: Circuit, vk: &VerifyingKey) {
@@ -349,39 +366,59 @@ pub fn get_transparent_addr(env: &Env, recipient: &Scalar) -> Option<Address> {
 // Frontier (persistent; filled-subtree array stored verbatim, no hashing).
 // ---------------------------------------------------------------------------
 
-pub fn set_frontier(env: &Env, frontier: &Vec<Scalar>) {
-    let key = DataKey::Frontier;
+pub fn set_frontier(env: &Env, tree: Tree, frontier: &Vec<Scalar>) {
+    let key = DataKey::Frontier(tree);
     env.storage().persistent().set(&key, frontier);
     env.storage()
         .persistent()
         .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND);
 }
 
-pub fn get_frontier(env: &Env) -> Option<Vec<Scalar>> {
-    env.storage().persistent().get(&DataKey::Frontier)
+pub fn get_frontier(env: &Env, tree: Tree) -> Option<Vec<Scalar>> {
+    env.storage().persistent().get(&DataKey::Frontier(tree))
 }
 
 // ---------------------------------------------------------------------------
-// Recent-roots ring buffer (persistent).
+// Recent-roots ring buffer (persistent), per tree.
 // ---------------------------------------------------------------------------
 
-pub fn get_recent_roots(env: &Env) -> Option<Vec<Root>> {
-    env.storage().persistent().get(&DataKey::RecentRoots)
+pub fn get_recent_roots(env: &Env, tree: Tree) -> Option<Vec<Root>> {
+    env.storage().persistent().get(&DataKey::RecentRoots(tree))
 }
 
-pub fn set_recent_roots(env: &Env, roots: &Vec<Root>) {
-    let key = DataKey::RecentRoots;
+pub fn set_recent_roots(env: &Env, tree: Tree, roots: &Vec<Root>) {
+    let key = DataKey::RecentRoots(tree);
     env.storage().persistent().set(&key, roots);
     env.storage()
         .persistent()
         .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND);
 }
 
+// ---------------------------------------------------------------------------
+// Escrow-DvP intents (persistent, keyed by intent_id; FIN-017).
+// ---------------------------------------------------------------------------
+
+pub fn intent_exists(env: &Env, id: &BytesN<32>) -> bool {
+    env.storage().persistent().has(&DataKey::Intent(id.clone()))
+}
+
+pub fn get_intent(env: &Env, id: &BytesN<32>) -> Option<IntentRecord> {
+    env.storage().persistent().get(&DataKey::Intent(id.clone()))
+}
+
+pub fn set_intent(env: &Env, id: &BytesN<32>, record: &IntentRecord) {
+    let key = DataKey::Intent(id.clone());
+    env.storage().persistent().set(&key, record);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND);
+}
+
 /// Initialise the recent-roots buffer with a single seed root.
-pub fn init_recent_roots(env: &Env, seed: &Root) {
+pub fn init_recent_roots(env: &Env, tree: Tree, seed: &Root) {
     let mut roots: Vec<Root> = Vec::new(env);
     roots.push_back(seed.clone());
-    set_recent_roots(env, &roots);
+    set_recent_roots(env, tree, &roots);
 }
 
 /// Convenience: instance-storage TTL bump (call after any mutation that touches

@@ -73,4 +73,25 @@ pub enum Error {
     /// an `asset_id` from an admin-registered mirror of the assets registry; a
     /// missing entry means the asset was never `register_asset`'d.
     AssetNotRegistered = 50,
+
+    // --- escrow DvP (FIN-017) ---
+    /// `create_intent` with an `intent_id` that already exists.
+    IntentExists = 60,
+    /// `escrow_deposit`/`settle`/`escrow_refund` for an unknown `intent_id`.
+    IntentNotFound = 61,
+    /// The intent is already settled (terminal); no further ops allowed.
+    IntentSettled = 62,
+    /// `cm_out_0` does not match either expected escrow/refund commitment, or the
+    /// matched leg is in the wrong state (already deposited / not deposited).
+    EscrowCmMismatch = 63,
+    /// `settle` output commitments do not equal the consented swap outputs.
+    SwapOutputMismatch = 64,
+    /// `settle` requires BOTH legs deposited first.
+    NotFullyDeposited = 65,
+    /// `settle` after the deadline (must be `now < deadline`).
+    DeadlinePassed = 66,
+    /// `escrow_refund` before the deadline (must be `now >= deadline`).
+    DeadlineNotReached = 67,
+    /// `create_intent` with a deadline at/!before the current ledger.
+    DeadlineInPast = 68,
 }

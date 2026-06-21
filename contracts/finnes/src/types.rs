@@ -104,6 +104,9 @@ pub struct InitConfig {
     pub vk_transfer: VerifyingKey,
     pub vk_unshield: VerifyingKey,
     pub vk_dvp: VerifyingKey,
+    /// Escrow boundary VKs for production DvP (FIN-017); `settle` reuses `vk_dvp`.
+    pub vk_escrow_deposit: VerifyingKey,
+    pub vk_escrow_refund: VerifyingKey,
 }
 
 /// Identifies which circuit a proof belongs to (selects the VK and the
@@ -115,6 +118,9 @@ pub enum Circuit {
     Transfer,
     Unshield,
     Dvp,
+    /// Escrow boundary circuits for production DvP (FIN-017). `settle` reuses `Dvp`.
+    EscrowDeposit,
+    EscrowRefund,
 }
 
 // ---------------------------------------------------------------------------
@@ -364,6 +370,83 @@ impl UnshieldPublicInputs {
         v.push_back(self.fee.clone()); // 12
         v.push_back(self.next_index.clone()); // 13
         extend(&mut v, &self.old_frontier); // 14 .. 14+D-1
+        extend(&mut v, &self.new_frontier);
+        extend(&mut v, &self.c_auditor);
+        extend(&mut v, &self.c_recipient);
+        v
+    }
+}
+
+/// `escrow_deposit.circom` / `escrow_refund.circom` — production escrow DvP
+/// boundary (FIN-017). Both circuits share this 61-signal layout (uniform IO):
+/// ```text
+///  0 anchor_root 1 kyc_root 2 sanction_root 3 assets_root 4 frozen_root
+///  5 auditor_pk  6 nf_in_0  7 cm_out_0       8 new_root    9 fee  10 next_index
+/// 11..30 old_frontier  31..50 new_frontier  51..55 c_auditor  56..60 c_recipient
+/// ```
+/// `kyc_root`/`sanction_root` are constrained only by `escrow_refund` (recipient
+/// compliance); `escrow_deposit` carries them unconstrained (output owner = intent).
+#[contracttype]
+#[derive(Clone)]
+pub struct EscrowLegPublicInputs {
+    pub anchor_root: BytesN<32>,
+    pub kyc_root: BytesN<32>,
+    pub sanction_root: BytesN<32>,
+    pub assets_root: BytesN<32>,
+    pub frozen_root: BytesN<32>,
+    pub auditor_pk: BytesN<32>,
+    pub nf_in_0: BytesN<32>,
+    pub cm_out_0: BytesN<32>,
+    pub new_root: BytesN<32>,
+    pub fee: BytesN<32>,
+    pub next_index: BytesN<32>,
+    pub old_frontier: Vec<BytesN<32>>,
+    pub new_frontier: Vec<BytesN<32>>,
+    pub c_auditor: Vec<BytesN<32>>,
+    pub c_recipient: Vec<BytesN<32>>,
+}
+
+/// An escrow-DvP settlement intent (FIN-017). Created under BOTH parties'
+/// `require_auth`; all six commitments are fixed at create time so settle/refund
+/// outputs are pinned to what A & B consented to (invariant #15). Stored at
+/// `DataKey::Intent(intent_id)`.
+#[contracttype]
+#[derive(Clone)]
+pub struct IntentRecord {
+    /// Ledger sequence; settle requires `now < deadline`, refund `now >= deadline`.
+    pub deadline: u32,
+    pub settled: bool,
+    /// Expected escrow-note commitments (the two deposit targets).
+    pub escrow_a_cm: BytesN<32>,
+    pub escrow_b_cm: BytesN<32>,
+    /// Consented swap outputs: `out_a_cm` to A, `out_b_cm` to B.
+    pub out_a_cm: BytesN<32>,
+    pub out_b_cm: BytesN<32>,
+    /// Consented refund notes (one per party, paid on timeout).
+    pub refund_a_cm: BytesN<32>,
+    pub refund_b_cm: BytesN<32>,
+    pub deposited_a: bool,
+    pub deposited_b: bool,
+    pub refunded_a: bool,
+    pub refunded_b: bool,
+}
+
+impl EscrowLegPublicInputs {
+    /// Flatten to the canonical ordered scalar vector (61 signals, D=20, K_a=K_r=5).
+    pub fn to_scalars(&self, env: &Env) -> Vec<Scalar> {
+        let mut v: Vec<Scalar> = Vec::new(env);
+        v.push_back(self.anchor_root.clone()); // 0
+        v.push_back(self.kyc_root.clone()); // 1
+        v.push_back(self.sanction_root.clone()); // 2
+        v.push_back(self.assets_root.clone()); // 3
+        v.push_back(self.frozen_root.clone()); // 4
+        v.push_back(self.auditor_pk.clone()); // 5
+        v.push_back(self.nf_in_0.clone()); // 6
+        v.push_back(self.cm_out_0.clone()); // 7
+        v.push_back(self.new_root.clone()); // 8
+        v.push_back(self.fee.clone()); // 9
+        v.push_back(self.next_index.clone()); // 10
+        extend(&mut v, &self.old_frontier); // 11 .. 11+D-1
         extend(&mut v, &self.new_frontier);
         extend(&mut v, &self.c_auditor);
         extend(&mut v, &self.c_recipient);

@@ -259,3 +259,83 @@ pub fn transparent_registered(env: &Env, recipient: &Scalar, addr: &Address) {
         },
     );
 }
+
+// ---------------------------------------------------------------------------
+// Escrow DvP (FIN-017). PUBLIC data only: the intent id, the inserted commitment,
+// the new tree root, and the field-packed ciphertexts. No secret (#8).
+// ---------------------------------------------------------------------------
+
+/// `create_intent`: a new escrow-DvP intent was registered (both parties consented).
+pub fn intent_created(env: &Env, intent_id: &BytesN<32>, deadline: u32) {
+    env.events()
+        .publish((symbol_short!("intent"),), (intent_id.clone(), deadline));
+}
+
+/// `escrow_deposit`: a party's note was escrowed into the ESCROW tree.
+pub fn escrow_deposited(
+    env: &Env,
+    intent_id: &BytesN<32>,
+    nf_in_0: &Nullifier,
+    cm_out: &Commitment,
+    new_root: &Root,
+    c_auditor: &Vec<Scalar>,
+    c_recipient: &Vec<Scalar>,
+) {
+    env.events().publish(
+        (symbol_short!("escrowdep"),),
+        (
+            intent_id.clone(),
+            nf_in_0.clone(),
+            cm_out.clone(),
+            new_root.clone(),
+            c_auditor.clone(),
+            c_recipient.clone(),
+        ),
+    );
+}
+
+/// `settle_intent`: both escrows spent, swap outputs minted into the MAIN tree.
+pub fn intent_settled(
+    env: &Env,
+    intent_id: &BytesN<32>,
+    nf_leg_x_0: &Nullifier,
+    nf_leg_y_0: &Nullifier,
+    cm_out_x: &Commitment,
+    cm_out_y: &Commitment,
+    new_root: &Root,
+) {
+    env.events().publish(
+        (symbol_short!("settled"),),
+        (
+            intent_id.clone(),
+            nf_leg_x_0.clone(),
+            nf_leg_y_0.clone(),
+            cm_out_x.clone(),
+            cm_out_y.clone(),
+            new_root.clone(),
+        ),
+    );
+}
+
+/// `escrow_refund`: a timed-out escrow was returned to its depositor (MAIN tree).
+pub fn escrow_refunded(
+    env: &Env,
+    intent_id: &BytesN<32>,
+    nf_in_0: &Nullifier,
+    cm_out: &Commitment,
+    new_root: &Root,
+    c_auditor: &Vec<Scalar>,
+    c_recipient: &Vec<Scalar>,
+) {
+    env.events().publish(
+        (symbol_short!("refunded"),),
+        (
+            intent_id.clone(),
+            nf_in_0.clone(),
+            cm_out.clone(),
+            new_root.clone(),
+            c_auditor.clone(),
+            c_recipient.clone(),
+        ),
+    );
+}

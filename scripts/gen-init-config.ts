@@ -53,7 +53,11 @@ function loadVk(circuit: string): HostVerifyingKey {
 const vk_shield = loadVk('shield');
 const vk_transfer = loadVk('transfer');
 const vk_unshield = loadVk('unshield');
-const vk_dvp = EMPTY_HOST_VK; // dvp.circom not built yet (FIN-016)
+// dvp/escrow circuits compile (FIN-016/017) but their D=20 VKs await the Phase-D
+// ceremony; until then the contract stores valid-length empty placeholders.
+const vk_dvp = EMPTY_HOST_VK;
+const vk_escrow_deposit = EMPTY_HOST_VK;
+const vk_escrow_refund = EMPTY_HOST_VK;
 
 // --- validate the host encoding before emitting -----------------------------
 let bad = false;
@@ -94,6 +98,8 @@ const cfg = {
   vk_transfer,
   vk_unshield,
   vk_dvp,
+  vk_escrow_deposit,
+  vk_escrow_refund,
 };
 
 mkdirSync(dirname(OUT), { recursive: true });

@@ -200,6 +200,104 @@
                     },
                     {
                       "key": {
+                        "symbol": "vk_escrow_deposit"
+                      },
+                      "val": {
+                        "map": [
+                          {
+                            "key": {
+                              "symbol": "alpha_g1"
+                            },
+                            "val": {
+                              "bytes": ""
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "beta_g2"
+                            },
+                            "val": {
+                              "bytes": ""
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "delta_g2"
+                            },
+                            "val": {
+                              "bytes": ""
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "gamma_g2"
+                            },
+                            "val": {
+                              "bytes": ""
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "ic"
+                            },
+                            "val": {
+                              "vec": []
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "vk_escrow_refund"
+                      },
+                      "val": {
+                        "map": [
+                          {
+                            "key": {
+                              "symbol": "alpha_g1"
+                            },
+                            "val": {
+                              "bytes": ""
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "beta_g2"
+                            },
+                            "val": {
+                              "bytes": ""
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "delta_g2"
+                            },
+                            "val": {
+                              "bytes": ""
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "gamma_g2"
+                            },
+                            "val": {
+                              "bytes": ""
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "ic"
+                            },
+                            "val": {
+                              "vec": []
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "vk_shield"
                       },
                       "val": {
@@ -392,6 +490,13 @@
               "vec": [
                 {
                   "symbol": "Frontier"
+                },
+                {
+                  "vec": [
+                    {
+                      "symbol": "Escrow"
+                    }
+                  ]
                 }
               ]
             },
@@ -409,6 +514,127 @@
                   "vec": [
                     {
                       "symbol": "Frontier"
+                    },
+                    {
+                      "vec": [
+                        {
+                          "symbol": "Escrow"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "vec": [
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    }
+                  ]
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          518400
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "Frontier"
+                },
+                {
+                  "vec": [
+                    {
+                      "symbol": "Main"
+                    }
+                  ]
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "Frontier"
+                    },
+                    {
+                      "vec": [
+                        {
+                          "symbol": "Main"
+                        }
+                      ]
                     }
                   ]
                 },
@@ -492,6 +718,13 @@
               "vec": [
                 {
                   "symbol": "RecentRoots"
+                },
+                {
+                  "vec": [
+                    {
+                      "symbol": "Escrow"
+                    }
+                  ]
                 }
               ]
             },
@@ -509,6 +742,70 @@
                   "vec": [
                     {
                       "symbol": "RecentRoots"
+                    },
+                    {
+                      "vec": [
+                        {
+                          "symbol": "Escrow"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "vec": [
+                    {
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000010"
+                    }
+                  ]
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          518400
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "RecentRoots"
+                },
+                {
+                  "vec": [
+                    {
+                      "symbol": "Main"
+                    }
+                  ]
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "RecentRoots"
+                    },
+                    {
+                      "vec": [
+                        {
+                          "symbol": "Main"
+                        }
+                      ]
                     }
                   ]
                 },
@@ -662,6 +959,32 @@
                           "vec": [
                             {
                               "symbol": "LeafCount"
+                            },
+                            {
+                              "vec": [
+                                {
+                                  "symbol": "Escrow"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u64": 0
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "LeafCount"
+                            },
+                            {
+                              "vec": [
+                                {
+                                  "symbol": "Main"
+                                }
+                              ]
                             }
                           ]
                         },
@@ -702,6 +1025,32 @@
                           "vec": [
                             {
                               "symbol": "TreeRoot"
+                            },
+                            {
+                              "vec": [
+                                {
+                                  "symbol": "Escrow"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        "val": {
+                          "bytes": "0000000000000000000000000000000000000000000000000000000000000010"
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "TreeRoot"
+                            },
+                            {
+                              "vec": [
+                                {
+                                  "symbol": "Main"
+                                }
+                              ]
                             }
                           ]
                         },
@@ -719,6 +1068,126 @@
                               "vec": [
                                 {
                                   "symbol": "Dvp"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        "val": {
+                          "map": [
+                            {
+                              "key": {
+                                "symbol": "alpha_g1"
+                              },
+                              "val": {
+                                "bytes": ""
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "beta_g2"
+                              },
+                              "val": {
+                                "bytes": ""
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "delta_g2"
+                              },
+                              "val": {
+                                "bytes": ""
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "gamma_g2"
+                              },
+                              "val": {
+                                "bytes": ""
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "ic"
+                              },
+                              "val": {
+                                "vec": []
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "Vk"
+                            },
+                            {
+                              "vec": [
+                                {
+                                  "symbol": "EscrowDeposit"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        "val": {
+                          "map": [
+                            {
+                              "key": {
+                                "symbol": "alpha_g1"
+                              },
+                              "val": {
+                                "bytes": ""
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "beta_g2"
+                              },
+                              "val": {
+                                "bytes": ""
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "delta_g2"
+                              },
+                              "val": {
+                                "bytes": ""
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "gamma_g2"
+                              },
+                              "val": {
+                                "bytes": ""
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "ic"
+                              },
+                              "val": {
+                                "vec": []
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "Vk"
+                            },
+                            {
+                              "vec": [
+                                {
+                                  "symbol": "EscrowRefund"
                                 }
                               ]
                             }
