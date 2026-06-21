@@ -27,7 +27,8 @@ import {
 
 import { demoState, DEMO_AUDITOR_VIEW_KEY, HEAD_LOW } from './demo-state.js';
 import { allLiveNotes, liveNoteNullifier } from './live-notes.js';
-import { buildChainTree, type ChainTree } from './indexer.js';
+import { frozenNonMembership } from './freeze.js';
+import { buildChainTree, indexFrozen, type ChainTree } from './indexer.js';
 import { saveStoredNote } from './note-store.js';
 import { proveInBrowser } from './prove-browser.js';
 import { isNullifierUsed, submitInvocation } from './soroban.js';
@@ -219,9 +220,15 @@ export async function runUnshield(rawAmount: bigint): Promise<OpResult> {
       : undefined;
     steps.push(ok('Select spent note + change', `spend leaf ${spend.leafIndex} (${spend.note.value} raw); ${change ? `change ${change.value} back to ${me.label}` : 'exact spend (no change)'}.`));
 
+    // Frozen-set non-membership against the LIVE frozen set (FIN-018): throws if
+    // this note was clawed back (then it is unspendable, invariant #19b). Empty
+    // set → the genesis head witness (identical to before any freeze).
+    const { frozen } = await indexFrozen();
+    const nm = frozenNonMembership(frozen, commitNote(spend.note));
+
     const { witness } = buildUnshieldWitness({
       inNote: spend.note, ownerSk: spend.ownerSk, inPath: chain.tree.inclusionPath(spend.leafIndex), anchorRoot: chain.tree.root(),
-      frozenLow: HEAD_LOW, frozenPath: st.frozenLowPath, frozenRoot: st.frozenRoot,
+      frozenLow: nm.low, frozenPath: nm.path, frozenRoot: nm.root,
       recipient: me.ownerPk, kycPath: me.kycPath, kycRoot: st.kycRoot,
       sanctionLow: HEAD_LOW, sanctionPath: st.sanctionLowPath, sanctionRoot: st.sanctionRoot,
       amount: rawAmount, changeNote: change,
@@ -230,7 +237,7 @@ export async function runUnshield(rawAmount: bigint): Promise<OpResult> {
       oldFrontier: chain.tree.frontier(), nextIndex: chain.leafCount, fee: 0n,
       auditorPk: st.auditorPk, kView: DEMO_AUDITOR_VIEW_KEY, kPair: randFr(), rhoEncAuditor: randFr(), rhoEncRecipient: randFr(),
     });
-    steps.push(ok('Assemble unshield witness', 'frozen non-membership of the spent note + recipient KYC (invariant #19).'));
+    steps.push(ok('Assemble unshield witness', `frozen non-membership vs the live frozen set (${frozen.length} frozen) + recipient KYC (invariant #19).`));
 
     const proof = await proveInBrowser('unshield', witness as Record<string, unknown>);
     steps.push(ok('Generate Groth16 proof (in-browser)', `${proof.publicSignals.length} public signals; witness stays in this tab (inv #8).`));
@@ -282,6 +289,11 @@ export async function runTransfer(rawAmount: bigint): Promise<OpResult> {
     const outChange = { assetId: asset.assetId, value: changeVal, ownerPk: me.ownerPk, rho: randFr(), rNote: randFr() };
     steps.push(ok('Select 2 input notes + build outputs', `spend leaves ${in0.leafIndex},${in1.leafIndex} (${sum} raw) → ${rawAmount} to ${recipientAcct.label} + ${changeVal} change to ${me.label}.`));
 
+    // Frozen-set non-membership of BOTH spent notes against the LIVE frozen set
+    // (FIN-018): throws if either was clawed back. Empty set → genesis head witness.
+    const { frozen } = await indexFrozen();
+    const nm = [in0, in1].map((s) => frozenNonMembership(frozen, commitNote(s.note)));
+
     const { witness } = buildTransferWitness({
       ownerSk: me.ownerSk,
       inNotes: [in0.note, in1.note],
@@ -290,7 +302,7 @@ export async function runTransfer(rawAmount: bigint): Promise<OpResult> {
       outNotes: [outRecipient, outChange],
       kycLeaf: recipientAcct.ownerPk, kycPath: recipientAcct.kycPath, kycRoot: st.kycRoot,
       sanctionLow: HEAD_LOW, sanctionPath: st.sanctionLowPath, sanctionRoot: st.sanctionRoot,
-      frozenLow: [HEAD_LOW, HEAD_LOW], frozenPaths: [st.frozenLowPath, st.frozenLowPath], frozenRoot: st.frozenRoot,
+      frozenLow: [nm[0]!.low, nm[1]!.low], frozenPaths: [nm[0]!.path, nm[1]!.path], frozenRoot: nm[0]!.root,
       sacAddress: sacAddressToField(asset.sacAddress), decimals: BigInt(asset.decimals), perTxLimitRaw: asset.perTxLimitRaw,
       assetsPath: asset.assetsPath, assetsRoot: st.assetsRoot,
       oldFrontier: tree.frontier(), nextIndex: tree.size, fee: 0n,
@@ -320,6 +332,10 @@ export async function runTransfer(rawAmount: bigint): Promise<OpResult> {
  *  are detected FIRST (they surface during prepare/submit, not proving). */
 function classify(prior: OpStep[], e: unknown): OpStep {
   const msg = e instanceof Error ? e.message : String(e);
+  // The spent note was clawed back (issuer frozen set, FIN-018) → unspendable.
+  if (/^FROZEN:/i.test(msg) || /frozen set/i.test(msg)) {
+    return err('Frozen-set non-membership', `${msg} It was clawed back by the issuer (invariant #14/#19).`);
+  }
   // Depositor has no TBOND trustline / balance (shield pulls TBOND from the wallet).
   if (/trustline/i.test(msg)) {
     return err(

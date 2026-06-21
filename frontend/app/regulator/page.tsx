@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { AuditorKeyInput } from '@/components/AuditorKeyInput';
 import { TxList } from '@/components/TxList';
 import { DisclosurePanel } from '@/components/DisclosurePanel';
+import { FreezePanel } from '@/components/FreezePanel';
 import { listOnChainTransactions, type OnChainTxSummary } from '@/lib/finnes-client';
 
 /**
@@ -75,10 +76,8 @@ export default function RegulatorPage() {
         <DisclosurePanel tx={selected} />
       </div>
 
-      <p className="text-[11px] leading-relaxed text-ink-faint">
-        Clawback is a separate two-phase / two-key flow (auditor identifies cm_target via the view
-        key; issuer_authority freezes it). See ARCHITECTURE.md → Clawback &amp; freeze.
-      </p>
+      {/* Clawback: the auditor (above) identifies cm_target; the issuer freezes it. */}
+      <FreezePanel selected={selected} />
     </div>
   );
 }

@@ -468,8 +468,42 @@ Two-leg combined circuit (demo single-witness, labelled non-production). Consent
 ### [ ] FIN-017 · P3 · Production DvP via escrow
 Escrow / two-phase settlement (each party single-party-spends into an intent-owned escrow note; settlement spends both and mints swapped outputs). Atomic-via-escrow with timeout refund.
 
-### [ ] FIN-018 · P3 · Clawback / freeze flow + UI
+### [~] FIN-018 · P3 · Clawback / freeze flow + UI — FREEZE FLOW + UI DONE; recovery-mint deferred
 Frozen-commitment set management; two-phase two-key (auditor identifies `cm_target`, issuer freezes + mints recovery note); optional dual-signature freeze tx (invariant #14). Frontend freeze/clawback panel.
+- **Done (frozen-set IMT, the crypto core):** `frontend/lib/freeze.ts` rebuilds the
+  frozen Indexed-Merkle-Tree from the sorted commitments `[head, …cms, tail]` —
+  byte-identical to `scripts/lib/*-scenario.ts buildImt` and the demo's empty IMT, so
+  the contract's STRICT `frozen_root` match holds. `frozenRootOf`, `computeFreeze`
+  (insert → new root hex), and `frozenNonMembership` (bracketing low-leaf + path;
+  THROWS if the target is itself frozen → unspendable). **Machine-verified** (24/24,
+  throwaway harness): empty-set root == demo genesis; every non-membership low-leaf
+  satisfies the in-circuit `MerkleNonMembership` semantics (`low.value < target <
+  low.nextValue` AND `Poseidon(low) ∈ tree(root)` via the path) for empty/mid/below/
+  above; `computeFreeze` advances the root; a frozen/repeat target is rejected.
+- **Done (real on-chain freeze, issuer write authority):** `soroban.submitFreeze`
+  encodes `freeze(cm_target, new_frozen_root)` directly as two `ScVal::Bytes` (no
+  contract-spec entry needed) and submits a real Freighter-signed tx; `freeze` calls
+  `require_auth(issuer_authority)` on-chain, so it needs the issuer wallet (honest
+  error otherwise). `indexer.indexFrozen` replays `freeze` events → live frozen set +
+  `frozen_root`. `finnes-client.freezeCommitment` orchestrates read-set → compute-root
+  → submit with honest per-step status; `listFrozen` feeds the panel.
+- **Done (UI):** `frontend/components/FreezePanel.tsx` in the regulator/issuer console
+  (replaces the old placeholder note): explains the two-phase/two-key model, lets the
+  auditor pick `cm_target` from a disclosed tx's output commitments (or paste one),
+  shows the live frozen set, and runs the issuer freeze with `OpResultPanel` status.
+- **Done (write-path consistency — REQUIRED, not optional):** because `frozen_root` is
+  matched STRICTLY, a freeze would otherwise break ALL spends. `write-flow.ts` now
+  derives each spent note's frozen non-membership from the LIVE frozen set
+  (`indexFrozen` + `frozenNonMembership`) instead of the hardcoded empty witness —
+  **zero regression** (empty set is byte-identical to the prior `HEAD_LOW`/genesis
+  root), and a clawed-back note now fails its own spend with an honest "FROZEN" step.
+- **Verified:** frontend `tsc` adds no new errors (only the pre-existing snarkjs ones);
+  `next build` GREEN (all routes incl. `/regulator`).
+- **Deferred (recovery-note mint, phase 2b):** the contract `clawback`/`mint_recovery`
+  reuses the shield circuit, so wiring it needs a shield witness/zkey for the recovered
+  value — same operator gate as the write-path. The FREEZE (make-unspendable) half is
+  the enforcement mechanism and is complete; recovery-mint UI is a follow-up. Optional
+  dual-signature freeze (auditor + issuer) also remains a follow-up (contract TODO).
 
 ### [~] FIN-019 · P3 · Backend tier (indexer / API / relayer) — INDEXER DONE + LIVE-VERIFIED; API/relayer deferred
 Indexer (event subscription, off-chain tree reconstruction, ciphertext store), API (paths/roots/ciphertexts), relayer (fee-bump submission; per-asset `fee` term is 0 in demo). Replaces the frontend's mock/stubbed reads.

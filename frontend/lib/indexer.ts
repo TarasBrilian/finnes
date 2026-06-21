@@ -220,3 +220,36 @@ export async function indexTransactions(): Promise<IndexedTransaction[]> {
 
   return txs.reverse();
 }
+
+// ---------------------------------------------------------------------------
+// Frozen set (clawback, FIN-018): replay `freeze` events → frozen commitments +
+// the latest on-chain `frozen_root`. The issuer freezes a commitment to make a
+// note unspendable (every spend proves non-membership against `frozen_root`).
+// ---------------------------------------------------------------------------
+
+export interface FrozenState {
+  /** Commitments in the issuer frozen set (from `freeze` events, in range). */
+  readonly frozen: bigint[];
+  /** The latest on-chain `frozen_root` (null if no freeze events in range). */
+  readonly frozenRoot: bigint | null;
+}
+
+/**
+ * Reconstruct the frozen set from `freeze` events. NOTE: like the tree, a
+ * stateless re-read only sees events within Testnet's ~22h retention; a freeze
+ * older than the window would be missed (a production indexer persists the set).
+ * For the demo, freezes are recent. Returns an empty set when none are in range,
+ * which reproduces the genesis `frozen_root` (consistent with the write-path).
+ */
+export async function indexFrozen(): Promise<FrozenState> {
+  const effects = await indexEffects();
+  const frozen: bigint[] = [];
+  let frozenRoot: bigint | null = null;
+  for (const e of effects) {
+    if (e.topic !== 'freeze') continue;
+    const v = e.value as Record<string, Buffer>;
+    frozen.push(toBig(v.cm_target!));
+    frozenRoot = toBig(v.new_frozen_root!);
+  }
+  return { frozen, frozenRoot };
+}

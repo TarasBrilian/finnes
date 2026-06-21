@@ -65,8 +65,9 @@ import {
   resolveAsset,
   resolveParty,
 } from './demo-data.js';
-import { indexTransactions } from './indexer.js';
-import { readCurrentRoot, submitInvocation } from './soroban.js';
+import { computeFreeze, toHex } from './freeze.js';
+import { indexFrozen, indexTransactions } from './indexer.js';
+import { readCurrentRoot, submitFreeze, submitInvocation } from './soroban.js';
 import {
   fetchLiveOwnedNotes,
   fetchSpendableUnshield,
@@ -103,6 +104,9 @@ function todo(label: string, detail: string): OpStep {
 }
 function ok(label: string, detail: string): OpStep {
   return { label, status: 'ok', detail };
+}
+function errStep(label: string, detail: string): OpStep {
+  return { label, status: 'error', detail };
 }
 function summarise(steps: OpStep[], txHash?: string): OpResult {
   const status: StepStatus = steps.some((s) => s.status === 'error')
@@ -482,6 +486,69 @@ export async function submitToContract(
   native: Readonly<Record<string, unknown>>,
 ): Promise<{ txHash: string }> {
   return submitInvocation(entrypoint, native as Record<string, unknown>);
+}
+
+// ---------------------------------------------------------------------------
+// Clawback / freeze (FIN-018, invariant #14) — two-phase, two-key.
+//   Phase 1 (read, auditor): identify cm_target by decrypting with the view key.
+//   Phase 2 (write, issuer): add cm_target to the frozen set + advance frozen_root.
+// This wrapper drives phase 2: the cm_target comes from the regulator's disclosed
+// view; the issuer (Freighter) authorises the on-chain freeze.
+// ---------------------------------------------------------------------------
+
+/** The current issuer frozen set (PUBLIC commitments, 0x-less hex), live or empty. */
+export async function listFrozen(): Promise<{ frozen: string[]; isMock: boolean }> {
+  try {
+    const { frozen } = await indexFrozen();
+    return { frozen: frozen.map((c) => toHex(c)), isMock: false };
+  } catch {
+    return { frozen: [], isMock: true };
+  }
+}
+
+/**
+ * Freeze (clawback) a target commitment: read the live frozen set, compute the new
+ * `frozen_root` (IMT insert), and submit the real issuer `freeze` tx. Honest per
+ * step; the note becomes unspendable once `frozen_root` advances (every spend must
+ * prove non-membership, invariant #14/#19). Requires the ISSUER's Freighter.
+ */
+export async function freezeCommitment(cmTargetHex: string): Promise<OpResult> {
+  const steps: OpStep[] = [];
+  try {
+    const clean = cmTargetHex.replace(/^0x/, '').trim();
+    if (!/^[0-9a-fA-F]{1,64}$/.test(clean)) {
+      return { status: 'error', steps: [errStep('Validate cm_target', 'Enter a 32-byte hex commitment (≤ 64 hex chars).')] };
+    }
+    const cmTarget = BigInt('0x' + clean);
+
+    const { frozen } = await indexFrozen();
+    steps.push(ok('Read live frozen set', `${frozen.length} commitment(s) currently frozen on-chain.`));
+
+    const { sorted, rootHex } = computeFreeze(frozen, cmTarget);
+    steps.push(
+      ok(
+        'Compute new frozen_root (IMT insert)',
+        `inserted cm_target into the frozen IMT → ${sorted.length} frozen; new frozen_root 0x${rootHex.slice(0, 10)}….`,
+      ),
+    );
+
+    const res = await submitFreeze(toHex(cmTarget), rootHex);
+    steps.push(
+      ok(
+        'Submit freeze (issuer authority)',
+        `real Soroban tx ${res.txHash.slice(0, 12)}…; frozen_root advanced (strict). The target note can no longer be spent.`,
+      ),
+    );
+    return { status: 'ok', steps, txHash: res.txHash };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const hint = /require_auth|InvalidAction|Auth|#?\bunauthor/i.test(msg)
+      ? ' (the connected Freighter must be the issuer_authority — admin=issuer=deployer in the demo).'
+      : /Freighter|wallet|not detected|no account/i.test(msg)
+        ? ' Connect the issuer Freighter account (Testnet).'
+        : '';
+    return { status: 'error', steps: [...steps, errStep('Freeze', `${msg}${hint}`)] };
+  }
 }
 
 /** Display helper: format raw SAC units using the asset's display decimals. */
