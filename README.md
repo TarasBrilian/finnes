@@ -239,7 +239,9 @@ constraint actually constrains.
 - [ ] Soroban verifier + state + tree
 - [ ] End-to-end demo (shield → transfer → regulator disclosure)
 - [ ] Atomic DvP (`dvp.circom` + `settle_dvp`)
-- [ ] Threshold/multi-auditor view keys
+- [x] Threshold/multi-auditor view keys (SDK Shamir k-of-n split of the view key,
+      FIN-020 — off-chain key custody; the reconstructed key yields the same
+      `auditor_pk`, so the circuit/contract are unchanged)
 
 ---
 

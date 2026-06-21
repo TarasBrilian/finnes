@@ -76,6 +76,15 @@ export type {
 } from './disclose.js';
 export { discloseNote, discloseTransaction, formatRawAmount } from './disclose.js';
 
+// Threshold / multi-auditor view keys (FIN-020) — no single honeypot.
+export type { KeyShare, SplitOptions } from './threshold.js';
+export {
+  splitViewKey,
+  combineShares,
+  auditorPkFromShares,
+  randomCoefficients,
+} from './threshold.js';
+
 export type {
   CircomWitness,
   DvpWitnessDerived,

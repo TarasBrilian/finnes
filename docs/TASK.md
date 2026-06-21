@@ -582,8 +582,28 @@ Indexer (event subscription, off-chain tree reconstruction, ciphertext store), A
   you), which needs an on-chain-recoverable `c_recipient` key (ECDH/note-encryption,
   not the demo's throwaway pairwise key) — a circuit-touching crypto change.
 
-### [ ] FIN-020 · P3 · Threshold / multi-auditor view keys
+### [~] FIN-020 · P3 · Threshold / multi-auditor view keys — SDK k-of-n DONE; optional UI wiring deferred
 No single auditor honeypot — split the view key across authorities.
+- **Done (SDK threshold custody, the crypto core):** `sdk/src/threshold.ts` implements
+  a **Shamir k-of-n** split of the auditor view key `k_view` over the BLS12-381 scalar
+  field — pure field arithmetic (polynomial eval + Lagrange interpolation at 0, Fermat
+  modular inverse), no embedded curve / no new in-circuit primitive (invariant #1).
+  `splitViewKey(k_view, {threshold,total})` → N shares; `combineShares(anyK)` →
+  reconstructs `k_view`; `auditorPkFromShares` derives the SAME `auditor_pk =
+  Poseidon(k_view)` the contract is initialised with. So this is **off-chain key
+  custody only** — the circuit, contract, trusted setup, and live deployment are
+  UNCHANGED; a quorum reconstructs `k_view` and runs the existing `discloseTransaction`.
+  No single authority holds the key (no honeypot); fewer than `k` shares learn nothing.
+- **Done (tests):** `sdk/test/threshold.test.ts` (8 cases, `npm test` → **34 green**):
+  2-of-3 / 3-of-5 / n-of-n / 1-of-n, ANY quorum reconstructs (all combinations), a
+  threshold key derives the same `auditor_pk` as the single-key path, sub-quorum reveals
+  nothing, field-range + large-secret reduction, input validation, and a secure-random
+  (default-coefficient) round-trip. `npm run typecheck` clean.
+- **Deferred (optional, non-blocking):** wire the regulator UI to accept `k` shares
+  (instead of one key) and call `combineShares` before disclosing — a UI nicety; the
+  live demo still uses a single `k_view`. True asymmetric multi-auditor (per-note
+  `auditor_set_root` membership, FIN-001) would change all four circuits' public-IO +
+  need a fresh ceremony + redeploy, so it is out of scope for this P3 item.
 
 ### [ ] FIN-021 · P3 · Production trusted setup
 Replace the single-party demo ceremony with a multi-party contribution + transcript verification (invariant #10).
