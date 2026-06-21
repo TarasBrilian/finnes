@@ -5,9 +5,9 @@ import { fetchComplianceState, formatRawAmount, type ComplianceState } from '@/l
 import type { SpendingKeypair } from '@/lib/keys';
 
 /**
- * KYC / sanctions / per-asset limit status, as a slim inline chip strip. In the
+ * KYC / sanctions / per asset limit status, as a slim inline chip strip. In the
  * demo, KYC enrollment is mocked (admin script enrolls all demo accounts into
- * `kyc_root`), the in-circuit membership check still happens on every transfer;
+ * `kyc_root`), the in circuit membership check still happens on every transfer;
  * only enrollment is mocked (CLAUDE.md → Out of scope / KYC).
  */
 export function ComplianceStatus({ spending }: { spending: SpendingKeypair | null }) {
@@ -52,7 +52,7 @@ export function ComplianceStatus({ spending }: { spending: SpendingKeypair | nul
         </div>
       )}
 
-      <span className="ml-auto text-[11px] text-ink-faint">Proven in-circuit on every transfer.</span>
+      <span className="ml-auto text-[11px] text-ink-faint">Proven in circuit on every transfer.</span>
     </div>
   );
 }

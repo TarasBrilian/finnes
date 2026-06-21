@@ -11,13 +11,13 @@ import type { SpendingKeypair } from '@/lib/keys';
 /**
  * The institution's confidential position, its unspent notes on the live
  * commitment tree (ARCHITECTURE.md → Frontend). Rendered as the dashboard's
- * primary anchor: a deep navy panel with large per-asset figures. The institution
+ * primary anchor: a deep navy panel with large per asset figures. The institution
  * sees only its OWN notes.
  *
- * REAL & LIVE (FIN-027/019): balances are the session identity's unspent on-chain
+ * REAL & LIVE (FIN-027/019): balances are the session identity's unspent on chain
  * notes, commitments present in the contract's event-reconstructed tree and not
  * yet nullified (read live), i.e. exactly what the Transfer/Unshield tabs can
- * spend. Per-asset figures are NOT summed across assets (invariant #3/#16). Falls
+ * spend. Per asset figures are NOT summed across assets (invariant #3/#16). Falls
  * back to a deterministic demo fixture (flagged "Demo") only if RPC is unavailable.
  */
 export function ConfidentialBalances({ spending }: { spending: SpendingKeypair | null }) {
@@ -65,7 +65,7 @@ export function ConfidentialBalances({ spending }: { spending: SpendingKeypair |
                 className={`inline-block h-1.5 w-1.5 rounded-full ${isMock ? 'bg-amber-300' : 'animate-glowpulse bg-accent'}`}
               />
               {balances.length} asset{balances.length === 1 ? '' : 's'} · {totalNotes} note
-              {totalNotes === 1 ? '' : 's'} · {isMock ? 'demo fixture (RPC offline)' : 'live on-chain'}
+              {totalNotes === 1 ? '' : 's'} · {isMock ? 'demo fixture (RPC offline)' : 'live on chain'}
             </span>
           )}
         </div>
@@ -79,13 +79,13 @@ export function ConfidentialBalances({ spending }: { spending: SpendingKeypair |
         {spending && loading && (
           <p className="mt-5 flex items-center gap-2 text-sm text-blue-100/80">
             <span aria-hidden="true" className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-200/40 border-t-accent" />
-            Reading your on-chain notes…
+            Reading your on chain notes…
           </p>
         )}
 
         {spending && balances && balances.length === 0 && (
           <p className="mt-5 text-sm text-blue-100/80">
-            No unspent notes on-chain yet. Shield a deposit to mint your first confidential note.
+            No unspent notes on chain yet. Shield a deposit to mint your first confidential note.
           </p>
         )}
 
@@ -113,9 +113,9 @@ export function ConfidentialBalances({ spending }: { spending: SpendingKeypair |
         )}
 
         <p className="relative mt-7 max-w-2xl border-t border-white/10 pt-4 text-[11px] leading-relaxed text-blue-200/60">
-          Your unspent notes on the live commitment tree, each commitment present on-chain and not
-          yet nullified, matched client-side to a note you hold. Amounts are raw SAC units formatted
-          with display decimals; the ZK layer never rescales. Balances are per-asset
+          Your unspent notes on the live commitment tree, each commitment present on chain and not
+          yet nullified, matched client side to a note you hold. Amounts are raw SAC units formatted
+          with display decimals; the ZK layer never rescales. Balances are per asset
           and never summed across assets.
         </p>
       </div>

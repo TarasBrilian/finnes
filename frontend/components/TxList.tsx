@@ -13,7 +13,7 @@ function shortHash(h: string): string {
 }
 
 /**
- * Lists on-chain transactions as the PUBLIC sees them: opaque commitments,
+ * Lists on chain transactions as the PUBLIC sees them: opaque commitments,
  * nullifiers, and ciphertext references, no amounts, no parties. Selecting a
  * row feeds the DisclosurePanel, which (with the view key) reveals everything.
  */
@@ -29,7 +29,7 @@ export function TxList({
   return (
     <div className="card">
       <div className="mb-1 flex items-center justify-between gap-3">
-        <h3 className="text-base font-bold text-ink">On-chain ledger</h3>
+        <h3 className="text-base font-bold text-ink">On chain ledger</h3>
       </div>
       <p className="mb-4 text-xs text-ink-muted">
         Exactly what the public and competitors can see. Opaque blobs only.

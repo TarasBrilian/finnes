@@ -22,10 +22,10 @@ import { OpResultPanel } from './OpResultPanel';
  *
  *  Transfer  (shielded A → shielded B, 2-in / 2-out)
  *  Shield    (transparent RWA → note; binds the note to the deposited asset, #18)
- *  Unshield  (note → transparent; proves frozen non-membership + recipient KYC, #19)
+ *  Unshield  (note → transparent; proves frozen non membership + recipient KYC, #19)
  *
  * The left side is the form; the right side is a disclosure preview (what the
- * public sees, what stays hidden) and a client-side proof pipeline, so the form
+ * public sees, what stays hidden) and a client side proof pipeline, so the form
  * documents itself. All wiring, validation, and honest TODO results are unchanged.
  */
 
@@ -103,11 +103,11 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
   const [spendable, setSpendable] = useState<{ rawAmount: bigint; assetLabel: string } | null | 'loading'>(null);
   const [busy, setBusy] = useState(false);
 
-  // On the Unshield tab, read the live spendable note (the on-chain note this
+  // On the Unshield tab, read the live spendable note (the on chain note this
   // identity can redeem) so the form shows the max instead of letting the user
   // submit an over-the-note amount the witness builder would reject.
   // On the Shield tab, pre-fill the registered TBOND SAC so the form is ready (the
-  // demo shields the registered TBOND asset; only it is wired on-chain).
+  // demo shields the registered TBOND asset; only it is wired on chain).
   useEffect(() => {
     if (mode === 'shield' && !sacAddress) setSacAddress(TBOND_SAC);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -319,10 +319,10 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
               {mode === 'unshield' && (
                 <p className="mt-1.5 text-[11px]">
                   {spendable === 'loading' ? (
-                    <span className="text-ink-faint">Reading spendable balance on-chain…</span>
+                    <span className="text-ink-faint">Reading spendable balance on chain…</span>
                   ) : spendable ? (
                     <span className="text-ink-muted">
-                      Spendable note on-chain:{' '}
+                      Spendable note on chain:{' '}
                       <span className="font-mono text-sm font-semibold text-ink">{spendable.rawAmount.toString()}</span> raw
                       {' '}({formatRawAmount(spendable.rawAmount, DISPLAY_DECIMALS)} {ticker}), pre-filled.{' '}
                       <button
@@ -366,7 +366,7 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
 
             <div>
               <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-faint">
-                Proof pipeline · client-side
+                Proof pipeline · client side
               </p>
               <ol>
                 {PIPELINE.map((p, i) => (

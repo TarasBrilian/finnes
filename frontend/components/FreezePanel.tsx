@@ -14,12 +14,12 @@ const cmHex = (c: bigint): string => c.toString(16).padStart(64, '0');
 
 /**
  * Clawback / freeze panel (FIN-018, invariant #14), the regulator console's
- * write surface. Two-phase, two-key:
+ * write surface. Two phase, two key:
  *   Phase 1 (read, auditor): identify cm_target by decrypting a tx with the view
  *     key (the disclosure panel above). Its output commitments are pickable here.
  *   Phase 2 (write, issuer): freeze cm_target, compute the new frozen_root (IMT
  *     insert) and submit the real `freeze` tx (issuer Freighter). Every later spend
- *     proves non-membership against frozen_root, so the note becomes unspendable.
+ *     proves non membership against frozen_root, so the note becomes unspendable.
  */
 export function FreezePanel({ selected }: { selected: OnChainTxSummary | null }) {
   const [target, setTarget] = useState('');
@@ -63,13 +63,13 @@ export function FreezePanel({ selected }: { selected: OnChainTxSummary | null })
           <span className="eyebrow">Issuer console</span>
           <h2 className="text-lg font-bold text-ink">Clawback &amp; freeze</h2>
         </div>
-        <span className="chip">two-phase · two-key</span>
+        <span className="chip">two phase · two key</span>
       </div>
 
       <p className="mt-2 max-w-2xl text-sm text-ink-muted">
         The auditor (read authority) identifies a target commitment by decrypting a transaction with
         the view key; the issuer (write authority) freezes it. A frozen note is unspendable: every
-        spend must prove non-membership against <span className="mono">frozen_root</span> (invariant
+        spend must prove non membership against <span className="mono">frozen_root</span> (invariant
         #14/#19). No authority can compute a note&apos;s nullifier, so clawback is freeze-based, not a
         forced spend.
       </p>

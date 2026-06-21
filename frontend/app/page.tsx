@@ -14,20 +14,20 @@ import { FlowSteps } from '@/components/FlowSteps';
 // --- Quick-credibility figures shown directly under the hero. ---------------
 const STATS = [
   { v: '128-bit', k: 'BLS12-381 security' },
-  { v: '1', k: 'pairing-check per tx' },
+  { v: '1', k: 'pairing check per tx' },
   { v: '~1.05M', k: 'notes per tree (depth 20)' },
   { v: '0', k: 'values revealed to the public' },
 ];
 
 // --- What a transparent public ledger leaks for an institution. -------------
 const LEAKS = [
-  { t: 'Amount', d: 'A large tokenized-bond transfer broadcasts its exact size to every competitor.' },
+  { t: 'Amount', d: 'A large tokenized bond transfer broadcasts its exact size to every competitor.' },
   { t: 'Counterparties', d: 'Address clustering reveals who settled with whom, and how often.' },
   { t: 'Position & timing', d: 'Pending transfers expose holdings and trading strategy in real time.' },
-  { t: 'Front-running', d: 'Visible large orders invite front-running before they settle.' },
+  { t: 'Front running', d: 'Visible large orders invite front running before they settle.' },
 ];
 
-// --- The same on-chain transaction, two views. ------------------------------
+// --- The same on chain transaction, two views. ------------------------------
 const PUBLIC_VIEW = [
   { k: 'commitment', v: '0x9f3c…a71e' },
   { k: 'nullifier', v: '0x44b8…02d9' },
@@ -47,12 +47,12 @@ const CAPS = [
   {
     n: '01',
     t: 'Confidential transfer',
-    d: 'RWA moves as Poseidon commitments that hide amount, asset, and owner; nullifiers prevent double-spend. A Groth16 proof attests validity without revealing a single value.',
+    d: 'RWA moves as Poseidon commitments that hide amount, asset, and owner; nullifiers prevent double spend. A Groth16 proof attests validity without revealing a single value.',
   },
   {
     n: '02',
-    t: 'In-circuit compliance',
-    d: 'KYC membership, sanctions non-membership, and per-asset limits are proven inside the circuit: compliance without exposing identities to the public ledger.',
+    t: 'In circuit compliance',
+    d: 'KYC membership, sanctions non membership, and per asset limits are proven inside the circuit: compliance without exposing identities to the public ledger.',
   },
   {
     n: '03',
@@ -62,12 +62,12 @@ const CAPS = [
   {
     n: '04',
     t: 'Atomic DvP',
-    d: 'In the demo, the asset and payment legs settle together in one Soroban invocation. Production settlement is escrow-based and two-phase, with a timeout refund.',
+    d: 'In the demo, the asset and payment legs settle together in one Soroban invocation. Production settlement is escrow based and two phase, with a timeout refund.',
   },
   {
     n: '05',
     t: 'Issuer freeze & clawback',
-    d: 'A frozen-commitment set makes a note unspendable; every spend proves non-membership. Two-phase and two-key: the auditor identifies, the issuer freezes.',
+    d: 'A frozen commitment set makes a note unspendable; every spend proves non membership. Two phase and two key: the auditor identifies, the issuer freezes.',
   },
   {
     n: '06',
@@ -78,9 +78,9 @@ const CAPS = [
 
 // --- End-to-end flow. -------------------------------------------------------
 const FLOW = [
-  { n: '1', t: 'Shield', d: 'Deposit a transparent RWA token. It becomes a Poseidon-committed shielded note, and only an opaque commitment ever lands on-chain.' },
-  { n: '2', t: 'Prove', d: 'The client builds a Groth16 proof of a valid, compliant, fully-encrypted transfer, locally. Spending and view keys never leave the tab.' },
-  { n: '3', t: 'Verify & settle', d: 'Soroban runs one BLS12-381 pairing-check, records the nullifiers, and appends the new commitments, all atomically.' },
+  { n: '1', t: 'Shield', d: 'Deposit a transparent RWA token. It becomes a Poseidon committed shielded note, and only an opaque commitment ever lands on chain.' },
+  { n: '2', t: 'Prove', d: 'The client builds a Groth16 proof of a valid, compliant, fully encrypted transfer, locally. Spending and view keys never leave the tab.' },
+  { n: '3', t: 'Verify & settle', d: 'Soroban runs one BLS12-381 pairing check, records the nullifiers, and appends the new commitments, all atomically.' },
   { n: '4', t: 'Disclose', d: 'The regulator decrypts the mandatory ciphertext with the view key and audits the full transaction: amounts and parties.' },
 ];
 
@@ -88,7 +88,7 @@ const ROLES = [
   {
     href: '/institution',
     label: 'Institution',
-    blurb: 'Hold shielded notes, settle confidentially, and stay provably compliant. KYC, limits, and disclosure are handled in-circuit.',
+    blurb: 'Hold shielded notes, settle confidentially, and stay provably compliant. KYC, limits, and disclosure are handled in circuit.',
     glyph: 'M4 20h16M6 20V8l6-4 6 4v12M10 12h4M10 16h4',
   },
   {
@@ -127,9 +127,9 @@ export default function HomePage() {
               className="mt-7 max-w-xl text-lg leading-relaxed text-white/70 animate-fade-up"
               style={{ animationDelay: '120ms' }}
             >
-              Move real-world-asset tokens on Stellar with hidden amounts and counterparties:
-              atomically settled, provably compliant in-circuit, and selectively disclosable to
-              regulators. <span className="text-white/90">Dark-pool-grade confidentiality, audit-grade transparency.</span>
+              Move real world asset tokens on Stellar with hidden amounts and counterparties:
+              atomically settled, provably compliant in circuit, and selectively disclosable to
+              regulators. <span className="text-white/90">Dark pool grade confidentiality, audit grade transparency.</span>
             </p>
             <div
               className="mt-9 flex flex-wrap items-center gap-3 animate-fade-up"
@@ -146,13 +146,13 @@ export default function HomePage() {
               <span className="text-white/20">/</span>
               <span>Poseidon-BLS</span>
               <span className="text-white/20">/</span>
-              <span>one pairing-check</span>
+              <span>one pairing check</span>
               <span className="text-white/20">/</span>
               <span>no mixer</span>
             </div>
           </div>
 
-          {/* Hero visual: a single on-chain record, opaque to the public,
+          {/* Hero visual: a single on chain record, opaque to the public,
               with the regulator's decrypted truth folded underneath. */}
           <div className="relative hidden animate-fade-up lg:block" style={{ animationDelay: '260ms' }} aria-hidden="true">
             <div className="absolute -inset-6 rounded-[2rem] bg-aurora opacity-80 blur-2xl" />
@@ -198,9 +198,9 @@ export default function HomePage() {
               <div key={g} className="flex items-center gap-8 pr-8 font-display text-sm font-semibold uppercase tracking-[0.22em] text-white/55">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <span key={i} className="flex items-center gap-8">
-                    Dark-pool-grade confidentiality
+                    Dark pool grade confidentiality
                     <span className="text-accent">◆</span>
-                    Audit-grade transparency
+                    Audit grade transparency
                     <span className="text-accent">◆</span>
                   </span>
                 ))}
@@ -243,7 +243,7 @@ export default function HomePage() {
             </h2>
             <p className="mt-5 max-w-2xl text-base leading-relaxed text-white/65">
               For retail crypto that is fine. For institutions it is a dealbreaker, leaking strategy,
-              breaching client confidentiality, and inviting front-running.
+              breaching client confidentiality, and inviting front running.
             </p>
           </Reveal>
 
@@ -374,7 +374,7 @@ export default function HomePage() {
               From deposit to disclosure
             </h2>
             <p className="mt-3 max-w-xl text-base text-white/60">
-              Four steps. Secrets stay client-side; the chain and backend only ever touch public data.
+              Four steps. Secrets stay client side; the chain and backend only ever touch public data.
             </p>
           </Reveal>
 

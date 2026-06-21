@@ -17,7 +17,7 @@ import { useSpendingKeypair } from '@/lib/use-keys';
 /** Protocol facts surfaced inline in the title bar, true statements, never faked. */
 const FACTS: readonly { k: string; v: string }[] = [
   { k: 'Network', v: 'Stellar Testnet' },
-  { k: 'Prover', v: 'Client-side' },
+  { k: 'Prover', v: 'Client side' },
   { k: 'Curve', v: 'BLS12-381' },
   { k: 'Proof', v: 'Groth16 · one pairing' },
 ];
@@ -90,7 +90,7 @@ export default function InstitutionPage() {
             </svg>
             <span>
               <span className="font-semibold text-ink-muted">Trust boundary.</span> Keys, the
-              witness, and note plaintext stay in this tab. The prover runs client-side; nothing
+              witness, and note plaintext stay in this tab. The prover runs client side; nothing
               secret reaches a shared backend.
             </span>
           </p>
@@ -101,7 +101,7 @@ export default function InstitutionPage() {
       <p className="border-t border-blue-100 pt-5 text-[11px] leading-relaxed text-ink-faint">
         DvP (atomic two-asset settlement) is a stretch goal. The demo path uses a single combined
         proof holding both parties&apos; secrets and is non-production (ARCHITECTURE.md → Settlement);
-        production DvP is escrow / two-phase.
+        production DvP is escrow / two phase.
       </p>
     </div>
   );

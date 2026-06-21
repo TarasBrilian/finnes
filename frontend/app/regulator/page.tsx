@@ -9,7 +9,7 @@ import { listOnChainTransactions, type OnChainTxSummary } from '@/lib/finnes-cli
 
 /**
  * Regulator / Auditor view (ARCHITECTURE.md → Frontend): hold the auditor view
- * key, list on-chain transactions (the opaque public view), and decrypt the
+ * key, list on chain transactions (the opaque public view), and decrypt the
  * mandatory auditor ciphertext for a selected tx to display the full
  * transaction. The regulator's read authority is the one that sees everything.
  */
@@ -30,7 +30,7 @@ export default function RegulatorPage() {
     };
   }, []);
 
-  // The ledger is REAL on-chain data when the indexer returned live events
+  // The ledger is REAL on chain data when the indexer returned live events
   // (FIN-019); it falls back to the deterministic demo fixture otherwise.
   const live = txs.length > 0 && !txs[0]!.isMock;
 
@@ -54,7 +54,7 @@ export default function RegulatorPage() {
           {live ? (
             <>
               <span className="chip chip-good mr-2">Live</span>
-              On-chain ledger reconstructed from the deployed contract&apos;s events over Soroban RPC
+              On chain ledger reconstructed from the deployed contract&apos;s events over Soroban RPC
               (FIN-019).
             </>
           ) : (
