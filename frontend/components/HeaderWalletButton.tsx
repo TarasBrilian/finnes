@@ -63,7 +63,7 @@ export function HeaderWalletButton() {
       <button
         type="button"
         onClick={disconnect}
-        title={`${publicKey} - click to disconnect`}
+        title={`${publicKey} (click to disconnect)`}
         className="badge border border-emerald-200 bg-emerald-50 text-emerald-800 transition hover:bg-emerald-100"
       >
         <span className="mono">{truncate(publicKey)}</span>

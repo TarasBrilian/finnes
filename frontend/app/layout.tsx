@@ -5,7 +5,7 @@ import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
 
 export const metadata: Metadata = {
-  title: 'Finnes - Confidential RWA Settlement',
+  title: 'Finnes: Confidential RWA Settlement',
   description:
     'Institution- and regulator-facing UI for the Finnes confidential settlement layer on Stellar/Soroban. Private from the public, fully auditable by regulators.',
   icons: {

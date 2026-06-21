@@ -32,7 +32,7 @@ export function TxList({
         <h3 className="text-base font-bold text-ink">On-chain ledger</h3>
       </div>
       <p className="mb-4 text-xs text-ink-muted">
-        Exactly what the public and competitors can see - opaque blobs only.
+        Exactly what the public and competitors can see. Opaque blobs only.
       </p>
 
       <ul className="space-y-2">
@@ -86,7 +86,7 @@ export function TxList({
         <span aria-hidden="true" className="mt-px">
           🔒
         </span>
-        No amount, asset, or counterparty is observable here - only the regulator, holding the view
+        No amount, asset, or counterparty is observable here. Only the regulator, holding the view
         key, can resolve it.
       </p>
     </div>

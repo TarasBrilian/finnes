@@ -71,7 +71,7 @@ const MODES: readonly ModeMeta[] = [
     blurb: 'Deposit a transparent RWA token into the shielded domain.',
     reveals: ['asset_id', 'amount', '1 commitment'],
     hides: ['owner', 'rho', 'r_note'],
-    outputs: 'Mints one shielded note bound to the deposited asset (invariant #18).',
+    outputs: 'Mints one shielded note bound to the deposited asset.',
   },
   {
     id: 'unshield',
@@ -282,7 +282,7 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
                   onChange={(e) => setRecipient(e.target.value)}
                 />
                 <p className="mt-1.5 text-[11px] text-ink-faint">
-                  Must be KYC-approved &amp; non-sanctioned (invariant #19). The demo pays the
+                  Must be KYC-approved &amp; non-sanctioned. The demo pays the
                   pre-registered recipient (Bank B → the contract&apos;s registered payout address);
                   arbitrary recipients need an admin <span className="font-mono">register_transparent</span> (FIN-010).
                 </p>
@@ -392,7 +392,7 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
         <div className="mt-2 flex flex-col gap-3 border-t border-blue-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
           <p className="order-2 max-w-sm text-[11px] leading-relaxed text-ink-faint sm:order-1">
             The witness is assembled and proven in this tab, keys and note plaintext never leave the
-            browser (invariant #8).
+            browser.
           </p>
           <div className="order-1 sm:order-2 sm:text-right">
             <button type="submit" className="btn-primary w-full sm:w-auto sm:min-w-[14rem]" disabled={disabled}>

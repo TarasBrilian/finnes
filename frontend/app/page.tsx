@@ -24,7 +24,7 @@ const LEAKS = [
   { t: 'Amount', d: 'A large tokenized-bond transfer broadcasts its exact size to every competitor.' },
   { t: 'Counterparties', d: 'Address clustering reveals who settled with whom, and how often.' },
   { t: 'Position & timing', d: 'Pending transfers expose holdings and trading strategy in real time.' },
-  { t: 'Front-running', d: 'Visible large orders invite being traded ahead of before they settle.' },
+  { t: 'Front-running', d: 'Visible large orders invite front-running before they settle.' },
 ];
 
 // --- The same on-chain transaction, two views. ------------------------------
@@ -62,7 +62,7 @@ const CAPS = [
   {
     n: '04',
     t: 'Atomic DvP',
-    d: 'The asset leg and the payment leg settle together in a single Soroban invocation; production settlement is escrow-based and two-phase, with a timeout refund.',
+    d: 'In the demo, the asset and payment legs settle together in one Soroban invocation. Production settlement is escrow-based and two-phase, with a timeout refund.',
   },
   {
     n: '05',
@@ -262,8 +262,8 @@ export default function HomePage() {
           <Reveal delay={120}>
             <p className="mt-12 max-w-2xl text-base leading-relaxed text-white/70">
               Mixers remove the leak, but also the audit trail, so they are unusable for regulated
-              institutions. <span className="font-semibold text-accent">Finnes keeps both:</span> nothing
-              is visible to the public, everything is visible to the regulator.
+              institutions. <span className="font-semibold text-accent">Finnes removes the leak without losing the audit trail:</span> nothing
+              is visible to the public, everything to the regulator.
             </p>
           </Reveal>
         </div>

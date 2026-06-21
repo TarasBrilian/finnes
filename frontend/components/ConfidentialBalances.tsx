@@ -115,7 +115,7 @@ export function ConfidentialBalances({ spending }: { spending: SpendingKeypair |
         <p className="relative mt-7 max-w-2xl border-t border-white/10 pt-4 text-[11px] leading-relaxed text-blue-200/60">
           Your unspent notes on the live commitment tree, each commitment present on-chain and not
           yet nullified, matched client-side to a note you hold. Amounts are raw SAC units formatted
-          with display decimals; the ZK layer never rescales (invariant #16). Balances are per-asset
+          with display decimals; the ZK layer never rescales. Balances are per-asset
           and never summed across assets.
         </p>
       </div>

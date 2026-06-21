@@ -50,7 +50,7 @@ export function AuditorKeyInput() {
     <div className="card">
       <h3 className="text-base font-bold text-ink">Auditor view key</h3>
       <p className="mt-0.5 text-xs text-ink-muted">
-        Read authority. Held only in this tab; never sent anywhere (invariant #8).
+        Read authority. Held only in this tab; never sent anywhere.
       </p>
 
       {kp ? (
@@ -96,7 +96,7 @@ export function AuditorKeyInput() {
                 </button>
               </div>
               <p className="text-[11px] text-ink-faint">
-                Secret read authority - never sent anywhere (invariant #8). Reveal only to verify or
+                Secret read authority. Never sent anywhere. Reveal only to verify or
                 copy it.
               </p>
             </div>

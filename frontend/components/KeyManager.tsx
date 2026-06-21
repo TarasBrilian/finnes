@@ -99,7 +99,7 @@ export function KeyManager() {
               </button>
             </div>
             <p className="mt-0.5 text-[11px] text-ink-faint">
-              Share this with the sender (owner_pk) - this is what they paste into a confidential
+              Share this with the sender (owner_pk). This is what they paste into a confidential
               transfer. It is public; safe to share.
             </p>
           </div>

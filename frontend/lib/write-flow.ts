@@ -186,7 +186,7 @@ async function doShield(value: bigint, steps: OpStep[], label: string): Promise<
     ownerPk: me.ownerPk.toString(), ownerSk: (me.ownerSk as unknown as bigint).toString(),
     rho: outNote.rho.toString(), rNote: outNote.rNote.toString(),
   });
-  steps.push(ok(label, `minted ${value} raw to ${me.label} (leaf ${leafIndex}); proved in-browser + submitted — tx ${res.txHash.slice(0, 10)}….`));
+  steps.push(ok(label, `minted ${value} raw to ${me.label} (leaf ${leafIndex}); proved in-browser + submitted, tx ${res.txHash.slice(0, 10)}….`));
   return res.txHash;
 }
 
@@ -266,7 +266,7 @@ export async function runTransfer(rawAmount: bigint): Promise<OpResult> {
     // Each auto-shield is its own on-chain tx (approve each in your wallet).
     const needed = 2 - unspent.length;
     if (needed > 0) {
-      steps.push(ok('Auto-prepare notes', `a 2-in transfer needs 2 notes; auto-shielding ${needed} (each ${rawAmount} raw) — approve each in your wallet.`));
+      steps.push(ok('Auto-prepare notes', `a 2-in transfer needs 2 notes; auto-shielding ${needed} (each ${rawAmount} raw). Approve each in your wallet.`));
       for (let i = 0; i < needed; i++) {
         await doShield(rawAmount, steps, `Auto-shield note ${i + 1}/${needed}`);
       }
@@ -342,7 +342,7 @@ function classify(prior: OpStep[], e: unknown): OpStep {
       'Submit to contract',
       'Your connected wallet has no TBOND trustline (or no TBOND). Shield pulls TBOND from your ' +
         'wallet, so it must hold it. Add the TBOND asset in Freighter (issuer ' +
-        'GB66GONTENMTB5L5QXO7ARYR6HN7FAQG7MX6KCAJGHJIYUXE44JW37TD), then fund it — or connect an ' +
+        'GB66GONTENMTB5L5QXO7ARYR6HN7FAQG7MX6KCAJGHJIYUXE44JW37TD), then fund it, or connect an ' +
         'account that already holds TBOND.',
     );
   }

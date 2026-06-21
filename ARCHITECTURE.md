@@ -1,4 +1,4 @@
-# Finnes — System Architecture
+# Finnes: System Architecture
 
 Confidential settlement layer for regulated RWA on Stellar. This document describes
 the **system architecture**: the components, their responsibilities, and how they
@@ -13,7 +13,7 @@ contract internals live in the `circuits/` and `contracts/` source.
 Finnes is split into four tiers. The guiding principle is a **trust boundary**:
 all secrets (spending keys, viewing keys, and the proof witness) stay inside the
 client/institution zone. The shared backend and the chain only ever see public
-data — commitments, nullifiers, ciphertexts, roots, and proofs.
+data: commitments, nullifiers, ciphertexts, roots, and proofs.
 
 ```mermaid
 graph TB
@@ -58,9 +58,9 @@ private keys exist.
 - Builds confidential-transfer and DvP-settlement intents, then hands the witness
   to the prover. It never sends private data to the shared backend.
 - Two role-based views:
-  - **Institution view** — confidential balances, send a confidential transfer,
+  - **Institution view**: confidential balances, send a confidential transfer,
     run a DvP settlement, see KYC/limit status.
-  - **Regulator / auditor view** — uses the auditor view key to decrypt and inspect
+  - **Regulator / auditor view**: uses the auditor view key to decrypt and inspect
     transactions for audit.
 - Shows each user only what they are entitled to see; nothing about other parties.
 
@@ -69,19 +69,19 @@ private keys exist.
 ## Backend
 
 Off-chain services that handle the heavy read side. Stateless with respect to
-secrets — it touches only public chain data and never holds spending or viewing
+secrets. It touches only public chain data and never holds spending or viewing
 keys.
 
-- **Indexer** — subscribes to contract events, reconstructs the commitment Merkle
+- **Indexer**: subscribes to contract events, reconstructs the commitment Merkle
   tree off-chain, tracks the nullifier set and the recent-roots ring buffer, and
   stores ciphertexts for client scanning.
-- **API** — serves Merkle inclusion paths, current/recent roots, compliance roots
+- **API**: serves Merkle inclusion paths, current/recent roots, compliance roots
   (KYC and sanctions), and encrypted-note blobs so clients stay lightweight. For
   the demo, KYC enrollment is **mocked**: an admin script enrolls all demo accounts
   into `kyc_root` and the API serves a KYC path for any enrolled address, so a
   sender can prove a recipient's membership without a real identity provider.
   (Recipient-KYC privacy is a production concern, deferred.)
-- **Relayer** (optional) — submits transactions on behalf of users via a Stellar
+- **Relayer** (optional): submits transactions on behalf of users via a Stellar
   **fee-bump** transaction: the relayer's account pays the XLM network fee, so a
   user needs no XLM-funded account and their identity is not linked to a
   confidential transfer. Relayer compensation (when charged) is a per-asset `fee`
@@ -89,7 +89,7 @@ keys.
   demo**.
 - The prover is **not** part of the shared backend (that would leak the witness).
   If browser proving is too heavy, an institution may run its own prover node
-  inside its own trust zone — never as a shared multi-tenant service.
+  inside its own trust zone, never as a shared multi-tenant service.
 
 ---
 
@@ -108,7 +108,7 @@ The on-chain settlement state machine and proof verifier on Soroban (Rust / WASM
 - Verifies proofs using the BLS12-381 host functions (CAP-0059, Protocol 22/23).
 - Performs **no hashing**: the circuit proves the Merkle transition and outputs the
   new `(frontier, root)`, which the contract stores verbatim. The contract only
-  runs the pairing-check and writes storage — no Poseidon on-chain.
+  runs the pairing-check and writes storage, no Poseidon on-chain.
 - Enforces a strict order on every transfer: validate the commitment root (against
   a recent-roots window) → check nullifiers are unused → check compliance roots
   match state (**`frozen_root` strict; `kyc_root`/`sanction_root` windowed**) →
@@ -130,17 +130,17 @@ The zero-knowledge layer: circuits and the proving system that make confidential
 and in-circuit compliance possible.
 
 - **Circuits** (Circom, `--prime bls12381`): `shield`, `transfer`, `unshield`, and
-  `dvp` (each with its own VK), composed from reusable sub-circuits — note
+  `dvp` (each with its own VK), composed from reusable sub-circuits: note
   commitment, nullifier derivation, Merkle inclusion, Merkle-transition
   (`old_frontier → new_frontier, new_root`), value range checks, authorized-assets
   membership, KYC membership, sanctions **and frozen-set** non-membership, and
   auditor-encryption well-formedness. `shield` and `unshield` are transfer variants
-  (no shielded inputs / transparent-revealing output respectively) — same gadgets,
+  (no shielded inputs / transparent-revealing output respectively). Same gadgets,
   no new crypto. All gadgets are BLS-native: the **only**
   in-circuit cryptographic primitive is Poseidon over the BLS12-381 scalar field
   (plus field-agnostic range/bit checks). There is **no embedded curve** and **no
   in-circuit signature**.
-- **Proof system**: Groth16 over the BLS12-381 curve — single pairing-check
+- **Proof system**: Groth16 over the BLS12-381 curve, single pairing-check
   verification, the cheapest option on Soroban (~40M instructions).
 - **Prover**: runs inside the client/institution zone (browser WASM or a
   self-hosted node). It takes the private witness plus the proving key and produces
@@ -151,7 +151,7 @@ and in-circuit compliance possible.
 - **Toolchain**: Circom and SnarkJS; the VK is translated into the Soroban verifier
   (based on `stellar/soroban-examples/groth16_verifier`).
 - **Poseidon parity**: a single parameter set generated for the BLS12-381 scalar
-  field `r`, mirrored across exactly two surfaces — the circuit and the JS/TS
+  field `r`, mirrored across exactly two surfaces, the circuit and the JS/TS
   SDK/prover (never the contract). A cross-implementation test vector is a CI gate;
   circomlibjs' default (BN254) Poseidon must not be used.
 - **Public-IO**: recent commitment root, nullifiers, output commitments, compliance
@@ -185,22 +185,22 @@ constraint behind the design: a sound nullifier is derived from the owner's
 spending key, so a *single* combined proof would need both parties' secrets in one
 witness. We avoid that.
 
-- **Production — escrow / two-phase.** Each party first does an ordinary
+- **Production: escrow / two-phase.** Each party first does an ordinary
   single-party spend of its own note into an *escrow note* owned by the settlement
   intent (owner = the intent, not A or B). Because each leg's nullifier is derived
   from its own owner's secret, both spends are sound with **no shared key
-  material**. A settlement step then spends both escrow notes — whose authority
-  belongs to the intent/contract, not to any party's secret — and mints the swapped
+  material**. A settlement step then spends both escrow notes (whose authority
+  belongs to the intent/contract, not to any party's secret) and mints the swapped
   outputs (security → B, cash → A). Atomicity is *atomic-via-escrow* with a timeout
   refund (HTLC / DvP-CCP style); the only leak is that "an intent of some size
   exists", which institutions accept.
-- **Demo — single combined proof.** One witness holds both parties' secrets and
+- **Demo: single combined proof.** One witness holds both parties' secrets and
   produces one proof (one pairing). This is acceptable **only** because a test
   harness controls both keypairs; it does not demonstrate the no-key-sharing
   property and is **not** the production model. Label it as such wherever shown.
 - Counterparty consent in both models is on-chain via `require_auth` (native
   Ed25519) over a transaction that commits to the concrete intent (output
-  commitments, nonce) — never an in-circuit signature.
+  commitments, nonce), never an in-circuit signature.
 
 ---
 
@@ -208,7 +208,7 @@ witness. We avoid that.
 
 Shielded clawback is enforced in-circuit via an issuer-managed **frozen-commitment
 set** (a separate root). Every spend proves **non-membership** of each spent
-commitment against `frozen_root`, reusing the sanctions non-membership gadget — so
+commitment against `frozen_root`, reusing the sanctions non-membership gadget, so
 a frozen note simply becomes unspendable. Computing a note's nullifier to clawback
 it is impossible: that needs the owner's spending key, which no authority holds.
 
@@ -223,8 +223,8 @@ joins the otherwise-separated read and write authorities explicit and auditable:
 
 `frozen_root` is checked **strictly** against current state on every transfer
 (immediacy is the point of clawback). Only `issuer_authority` can change it, so the
-liveness cost of invalidating in-flight proofs is bounded and non-adversarial —
-affected provers simply detect the change via the API and re-prove against the new
+liveness cost of invalidating in-flight proofs is bounded and non-adversarial.
+Affected provers simply detect the change via the API and re-prove against the new
 root.
 
 ---
@@ -244,7 +244,7 @@ mechanism.
 - **Per-asset limits via membership.** A transfer proves membership of
   `(asset_id, …, per_tx_limit_raw)` against `assets_root` and checks
   `value ≤ per_tx_limit_raw`. The limit arrives as a witness, never as a per-asset
-  public input — exposing it would fingerprint the otherwise-hidden asset. Notional
+  public input. Exposing it would fingerprint the otherwise-hidden asset. Notional
   cross-asset limits ("max $10M/transfer") need a price oracle and are out of scope;
   admins set `per_tx_limit_raw` to reflect notional off-chain. For DvP the check is
   per-leg.
@@ -252,11 +252,11 @@ mechanism.
   transparent input. `(asset_id, amount)` are public; the proof shows the new
   commitment opens to them without revealing `(owner, rho, r)` (not a full opening,
   which would de-anonymize the note at birth). Reuses the output-commitment +
-  auditor-encryption logic — no new crypto.
+  auditor-encryption logic, no new crypto.
 - **Unshield** (shielded → transparent) = a transfer that reveals
   `(asset_id, amount, recipient)` so the contract can call the SAC `transfer`. On
   top of the usual inclusion / nullifier / KYC constraints it MUST enforce a
-  compliant transparent recipient **and frozen-set non-membership** — closing the
+  compliant transparent recipient **and frozen-set non-membership**, closing the
   escape hatch where a frozen note could exit the shielded domain. Revealing
   `asset_id` / `amount` here is inherent to leaving for the transparent layer.
 
@@ -270,16 +270,16 @@ mechanism.
   set of authorities).
 - **Public** (shared backend + chain): commitments, nullifiers, ciphertexts, roots,
   proofs, and the verifying key.
-- The backend is untrusted for confidentiality — it only ever sees public data.
+- The backend is untrusted for confidentiality. It only ever sees public data.
 
 ---
 
 ## Roles
 
-- **Institution user** — sends and receives confidential transfers and settlements.
-- **Regulator / auditor** — holds the view key (**read** authority); can decrypt
+- **Institution user**: sends and receives confidential transfers and settlements.
+- **Regulator / auditor**: holds the view key (**read** authority); can decrypt
   and audit all transactions.
-- **Issuer / admin** — holds `issuer_authority` (**write** authority); updates
+- **Issuer / admin**: holds `issuer_authority` (**write** authority); updates
   compliance roots and freezes/clawbacks via the frozen-commitment set.
 
 These two powers are kept as distinct keys even when one operator runs both in a

@@ -7,7 +7,7 @@ export function MockBadge({ label = 'MOCK DATA' }: { label?: string }) {
   return (
     <span
       className="badge bg-amber-100 text-amber-800"
-      title="Placeholder data - not backed by real chain/crypto wiring yet."
+      title="Placeholder data. Not backed by real chain/crypto wiring yet."
     >
       {label}
     </span>

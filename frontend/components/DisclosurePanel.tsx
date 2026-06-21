@@ -45,7 +45,7 @@ export function DisclosurePanel({ tx }: { tx: OnChainTxSummary | null }) {
     <div className="card lg:sticky lg:top-24">
       <h3 className="text-base font-bold text-ink">Selective disclosure</h3>
       <p className="mt-0.5 text-xs text-ink-muted">
-        The public sees nothing. With the view key, you see everything.
+        The public sees nothing. Load the key to resolve any blob into amounts and parties.
       </p>
 
       {!tx && (
@@ -70,7 +70,7 @@ export function DisclosurePanel({ tx }: { tx: OnChainTxSummary | null }) {
             <p className="mt-2 leading-relaxed text-ink-muted">
               {tx.outputs.length} output note{tx.outputs.length === 1 ? '' : 's'} ·{' '}
               {tx.outputs[0]?.cAuditor.fields.length ?? 0} field-packed auditor-ciphertext elements
-              each, bound to the proof as public inputs (invariant #5).
+              each, bound to the proof as public inputs.
             </p>
           </div>
 

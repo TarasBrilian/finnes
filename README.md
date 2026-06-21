@@ -10,7 +10,7 @@ It is built on Soroban's native BLS12-381 host functions (Protocol 22, CAP-0059)
 and a Groth16 + Circom proving stack.
 
 > Positioning in one line: *"Dark-pool-grade confidentiality, audit-grade
-> transparency."* Finnes is not a mixer — auditability is enforced in-circuit by
+> transparency."* Finnes is not a mixer. Auditability is enforced in-circuit by
 > design.
 
 ---
@@ -27,7 +27,7 @@ crypto that is fine. For institutions it is a dealbreaker:
 - Large pending transfers are exposed to front-running.
 
 Stellar's compliance stack (clawback, transfer restrictions, identity) controls
-*who may hold* a token — but does nothing to hide *amount and parties*. Existing
+*who may hold* a token, but does nothing to hide *amount and parties*. Existing
 crypto privacy tools (mixers) are unusable for institutions because they offer
 total anonymity with no audit trail. The result: institutions are stuck between a
 transparent public ledger (no privacy) and off-chain/permissioned settlement (no
@@ -43,12 +43,12 @@ privacy infrastructure for confidential transfers on public ledgers.
 
 A shielded-note (UTXO) settlement protocol on Soroban with three pillars:
 
-1. **Confidential transfer** — RWA moves via Poseidon commitments that hide
+1. **Confidential transfer**: RWA moves via Poseidon commitments that hide
    amount/asset/owner; nullifiers prevent double-spend. A Groth16 circuit proves
    each transfer is valid without revealing values.
-2. **Atomic DvP** — the asset leg and the payment leg settle together in a single
+2. **Atomic DvP**: the asset leg and the payment leg settle together in a single
    Soroban invocation, so on-chain settlement guarantees are preserved.
-3. **Selective disclosure** — every note is mandatorily encrypted to a regulator
+3. **Selective disclosure**: every note is mandatorily encrypted to a regulator
    *view key* (enforced inside the circuit), and compliance (KYC membership,
    sanctions non-membership, limits) is proven in-circuit without revealing
    identities to the public.
@@ -60,7 +60,7 @@ See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the full technical design.
 ## How it works
 
 Value is held as **shielded notes**. A note records an asset, an amount, and an
-owner, but only its Poseidon **commitment** ever appears on-chain — the amount and
+owner, but only its Poseidon **commitment** ever appears on-chain. The amount and
 parties stay hidden. Commitments are inserted as leaves into an on-chain
 incremental Merkle tree.
 
@@ -74,7 +74,7 @@ but reveals nothing about which note was spent) and a **Groth16 proof** that:
 - each output note is correctly encrypted to the regulator's view key.
 
 The Soroban contract verifies the proof using BLS12-381 host functions, records the
-nullifiers, and appends the new commitments — all in one atomic transaction. The
+nullifiers, and appends the new commitments, all in one atomic transaction. The
 public sees only opaque commitments, nullifiers, and ciphertexts; the regulator,
 holding the view key, can decrypt and audit every transaction in full.
 
@@ -189,7 +189,7 @@ initialization and updatable through the admin entrypoints:
 | `frozen_root` | Root of the issuer-managed frozen-commitment set (clawback; non-membership) |
 | `auditor_pk` | Regulator view-key public key (or a threshold set) |
 | `issuer_authority` | Public key authorized to freeze / clawback |
-| `assets_root` | Merkle root of the authorized-assets registry; each leaf = `(asset_id, sac_address, decimals, per_tx_limit_raw)` — per-asset limits live here, not as a global scalar |
+| `assets_root` | Merkle root of the authorized-assets registry; each leaf = `(asset_id, sac_address, decimals, per_tx_limit_raw)`. Per-asset limits live here, not as a global scalar |
 | `vk_shield`, `vk_transfer`, `vk_unshield`, `vk_dvp` | Groth16 verifying keys per circuit |
 
 `kyc_root`, `sanction_root`, `assets_root`, `auditor_pk`, and `frozen_root` are
@@ -202,12 +202,12 @@ window.
 
 ## Demo flow
 
-1. `shield` — deposit a transparent RWA token, creating a confidential note.
-2. `confidential_transfer` — move value A → B; the public sees only an opaque
+1. `shield`: deposit a transparent RWA token, creating a confidential note.
+2. `confidential_transfer`: move value A → B; the public sees only an opaque
    commitment, a nullifier, and ciphertexts.
 3. Regulator decrypts the mandatory auditor ciphertext with the view key and
    displays the full transaction (amount, parties).
-4. (Stretch) `settle_dvp` — settle a security leg against a confidential cash leg
+4. (Stretch) `settle_dvp`: settle a security leg against a confidential cash leg
    atomically.
 
 Closing narrative: *the public sees that a valid, compliant transfer happened;
@@ -240,7 +240,7 @@ constraint actually constrains.
 - [ ] End-to-end demo (shield → transfer → regulator disclosure)
 - [ ] Atomic DvP (`dvp.circom` + `settle_dvp`)
 - [x] Threshold/multi-auditor view keys (SDK Shamir k-of-n split of the view key,
-      FIN-020 — off-chain key custody; the reconstructed key yields the same
+      FIN-020: off-chain key custody; the reconstructed key yields the same
       `auditor_pk`, so the circuit/contract are unchanged)
 
 ---

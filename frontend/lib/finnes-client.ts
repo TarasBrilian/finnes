@@ -460,7 +460,7 @@ export async function decryptAuditorView(
     assetId: head.assetId,
     rawAmount: head.rawAmount,
     recipientPk: head.party,
-    senderPk: change?.party ?? (tx.circuit === 'shield' ? 'transparent deposit' : '—'),
+    senderPk: change?.party ?? (tx.circuit === 'shield' ? 'transparent deposit' : 'unknown'),
     isMock: false,
   };
 }
@@ -543,7 +543,7 @@ export async function freezeCommitment(cmTargetHex: string): Promise<OpResult> {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     const hint = /require_auth|InvalidAction|Auth|#?\bunauthor/i.test(msg)
-      ? ' (the connected Freighter must be the issuer_authority — admin=issuer=deployer in the demo).'
+      ? ' (the connected Freighter must be the issuer_authority, admin=issuer=deployer in the demo).'
       : /Freighter|wallet|not detected|no account/i.test(msg)
         ? ' Connect the issuer Freighter account (Testnet).'
         : '';

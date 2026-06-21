@@ -10,7 +10,7 @@ export const BATIK_SRC = '/vecteezy_batik-mega-mendung-blue-paattern_11219197.sv
 export const BATIK_BG_SRC = '/vecteezy_megamendung-batik-background-vector_105799.svg';
 
 /**
- * A full-bleed Mega Mendung "textile ribbon" — a horizontal band of the finer
+ * A full-bleed Mega Mendung "textile ribbon", a horizontal band of the finer
  * batik pattern that acts as a section divider. The light asset is darkened and
  * blue-tinted to sit inside the midnight theme, its top/bottom edges fade into
  * the surrounding sections, and the left/right edges dissolve via the marquee
@@ -39,7 +39,7 @@ export function BatikRibbon({ className = '' }: { className?: string }) {
 }
 
 /**
- * A faint, tinted Mega Mendung texture for the corner of a dark section — the
+ * A faint, tinted Mega Mendung texture for the corner of a dark section: the
  * finer pattern at low opacity, anchored to one side, dissolving across. Sits
  * behind content (pointer-events-none, aria-hidden).
  */
