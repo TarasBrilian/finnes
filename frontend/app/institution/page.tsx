@@ -14,7 +14,7 @@ import { useSpendingKeypair } from '@/lib/use-keys';
  * OWN notes.
  */
 
-/** Protocol facts surfaced inline in the title bar — true statements, never faked. */
+/** Protocol facts surfaced inline in the title bar, true statements, never faked. */
 const FACTS: readonly { k: string; v: string }[] = [
   { k: 'Network', v: 'Stellar Testnet' },
   { k: 'Prover', v: 'Client-side' },

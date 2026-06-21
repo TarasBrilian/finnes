@@ -13,11 +13,11 @@ const shortHex = (h: string): string => (h.length <= 16 ? h : `${h.slice(0, 8)}�
 const cmHex = (c: bigint): string => c.toString(16).padStart(64, '0');
 
 /**
- * Clawback / freeze panel (FIN-018, invariant #14) — the regulator console's
+ * Clawback / freeze panel (FIN-018, invariant #14), the regulator console's
  * write surface. Two-phase, two-key:
  *   Phase 1 (read, auditor): identify cm_target by decrypting a tx with the view
  *     key (the disclosure panel above). Its output commitments are pickable here.
- *   Phase 2 (write, issuer): freeze cm_target — compute the new frozen_root (IMT
+ *   Phase 2 (write, issuer): freeze cm_target, compute the new frozen_root (IMT
  *     insert) and submit the real `freeze` tx (issuer Freighter). Every later spend
  *     proves non-membership against frozen_root, so the note becomes unspendable.
  */
@@ -68,13 +68,13 @@ export function FreezePanel({ selected }: { selected: OnChainTxSummary | null })
 
       <p className="mt-2 max-w-2xl text-sm text-ink-muted">
         The auditor (read authority) identifies a target commitment by decrypting a transaction with
-        the view key; the issuer (write authority) freezes it. A frozen note is unspendable — every
+        the view key; the issuer (write authority) freezes it. A frozen note is unspendable: every
         spend must prove non-membership against <span className="mono">frozen_root</span> (invariant
         #14/#19). No authority can compute a note&apos;s nullifier, so clawback is freeze-based, not a
         forced spend.
       </p>
 
-      {/* Phase 1 — pick cm_target from the disclosed transaction's outputs. */}
+      {/* Phase 1, pick cm_target from the disclosed transaction's outputs. */}
       <div className="mt-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
           1 · Target commitment (auditor read)
@@ -103,7 +103,7 @@ export function FreezePanel({ selected }: { selected: OnChainTxSummary | null })
           </div>
         ) : (
           <p className="mt-1 text-xs text-ink-faint">
-            Select a transaction in the ledger and load the view key to pick a target — or paste a
+            Select a transaction in the ledger and load the view key to pick a target, or paste a
             commitment below.
           </p>
         )}
@@ -116,7 +116,7 @@ export function FreezePanel({ selected }: { selected: OnChainTxSummary | null })
         />
       </div>
 
-      {/* Phase 2 — issuer freezes. */}
+      {/* Phase 2, issuer freezes. */}
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <button
           type="button"
@@ -142,7 +142,7 @@ export function FreezePanel({ selected }: { selected: OnChainTxSummary | null })
           </span>
         </div>
         {frozen.length === 0 ? (
-          <p className="mt-1 text-xs text-ink-faint">Empty — no commitments have been frozen.</p>
+          <p className="mt-1 text-xs text-ink-faint">Empty, no commitments have been frozen.</p>
         ) : (
           <ul className="mt-2 space-y-1">
             {frozen.map((h) => (

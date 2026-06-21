@@ -5,7 +5,7 @@ import type { OpResult, OpStep } from '@/lib/finnes-client';
 /**
  * Renders the honest step-by-step status of a REAL write (FIN-027): assemble
  * witness → prove in-browser → submit the Soroban tx. Each step shows its genuine
- * outcome (done / error) as the pipeline runs — we NEVER render a fake success. A
+ * outcome (done / error) as the pipeline runs, we NEVER render a fake success. A
  * step that needs an operator prerequisite (served .zkey, connected Freighter, or
  * enough spendable notes) fails with an actionable error.
  */
@@ -38,7 +38,7 @@ export function OpResultPanel({ result }: { result: OpResult | null }) {
     result.status === 'ok'
       ? { cls: 'bg-emerald-50 text-emerald-900', text: 'Submitted on-chain.' }
       : result.status === 'error'
-        ? { cls: 'bg-rose-50 text-rose-900', text: 'Stopped — see the failing step below.' }
+        ? { cls: 'bg-rose-50 text-rose-900', text: 'Stopped, see the failing step below.' }
         : { cls: 'bg-amber-50 text-amber-900', text: 'In progress.' };
 
   return (

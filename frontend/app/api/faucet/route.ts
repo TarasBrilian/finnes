@@ -1,10 +1,10 @@
 /**
- * Test-TBOND faucet (FIN-027) — SERVER-SIDE. Sends the demo TBOND asset to a
+ * Test-TBOND faucet (FIN-027), SERVER-SIDE. Sends the demo TBOND asset to a
  * visitor's address so newcomers (who hold no TBOND) can actually try the app.
  *
  * The funding secret (`FAUCET_SECRET`) lives ONLY here, server-side (never shipped
  * to the browser). Set it in frontend/.env.local to a TESTNET key that can fund
- * TBOND — ideally the TBOND issuer (it mints on payment) or the deployer (finite
+ * TBOND, ideally the TBOND issuer (it mints on payment) or the deployer (finite
  * balance). The recipient must already hold a TBOND trustline (the faucet PAGE
  * walks the user through signing that with their own wallet, which only they can).
  *
@@ -29,7 +29,7 @@ const ISSUER = process.env.NEXT_PUBLIC_TBOND_ISSUER || 'GB66GONTENMTB5L5QXO7ARYR
 const FAUCET_SECRET = process.env.FAUCET_SECRET; // SERVER-ONLY; never NEXT_PUBLIC_*.
 const DISPENSE = process.env.FAUCET_AMOUNT || '1'; // display TBOND per claim
 
-// Simple in-memory cooldown (per address). Resets on server restart — fine for a demo.
+// Simple in-memory cooldown (per address). Resets on server restart, fine for a demo.
 const lastClaim = new Map<string, number>();
 const COOLDOWN_MS = 60_000;
 

@@ -42,7 +42,7 @@ function looksLikeStellarAddress(s: string): boolean {
 
 const RECIPIENT_ADDRESS_ERROR =
   "That's a transparent Stellar address (G…). A confidential transfer needs the recipient's " +
-  'shielded key (owner_pk) — share it from the “Shielded key” panel.';
+  'shielded key (owner_pk), share it from the “Shielded key” panel.';
 
 interface ModeMeta {
   readonly id: Mode;
@@ -238,7 +238,7 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
                 <input
                   id="sc-recipient-pk"
                   className="input font-mono"
-                  placeholder="zk… — not a G… address"
+                  placeholder="zk…, not a G… address"
                   value={recipientPk}
                   onChange={(e) => setRecipientPk(e.target.value)}
                   aria-invalid={!!recipientError}
@@ -249,7 +249,7 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
                   </p>
                 ) : (
                   <p className="mt-1.5 text-[11px] text-ink-faint">
-                    Public key the receiver shares — safe to paste.
+                    Public key the receiver shares, safe to paste.
                   </p>
                 )}
               </div>
@@ -266,7 +266,7 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
                   onChange={(e) => setSacAddress(e.target.value)}
                 />
                 <p className="mt-1.5 text-[11px] text-ink-faint">
-                  asset_id = Poseidon(sac_address) — the note binds to this asset.
+                  asset_id = Poseidon(sac_address), the note binds to this asset.
                 </p>
               </div>
             )}
@@ -324,7 +324,7 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
                     <span className="text-ink-muted">
                       Spendable note on-chain:{' '}
                       <span className="font-mono text-sm font-semibold text-ink">{spendable.rawAmount.toString()}</span> raw
-                      {' '}({formatRawAmount(spendable.rawAmount, DISPLAY_DECIMALS)} {ticker}) — pre-filled.{' '}
+                      {' '}({formatRawAmount(spendable.rawAmount, DISPLAY_DECIMALS)} {ticker}), pre-filled.{' '}
                       <button
                         type="button"
                         className="ml-1 font-semibold text-blue-600 underline"
@@ -333,7 +333,7 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
                         use max
                       </button>
                       <span className="mt-1 block text-ink-faint">
-                        No TBOND deposit here — unshield pays OUT from the contract; your wallet only pays the XLM fee.
+                        No TBOND deposit here, unshield pays OUT from the contract; your wallet only pays the XLM fee.
                       </span>
                     </span>
                   ) : (
@@ -346,7 +346,7 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
               {mode === 'transfer' && (
                 <p className="mt-1.5 text-[11px] text-ink-faint">
                   A transfer spends 2 notes. If you don&apos;t have 2 yet, this <span className="font-semibold text-ink-muted">auto-shields</span> them
-                  first — expect a few wallet prompts (the auto-shields, then the transfer). No need to press Shield manually.
+                  first, expect a few wallet prompts (the auto-shields, then the transfer). No need to press Shield manually.
                 </p>
               )}
             </div>
@@ -391,7 +391,7 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
         {/* ---- Action bar --------------------------------------------- */}
         <div className="mt-2 flex flex-col gap-3 border-t border-blue-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
           <p className="order-2 max-w-sm text-[11px] leading-relaxed text-ink-faint sm:order-1">
-            The witness is assembled and proven in this tab — keys and note plaintext never leave the
+            The witness is assembled and proven in this tab, keys and note plaintext never leave the
             browser (invariant #8).
           </p>
           <div className="order-1 sm:order-2 sm:text-right">

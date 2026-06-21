@@ -7,7 +7,7 @@ function shortCm(c: bigint): string {
   return hex.length <= 10 ? `0x${hex}` : `0x${hex.slice(0, 6)}…${hex.slice(-4)}`;
 }
 
-/** Compact display of a tx hash — real Testnet hashes are 64 hex chars. */
+/** Compact display of a tx hash, real Testnet hashes are 64 hex chars. */
 function shortHash(h: string): string {
   return h.length <= 18 ? h : `${h.slice(0, 10)}…${h.slice(-6)}`;
 }

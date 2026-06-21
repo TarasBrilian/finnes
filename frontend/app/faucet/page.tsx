@@ -3,7 +3,7 @@
 /**
  * Test-TBOND faucet page (FIN-027). Lets any visitor get the demo asset so they
  * can actually use the app: connect a wallet → add the TBOND trustline (they sign
- * it — only they can) → claim TBOND from the server faucet. Two steps because a
+ * it, only they can) → claim TBOND from the server faucet. Two steps because a
  * trustline needs the holder's signature; the funding happens server-side.
  */
 
@@ -75,7 +75,7 @@ export default function FaucetPage() {
   async function addTrustline() {
     if (!address) return;
     setBusy('trustline');
-    setMsg({ kind: 'info', text: 'Building trustline transaction — approve it in Freighter…' });
+    setMsg({ kind: 'info', text: 'Building trustline transaction, approve it in Freighter…' });
     try {
       const f = await fr();
       const s = server();
@@ -141,7 +141,7 @@ export default function FaucetPage() {
                 <div className="mono break-all text-ink">{address}</div>
                 <div className="mt-1 text-ink-muted">
                   TBOND balance:{' '}
-                  <span className="font-mono font-semibold text-ink">{balance ?? (hasTrustline ? '0' : '—')}</span>
+                  <span className="font-mono font-semibold text-ink">{balance ?? (hasTrustline ? '0' : '-')}</span>
                   {hasTrustline === false && <span className="ml-1 text-rose-600">(no trustline yet)</span>}
                 </div>
               </div>
@@ -183,7 +183,7 @@ export default function FaucetPage() {
         </div>
 
         <p className="mt-6 text-[11px] leading-relaxed text-ink-faint">
-          Testnet, demo-only — TBOND here has no real value. After claiming, go to the{' '}
+          Testnet, demo-only, TBOND here has no real value. After claiming, go to the{' '}
           <a className="underline" href="/institution">institution console</a> to shield, transfer, and unshield.
           The funder runs server-side; your keys never leave your wallet.
         </p>

@@ -60,7 +60,7 @@ export default function RegulatorPage() {
           ) : (
             <>
               <span className="chip mr-2">Demo</span>
-              Showing the deterministic demo fixture — no live events in range (RPC unavailable or
+              Showing the deterministic demo fixture, no live events in range (RPC unavailable or
               past Testnet&apos;s ~22h event retention). Crypto is still genuine.
             </>
           )}
