@@ -252,8 +252,8 @@ pub struct UnshieldPublicInputs {
 /// ```text
 ///  0 anchor_root  1 kyc_root  2 sanction_root  3 assets_root  4 frozen_root
 ///  5 auditor_pk   6 nf_legX_0 7 nf_legY_0      8 cm_out_X     9 cm_out_Y
-/// 10 new_root    11 fee_X    12 fee_Y
-/// 13..13+D-1  old_frontier[0..D-1]
+/// 10 new_root    11 fee_X    12 fee_Y    13 next_index
+/// 14..14+D-1  old_frontier[0..D-1]
 ///    ..+D     new_frontier[0..D-1]
 ///    ..+K_a   c_auditor_X  ..+K_a c_auditor_Y
 ///    ..+K_r   c_recipient_X ..+K_r c_recipient_Y
@@ -274,6 +274,8 @@ pub struct DvpPublicInputs {
     pub new_root: BytesN<32>,
     pub fee_x: BytesN<32>,
     pub fee_y: BytesN<32>,
+    /// Current leaf count, pinned to state.leaf_count (invariants #11/#12).
+    pub next_index: BytesN<32>,
     pub old_frontier: Vec<BytesN<32>>,
     pub new_frontier: Vec<BytesN<32>>,
     pub c_auditor_x: Vec<BytesN<32>>,
@@ -386,7 +388,8 @@ impl DvpPublicInputs {
         v.push_back(self.new_root.clone()); // 10
         v.push_back(self.fee_x.clone()); // 11
         v.push_back(self.fee_y.clone()); // 12
-        extend(&mut v, &self.old_frontier); // 13 .. 13+D-1
+        v.push_back(self.next_index.clone()); // 13
+        extend(&mut v, &self.old_frontier); // 14 .. 14+D-1
         extend(&mut v, &self.new_frontier);
         extend(&mut v, &self.c_auditor_x);
         extend(&mut v, &self.c_auditor_y);

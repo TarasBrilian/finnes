@@ -532,3 +532,167 @@ export function buildUnshieldWitness(input: UnshieldWitnessInput): UnshieldWitne
 
   return { witness, derived: { cmIn, nf, cmChange, hasChange, newRoot, newFrontier } };
 }
+
+// ===========================================================================
+// dvp.circom - atomic two-asset settlement (DEMO: single combined proof) (FIN-016)
+// ===========================================================================
+
+/**
+ * Fully-resolved inputs for a two-leg DvP witness. Per-leg arrays are indexed
+ * [0]=X (A spends asset X -> B), [1]=Y (B spends asset Y -> A). Each leg spends a
+ * single note of ONE asset to one output; the legs use DIFFERENT assets and
+ * DIFFERENT spending keys (one combined proof — DEMO only, invariant #15).
+ *
+ * SECRET: this embeds BOTH parties' spending keys + note openings (invariant #8).
+ */
+export interface DvpWitnessInput {
+  // shared state (one of each, both legs)
+  readonly anchorRoot: Fr;
+  readonly kycRoot: Fr;
+  readonly sanctionRoot: Fr;
+  readonly assetsRoot: Fr;
+  readonly frozenRoot: Fr;
+  readonly auditorPk: Fr;
+  /** Single sender↔auditor shared key for both legs; `auditor_pk = Poseidon(kView)`. */
+  readonly kView: Fr;
+  readonly oldFrontier: readonly Fr[];
+  readonly nextIndex: number;
+  // per leg [0]=X, [1]=Y
+  readonly inNotes: readonly [Note, Note];
+  /** Each leg's own spender key (no key sharing across legs). SECRET. */
+  readonly ownerSk: readonly [Fr, Fr];
+  readonly inPaths: readonly [MerklePath, MerklePath];
+  /** Output notes (each leg's output asset == its input asset; normalised here). */
+  readonly outNotes: readonly [Note, Note];
+  readonly frozenLow: readonly [ImtLowLeaf, ImtLowLeaf];
+  readonly frozenPaths: readonly [MerklePath, MerklePath];
+  readonly sacAddress: readonly [Fr, Fr];
+  readonly decimals: readonly [Fr, Fr];
+  readonly perTxLimitRaw: readonly [Fr, Fr];
+  readonly assetsPaths: readonly [MerklePath, MerklePath];
+  /** KYC membership of each leg's recipient (= outNotes[L].ownerPk). */
+  readonly kycPaths: readonly [MerklePath, MerklePath];
+  readonly sanctionLow: readonly [ImtLowLeaf, ImtLowLeaf];
+  readonly sanctionPaths: readonly [MerklePath, MerklePath];
+  /** Per-leg fee (fee_X, fee_Y); 0 in the demo (invariant #3). */
+  readonly fee: readonly [Fr, Fr];
+  readonly kPair: readonly [Fr, Fr];
+  readonly rhoEncAuditor: readonly [Fr, Fr];
+  readonly rhoEncRecipient: readonly [Fr, Fr];
+}
+
+export interface DvpWitnessDerived {
+  readonly nf: readonly [Fr, Fr];
+  readonly cmOut: readonly [Fr, Fr];
+  readonly newRoot: Fr;
+  readonly newFrontier: readonly Fr[];
+}
+
+export interface DvpWitnessResult {
+  readonly witness: CircomWitness;
+  readonly derived: DvpWitnessDerived;
+}
+
+/**
+ * Assemble the complete `Dvp(D, 5, 5)` witness from resolved inputs. Depth `D` is
+ * taken from `oldFrontier.length`. Each leg's output commitment + ciphertexts use
+ * the leg's INPUT asset_id (the circuit binds `outNote.asset_id <== in_asset_id`),
+ * so the output note's asset is normalised to the input's here to stay consistent.
+ * The two output commitments are inserted at `nextIndex` and `nextIndex + 1`.
+ */
+export function buildDvpWitness(input: DvpWitnessInput): DvpWitnessResult {
+  const depth = input.oldFrontier.length;
+  // Normalise each leg's output asset to its input asset (the circuit uses
+  // in_asset_id for the output commitment + the encryption binding).
+  const outLeg = (L: 0 | 1): Note => ({ ...input.outNotes[L], assetId: input.inNotes[L].assetId });
+  const out0 = outLeg(0);
+  const out1 = outLeg(1);
+
+  const nf: [Fr, Fr] = [
+    deriveNullifier(input.inNotes[0].rho, input.ownerSk[0] as OwnerSk),
+    deriveNullifier(input.inNotes[1].rho, input.ownerSk[1] as OwnerSk),
+  ];
+  const cmOut: [Fr, Fr] = [commitNote(out0), commitNote(out1)];
+  const cAud: [readonly Fr[], readonly Fr[]] = [
+    encryptToAuditor(out0, input.kView, { rhoEnc: input.rhoEncAuditor[0] }).fields,
+    encryptToAuditor(out1, input.kView, { rhoEnc: input.rhoEncAuditor[1] }).fields,
+  ];
+  const cRec: [readonly Fr[], readonly Fr[]] = [
+    encryptToRecipient(out0, input.kPair[0], { rhoEnc: input.rhoEncRecipient[0] }).fields,
+    encryptToRecipient(out1, input.kPair[1], { rhoEnc: input.rhoEncRecipient[1] }).fields,
+  ];
+
+  const { newFrontier, newRoot } = applyFrontierTransition(
+    input.oldFrontier,
+    input.nextIndex,
+    [cmOut[0], cmOut[1]],
+    depth,
+  );
+
+  const witness: CircomWitness = {
+    // --- public inputs (canonical order) ---
+    anchor_root: S(input.anchorRoot),
+    kyc_root: S(input.kycRoot),
+    sanction_root: S(input.sanctionRoot),
+    assets_root: S(input.assetsRoot),
+    frozen_root: S(input.frozenRoot),
+    auditor_pk: S(input.auditorPk),
+    nf_legX_0: S(nf[0]),
+    nf_legY_0: S(nf[1]),
+    cm_out_X: S(cmOut[0]),
+    cm_out_Y: S(cmOut[1]),
+    new_root: S(newRoot),
+    fee_X: S(input.fee[0]),
+    fee_Y: S(input.fee[1]),
+    next_index: String(input.nextIndex),
+    old_frontier: input.oldFrontier.map(String),
+    new_frontier: newFrontier.map(String),
+    c_auditor_X: cAud[0].map(String),
+    c_auditor_Y: cAud[1].map(String),
+    c_recipient_X: cRec[0].map(String),
+    c_recipient_Y: cRec[1].map(String),
+
+    // --- private witness (per leg [0]=X, [1]=Y) ---
+    in_asset_id: [S(input.inNotes[0].assetId), S(input.inNotes[1].assetId)],
+    in_value: [S(input.inNotes[0].value), S(input.inNotes[1].value)],
+    in_owner_pk: [S(input.inNotes[0].ownerPk), S(input.inNotes[1].ownerPk)],
+    in_rho: [S(input.inNotes[0].rho), S(input.inNotes[1].rho)],
+    in_r_note: [S(input.inNotes[0].rNote), S(input.inNotes[1].rNote)],
+    owner_sk: [S(input.ownerSk[0]), S(input.ownerSk[1])],
+    in_path_elements: [pe(input.inPaths[0]), pe(input.inPaths[1])],
+    in_path_indices: [pi(input.inPaths[0]), pi(input.inPaths[1])],
+
+    frozen_low_value: [S(input.frozenLow[0].value), S(input.frozenLow[1].value)],
+    frozen_low_next_index: [S(input.frozenLow[0].nextIndex), S(input.frozenLow[1].nextIndex)],
+    frozen_low_next_value: [S(input.frozenLow[0].nextValue), S(input.frozenLow[1].nextValue)],
+    frozen_path_elements: [pe(input.frozenPaths[0]), pe(input.frozenPaths[1])],
+    frozen_path_indices: [pi(input.frozenPaths[0]), pi(input.frozenPaths[1])],
+
+    out_value: [S(out0.value), S(out1.value)],
+    out_owner_pk: [S(out0.ownerPk), S(out1.ownerPk)],
+    out_rho: [S(out0.rho), S(out1.rho)],
+    out_r_note: [S(out0.rNote), S(out1.rNote)],
+
+    sac_address: [S(input.sacAddress[0]), S(input.sacAddress[1])],
+    decimals: [S(input.decimals[0]), S(input.decimals[1])],
+    per_tx_limit_raw: [S(input.perTxLimitRaw[0]), S(input.perTxLimitRaw[1])],
+    assets_path_elements: [pe(input.assetsPaths[0]), pe(input.assetsPaths[1])],
+    assets_path_indices: [pi(input.assetsPaths[0]), pi(input.assetsPaths[1])],
+
+    kyc_path_elements: [pe(input.kycPaths[0]), pe(input.kycPaths[1])],
+    kyc_path_indices: [pi(input.kycPaths[0]), pi(input.kycPaths[1])],
+
+    sanction_low_value: [S(input.sanctionLow[0].value), S(input.sanctionLow[1].value)],
+    sanction_low_next_index: [S(input.sanctionLow[0].nextIndex), S(input.sanctionLow[1].nextIndex)],
+    sanction_low_next_value: [S(input.sanctionLow[0].nextValue), S(input.sanctionLow[1].nextValue)],
+    sanction_path_elements: [pe(input.sanctionPaths[0]), pe(input.sanctionPaths[1])],
+    sanction_path_indices: [pi(input.sanctionPaths[0]), pi(input.sanctionPaths[1])],
+
+    k_view: S(input.kView),
+    k_pair: [S(input.kPair[0]), S(input.kPair[1])],
+    rho_enc_auditor: [S(input.rhoEncAuditor[0]), S(input.rhoEncAuditor[1])],
+    rho_enc_recipient: [S(input.rhoEncRecipient[0]), S(input.rhoEncRecipient[1])],
+  };
+
+  return { witness, derived: { nf, cmOut, newRoot, newFrontier } };
+}

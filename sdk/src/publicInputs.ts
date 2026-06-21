@@ -206,9 +206,9 @@ export function buildUnshieldPublicInputs(args: {
  * Order (docs/PUBLIC_IO.md §dvp.circom):
  *   0 anchor_root, 1 kyc_root, 2 sanction_root, 3 assets_root, 4 frozen_root,
  *   5 auditor_pk, 6 nf_legX_0, 7 nf_legY_0, 8 cm_out_X, 9 cm_out_Y, 10 new_root,
- *   11 fee_X, 12 fee_Y, 13.. old_frontier[D], ..new_frontier[D],
+ *   11 fee_X, 12 fee_Y, 13 next_index, 14.. old_frontier[D], ..new_frontier[D],
  *   ..c_auditor_X[K_a], ..c_auditor_Y[K_a], ..c_recipient_X[K_r],
- *   ..c_recipient_Y[K_r].
+ *   ..c_recipient_Y[K_r]. Total 74 (D=20, K_a=K_r=5).
  *
  * The single combined-proof form is DEMO-ONLY (invariant #15 / ARCHITECTURE.md
  * §Settlement); production DvP uses the escrow / two-phase flow built from
@@ -224,6 +224,8 @@ export function buildDvpPublicInputs(args: {
   newRoot: MerkleRoot;
   feeX: RawAmount;
   feeY: RawAmount;
+  /** Current leaf count the contract pins to state (invariants #11/#12). */
+  nextIndex: bigint;
   oldFrontier: Frontier;
   newFrontier: Frontier;
   cAuditorX: Ciphertext;
@@ -248,6 +250,7 @@ export function buildDvpPublicInputs(args: {
     args.newRoot,
     args.feeX,
     args.feeY,
+    args.nextIndex,
     ...args.oldFrontier,
     ...args.newFrontier,
     ...args.cAuditorX.fields,

@@ -462,8 +462,39 @@ but the cargo **workspace** emits to `contracts/target/`, and Soroban needs the
 
 ## Backlog — deferred (not needed for the core demo)
 
-### [ ] FIN-016 · P3 · `dvp.circom` + `settle_dvp` (demo combined proof)
+### [~] FIN-016 · P3 · `dvp.circom` + `settle_dvp` (demo combined proof) — CIRCUIT + WITNESS GATE + WIRING DONE; D=20 ceremony/on-chain deferred to Railway
 Two-leg combined circuit (demo single-witness, labelled non-production). Consent via on-chain `require_auth` for both parties, not in-circuit signature (invariant #15).
+- **Done (circuit — it now COMPILES, was the FIN-007 blocker):** rewrote the scaffold,
+  which didn't compile (it `include`d BN254 `circomlib` — invariant #1 — and used stale
+  gadget interfaces: `.lo/.hi`, `AuditorEncCheck(K_a)`/`enc_rand`). The reusable
+  `Dvp(D,K_a,K_r)` template was hoisted to `circuits/lib/dvp.circom` (a `DvpLeg`
+  sub-template per leg, wired to the EXACT FIN-003/004/005 gadgets `lib/transfer.circom`
+  uses); top-level `circuits/dvp.circom` fixes `D=20, K_a=K_r=5`. Compiles to **74 public
+  signals** (94,393 non-linear constraints). Two legs: leg X (A→B, asset X), leg Y (B→A,
+  asset Y) — DIFFERENT assets + DIFFERENT spending keys (no cross-leg netting, #3).
+- **Done (soundness — `next_index` added, #11/#12):** the scaffold's private `nextIndex`
+  let a prover insert at a wrong position; it is now a PUBLIC input the contract pins to
+  `leaf_count` (closing the same hole FIN-006/012/013 closed). De-drifted across all
+  surfaces: `docs/PUBLIC_IO.md` (73→**74**, next_index at index 13), `types.rs`
+  `DvpPublicInputs` + `to_scalars`, `sdk/src/publicInputs.ts` `buildDvpPublicInputs`,
+  and `settle_dvp` (`check_next_index`, replacing the FIN-011 TODO).
+- **Done (witness builder + acceptance gate):** `sdk/src/buildDvpWitness` (full
+  per-leg commitment/nullifier/ciphertext computation + combined frontier transition;
+  exported). `scripts/lib/dvp-scenario.ts` + `scripts/test-dvp-witness.ts`
+  (`npm run dvp:witness`, added to CI) drive `circuits/test/dvp/dvp_test.circom`
+  (`Dvp(6,5,5)`): a valid two-leg witness is **accepted**, and **one failing witness
+  per constraint class is rejected** — per-leg conservation (#3), bad input path,
+  missing auditor ct (#5), frozen spent note (#14), over-limit (#17), tampered new_root
+  (#12), tampered nullifier (#4), cross-leg asset/registry mismatch (#3/#16). 9/9 green.
+- **Done (contract):** `settle_dvp` now pins `next_index`; `cargo fmt`/`clippy`/`cargo test`
+  (26) green; `npm run typecheck` + `npm test` (26) green.
+- **Deferred (same procedure as the other circuits, operator/Railway):** the D=20 `dvp`
+  phase-2 ceremony (`setup-ceremony.sh` already lists `dvp`; it was skipped only because
+  the circuit didn't compile — now it will export `vk_dvp.json`), wiring the real `vk_dvp`
+  into `init` (currently an empty placeholder), and a live on-chain `settle_dvp` (needs
+  the Railway zkey + both parties' `require_auth`). The escrow/two-phase PRODUCTION DvP
+  stays FIN-017. Binding a nonce + output commitments into the `require_auth` payload is a
+  remaining hardening TODO in `settle_dvp`.
 
 ### [ ] FIN-017 · P3 · Production DvP via escrow
 Escrow / two-phase settlement (each party single-party-spends into an intent-owned escrow note; settlement spends both and mints swapped outputs). Atomic-via-escrow with timeout refund.

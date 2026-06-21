@@ -23,6 +23,7 @@
     "transfer:witness": "tsx scripts/test-transfer-witness.ts",
     "shield:witness": "tsx scripts/test-shield-witness.ts",
     "unshield:witness": "tsx scripts/test-unshield-witness.ts",
+    "dvp:witness": "tsx scripts/test-dvp-witness.ts",
     "transfer:prove": "tsx scripts/test-prove-transfer.ts",
     "transfer:prove:d20": "tsx scripts/test-prove-transfer-d20.ts",
     "transfer:live:anchor": "tsx scripts/test-transfer-live-anchor.ts",

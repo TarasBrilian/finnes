@@ -274,18 +274,18 @@ impl FinnesContract {
         check_assets_root(&env, &pi.assets_root)?;
         check_auditor_pk(&env, &pi.auditor_pk)?;
 
-        // 1'. Tree transition input.
+        // 1'. Tree transition input: frontier + next_index pinned to state
+        // (invariants #11/#12; FIN-016 — dvp.circom now exposes next_index).
         if !merkle::check_old_frontier(&env, &pi.old_frontier)? {
             return Err(Error::UnknownAnchorRoot);
         }
+        check_next_index(&env, &pi.next_index)?;
 
         // 4. ONE Groth16 proof for both legs (invariant #7 - never two).
         let vk = state::get_vk(&env, Circuit::Dvp).ok_or(Error::VerifyingKeyMissing)?;
         verifier::verify_groth16(&env, &vk, &proof, &pi.to_scalars(&env))?;
 
         // 5. Effects. Two output notes (one per leg) => advance leaf count by 2.
-        // TODO(FIN-016): check pi.next_index == leaf_count once dvp.circom
-        //    exposes the next_index public input.
         state::insert_nullifier(&env, &pi.nf_leg_x_0);
         state::insert_nullifier(&env, &pi.nf_leg_y_0);
         merkle::apply_transition(&env, &pi.new_frontier, &pi.new_root, 2)?;

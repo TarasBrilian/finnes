@@ -202,10 +202,9 @@ Total: **73** public signals (`13 + 2·D + 2·K_a + 2·K_r` = `13 + 40 + 10 + 10
 > never prover-controlled — otherwise a prover could compute a self-consistent
 > transition for a wrong index and corrupt the verbatim-stored tree
 > (invariants #11/#12). The FIN-003 heads-up flagged this; it is now wired.
-> `shield` is now amended (FIN-012: `next_index` at index 8, total 59) and
-> `unshield` too (FIN-013: `next_index` at index 13, total 64). `dvp` needs the
-> same signal when its circuit is completed (FIN-016) — its table below is NOT yet
-> amended.
+> `shield` is now amended (FIN-012: `next_index` at index 8, total 59),
+> `unshield` too (FIN-013: `next_index` at index 13, total 64), and `dvp`
+> (FIN-016: `next_index` at index 13, total 74). All four circuits now carry it.
 
 Private witness: input notes `(asset_id, value, owner_pk, rho, r_note)×2`,
 `owner_sk`, Merkle paths for the two inputs, KYC path, sanctions non-membership
@@ -330,17 +329,19 @@ this combined circuit.
 10       new_root
 11       fee_x
 12       fee_y
-13 .. 32 old_frontier[0..19] (D = 20)
-33 .. 52 new_frontier[0..19]
-53 .. 57 c_auditor_X[0..4]   (mandatory)
-58 .. 62 c_auditor_Y[0..4]   (mandatory)
-63 .. 67 c_recipient_X[0..4]
-68 .. 72 c_recipient_Y[0..4]
+13       next_index          (current leaf count; contract pins to state, #11/#12)
+14 .. 33 old_frontier[0..19] (D = 20)
+34 .. 53 new_frontier[0..19]
+54 .. 58 c_auditor_X[0..4]   (mandatory)
+59 .. 63 c_auditor_Y[0..4]   (mandatory)
+64 .. 68 c_recipient_X[0..4]
+69 .. 73 c_recipient_Y[0..4]
 ```
 
-Total: **73** public signals (`13 + 2·D + 2·K_a + 2·K_r` = `13 + 40 + 10 + 10`).
+Total: **74** public signals (`14 + 2·D + 2·K_a + 2·K_r` = `14 + 40 + 10 + 10`).
 Signal names match `DvpPublicInputs` in `contracts/finnes/src/types.rs`
-(`nf_leg_x_0` / `nf_leg_y_0` / `fee_x` / `fee_y`).
+(`nf_leg_x_0` / `nf_leg_y_0` / `fee_x` / `fee_y` / `next_index`). `next_index` was
+added in FIN-016 (the soundness pin the other circuits already carry, #11/#12).
 
 Per-leg: conservation per asset, per-leg `per_tx_limit_raw` check, KYC of each
 recipient, frozen/sanctions non-membership. Consent is on-chain via `require_auth`

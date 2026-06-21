@@ -78,6 +78,9 @@ export { discloseNote, discloseTransaction, formatRawAmount } from './disclose.j
 
 export type {
   CircomWitness,
+  DvpWitnessDerived,
+  DvpWitnessInput,
+  DvpWitnessResult,
   ImtLowLeaf,
   ShieldWitnessDerived,
   ShieldWitnessInput,
@@ -89,7 +92,12 @@ export type {
   UnshieldWitnessInput,
   UnshieldWitnessResult,
 } from './witness.js';
-export { buildShieldWitness, buildTransferWitness, buildUnshieldWitness } from './witness.js';
+export {
+  buildDvpWitness,
+  buildShieldWitness,
+  buildTransferWitness,
+  buildUnshieldWitness,
+} from './witness.js';
 
 export type { PublicInputVector } from './publicInputs.js';
 export {
