@@ -66,7 +66,7 @@ import {
   resolveParty,
 } from './demo-data.js';
 import { computeFreeze, toHex } from './freeze.js';
-import { indexFrozen, indexTransactions } from './indexer.js';
+import { indexFrozen, indexTransactions, type PublicReveal } from './indexer.js';
 import { readCurrentRoot, submitFreeze, submitInvocation } from './soroban.js';
 import {
   fetchLiveOwnedNotes,
@@ -327,6 +327,8 @@ export interface OnChainTxSummary {
   /** What the PUBLIC sees: opaque nullifiers + per-output commitments/ciphertexts. */
   readonly nullifiers: readonly string[];
   readonly outputs: readonly OnChainOutput[];
+  /** For `unshield`: asset/amount/recipient revealed in the clear on-chain. */
+  readonly publicReveal?: PublicReveal;
   readonly isMock: boolean;
 }
 
@@ -352,6 +354,9 @@ export interface DecryptedAuditView {
   readonly rawAmount: bigint;
   readonly senderPk: string;
   readonly recipientPk: string;
+  /** True when there is no confidential note: the values are already public
+   *  on-chain (an exact-spend unshield). Not a decryption, just a restatement. */
+  readonly publicOnly?: boolean;
   readonly isMock: boolean;
 }
 
@@ -381,6 +386,7 @@ export async function listOnChainTransactions(): Promise<OnChainTxSummary[]> {
         circuit: t.circuit,
         nullifiers: t.nullifiers,
         outputs: t.outputs.map((o) => ({ commitment: o.commitment, cAuditor: o.cAuditor })),
+        publicReveal: t.publicReveal,
         isMock: false,
       }));
     }
@@ -422,9 +428,23 @@ export async function decryptAuditorView(
   auditor: AuditorKeypair,
 ): Promise<DecryptedAuditView> {
   // An exact-spend unshield (cm_change_0 == 0) mints no confidential change note,
-  // so there is nothing to disclose, it already reveals asset/amount/recipient
-  // publicly. Surface that honestly rather than as a key failure.
+  // so there is nothing to DECRYPT — but the value leaving to the transparent
+  // layer is already public on-chain. Surface that public reveal instead of an
+  // error: an unshield is meant to be visible, that is the whole point.
   if (tx.outputs.length === 0) {
+    if (tx.publicReveal) {
+      const asset = resolveAsset(tx.publicReveal.assetId);
+      return {
+        outputs: [],
+        assetLabel: asset?.label ?? `asset ${tx.publicReveal.assetId.toString()}`,
+        assetId: tx.publicReveal.assetId,
+        rawAmount: tx.publicReveal.amount,
+        recipientPk: `0x${tx.publicReveal.recipient.toString(16)}`,
+        senderPk: 'shielded pool (sender hidden)',
+        publicOnly: true,
+        isMock: false,
+      };
+    }
     throw new Error(
       'This transaction has no confidential output notes to disclose (an exact-spend unshield reveals its asset, amount, and recipient publicly on-chain).',
     );
