@@ -38,7 +38,7 @@ mod test;
 #[cfg(test)]
 mod test_vectors;
 
-use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env};
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Vec};
 
 use crate::errors::Error;
 use crate::state::{Tree, RECENT_ROOTS_CAPACITY};
@@ -790,6 +790,32 @@ impl FinnesContract {
     // -----------------------------------------------------------------------
     pub fn current_root(env: Env) -> Option<BytesN<32>> {
         state::get_tree_root(&env, Tree::Main)
+    }
+
+    /// Current commitment-tree frontier (filled-subtree array, `TREE_DEPTH`
+    /// scalars) for the main tree. The write path reads this directly as the
+    /// proof's `old_frontier` instead of reconstructing it from contract events
+    /// (which age out of Testnet's ~22h RPC retention and then mis-root the
+    /// tree). `shield` anchors to this view (it needs no inclusion path, so the
+    /// frontier + `leaf_count` are a complete append anchor), making the
+    /// in-circuit `FrontierTransition` always insert at the true on-chain
+    /// position (#11/#12), so a partially aged-out event log can never produce a
+    /// stale `old_frontier` that the contract rejects (`UnknownAnchorRoot`).
+    /// `transfer`/`unshield` additionally need the full leaf set for their
+    /// inclusion paths, so they stay on the (retention-bounded) indexer until a
+    /// persistent indexer lands.
+    ///
+    /// Returns the concrete `BytesN<32>` element type (not the `Scalar` alias) so
+    /// the generated contract spec has no dangling type reference, matching the
+    /// `current_root` view.
+    pub fn current_frontier(env: Env) -> Option<Vec<BytesN<32>>> {
+        state::get_frontier(&env, Tree::Main)
+    }
+
+    /// Current leaf count (next append index) of the main commitment tree. The
+    /// write path uses this as `next_index`; pairs with `current_frontier`.
+    pub fn leaf_count(env: Env) -> u64 {
+        state::get_leaf_count(&env, Tree::Main).unwrap_or(0)
     }
 
     pub fn recent_roots_capacity() -> u32 {

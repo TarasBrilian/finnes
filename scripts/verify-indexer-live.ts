@@ -42,7 +42,7 @@ function bridgeAgedOutPrefix(events: bigint[]): bigint[] {
   return p > 0 ? [...SEED_COMMITMENTS.slice(0, p), ...events] : events;
 }
 
-const CONTRACT_ID = 'CDIWXQSWIP6GKJKCAZPFONDD7VZ2PR2AQVCBQ7WRNTL64M3DAP55G7IA';
+const CONTRACT_ID = 'CD3AO6XDA632MC35OYHM6TLO4Q3GJZA67VSUUSTRGLSBD3OTKF2FOYCF';
 const RPC_URL = 'https://soroban-testnet.stellar.org';
 const DEMO_AUDITOR_VIEW_KEY: Fr = 777_000_001n;
 
@@ -82,7 +82,9 @@ async function main() {
     const filters = [{ type: 'contract', contractIds: [CONTRACT_ID] }];
     const req = cursor ? { cursor, filters, limit: 200 } : { startLedger: start, filters, limit: 200 };
     const r = await s2.getEvents(req);
-    if (!r.events.length) break;
+    // Follow the cursor across empty pages (Soroban RPC scans a bounded window per
+    // call; an early startLedger yields empty pages WITH a cursor). Mirrors the
+    // fix in frontend/lib/indexer.ts — do not break on an empty page.
     for (const ev of r.events) {
       effects.push({
         topic: scValToNative(ev.topic[0]) as string,

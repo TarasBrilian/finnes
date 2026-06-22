@@ -11,10 +11,13 @@
 const env = (k: string, fallback: string): string =>
   (typeof process !== 'undefined' && process.env?.[k]) || fallback;
 
-/** The deployed Finnes contract (FIN-015). */
+/** The deployed Finnes contract (FIN-015). Redeployed with the `current_frontier`
+ *  / `leaf_count` views so the write path anchors `old_frontier`/`next_index` to
+ *  authoritative on-chain state instead of an event re-read (fixes the aged-out
+ *  frontier drift that rejected `shield` with `UnknownAnchorRoot`, #10). */
 export const CONTRACT_ID = env(
   'NEXT_PUBLIC_FINNES_CONTRACT_ID',
-  'CDIWXQSWIP6GKJKCAZPFONDD7VZ2PR2AQVCBQ7WRNTL64M3DAP55G7IA',
+  'CD3AO6XDA632MC35OYHM6TLO4Q3GJZA67VSUUSTRGLSBD3OTKF2FOYCF',
 );
 
 /** Soroban RPC endpoint (Testnet). */

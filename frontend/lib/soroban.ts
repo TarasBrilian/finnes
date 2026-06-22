@@ -67,6 +67,36 @@ export async function readCurrentRoot(): Promise<string | null> {
   return root ? Buffer.from(root).toString('hex') : null;
 }
 
+/**
+ * Read the deployed contract's current main-tree frontier + leaf count
+ * (read-only simulate). This is the AUTHORITATIVE append state: the write path
+ * anchors `old_frontier`/`next_index` to it directly instead of reconstructing
+ * the tree from events (which age out of Testnet's ~22h RPC retention and then
+ * produce a stale frontier the contract rejects with `UnknownAnchorRoot`, #10).
+ * Returns the frontier as TREE_DEPTH bigints (filled-subtree scalars) and the
+ * next append index. `frontier` is null only on a never-initialised contract.
+ */
+export async function readTreeState(): Promise<{ frontier: bigint[] | null; leafCount: number }> {
+  const s = server();
+  const src = new Account(Keypair.random().publicKey(), '0');
+  // Simulate each view independently (one op per simulate keeps retval mapping simple).
+  const frTx = new TransactionBuilder(src, { fee: BASE_FEE, networkPassphrase: NETWORK_PASSPHRASE })
+    .addOperation(contract().call('current_frontier'))
+    .setTimeout(30)
+    .build();
+  const lcTx = new TransactionBuilder(src, { fee: BASE_FEE, networkPassphrase: NETWORK_PASSPHRASE })
+    .addOperation(contract().call('leaf_count'))
+    .setTimeout(30)
+    .build();
+  const [frSim, lcSim] = await Promise.all([s.simulateTransaction(frTx), s.simulateTransaction(lcTx)]);
+  if (rpc.Api.isSimulationError(frSim)) throw new Error(`current_frontier simulate failed: ${frSim.error}`);
+  if (rpc.Api.isSimulationError(lcSim)) throw new Error(`leaf_count simulate failed: ${lcSim.error}`);
+  const fr = scValToNative(frSim.result!.retval) as (Buffer | Uint8Array)[] | null;
+  const lc = scValToNative(lcSim.result!.retval) as bigint;
+  const frontier = fr ? fr.map((b) => BigInt('0x' + Buffer.from(b).toString('hex'))) : null;
+  return { frontier, leafCount: Number(lc) };
+}
+
 /** True iff the nullifier (0x-less hex) is already spent on-chain (read-only). */
 export async function isNullifierUsed(nfHex: string): Promise<boolean> {
   const s = server();
