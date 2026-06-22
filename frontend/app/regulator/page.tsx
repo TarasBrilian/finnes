@@ -54,14 +54,12 @@ export default function RegulatorPage() {
           {live ? (
             <>
               <span className="chip chip-good mr-2">Live</span>
-              On chain ledger reconstructed from the deployed contract&apos;s events over Soroban RPC
-              (FIN-019).
+              Live ledger, read from the deployed contract on Stellar Testnet.
             </>
           ) : (
             <>
               <span className="chip mr-2">Demo</span>
-              Showing the deterministic demo fixture, no live events in range (RPC unavailable or
-              past Testnet&apos;s ~22h event retention). Crypto is still genuine.
+              Showing demo data, no live transactions in range right now. The cryptography is still real.
             </>
           )}
         </p>

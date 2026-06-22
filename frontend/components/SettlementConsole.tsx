@@ -60,36 +60,36 @@ const MODES: readonly ModeMeta[] = [
     label: 'Transfer',
     verb: 'Build, prove & submit',
     blurb: 'Move value between two shielded parties.',
-    reveals: ['2 nullifiers', '2 commitments', 'ciphertexts'],
+    reveals: ['encrypted note blobs'],
     hides: ['amount', 'asset', 'sender', 'recipient'],
-    outputs: 'Mints one note to the recipient and one change note back to you.',
+    outputs: 'Sends one note to the recipient and returns a change note to you.',
   },
   {
     id: 'shield',
     label: 'Shield',
     verb: 'Shield deposit',
     blurb: 'Deposit a transparent RWA token into the shielded domain.',
-    reveals: ['asset_id', 'amount', '1 commitment'],
-    hides: ['owner', 'rho', 'r_note'],
-    outputs: 'Mints one shielded note bound to the deposited asset.',
+    reveals: ['asset', 'amount'],
+    hides: ['owner', 'note secrets'],
+    outputs: 'Creates one shielded note bound to the deposited asset.',
   },
   {
     id: 'unshield',
     label: 'Unshield',
     verb: 'Unshield & pay out',
     blurb: 'Redeem a note back to a transparent Stellar address.',
-    reveals: ['1 nullifier', 'asset_id', 'amount', 'recipient'],
+    reveals: ['asset', 'amount', 'recipient'],
     hides: ['sender', 'change amount'],
-    outputs: 'Pays the recipient via SAC transfer; optional change stays shielded.',
+    outputs: 'Pays the recipient on chain; any change stays shielded.',
   },
 ];
 
 const PIPELINE: readonly { step: string; detail: string }[] = [
-  { step: 'Build', detail: 'Assemble the witness from local notes' },
-  { step: 'Encrypt', detail: 'Auditor (mandatory) + recipient ciphertexts' },
-  { step: 'Witness', detail: 'Range, conservation, KYC, limits' },
-  { step: 'Prove', detail: 'Groth16 over BLS12-381' },
-  { step: 'Submit', detail: 'Proof + public inputs + ciphertexts' },
+  { step: 'Build', detail: 'Gather your notes' },
+  { step: 'Encrypt', detail: 'Encrypt for the regulator and recipient' },
+  { step: 'Check', detail: 'Balances, KYC, and limits' },
+  { step: 'Prove', detail: 'Build the zero-knowledge proof' },
+  { step: 'Submit', detail: 'Send it on chain' },
 ];
 
 export function SettlementConsole({ spending }: { spending: SpendingKeypair | null }) {
@@ -102,6 +102,9 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
   const [result, setResult] = useState<OpResult | null>(null);
   const [spendable, setSpendable] = useState<{ rawAmount: bigint; assetLabel: string } | null | 'loading'>(null);
   const [busy, setBusy] = useState(false);
+  // How many pipeline lamps are lit (0..PIPELINE.length). They light up one by
+  // one while a submission runs and stay lit.
+  const [activeStep, setActiveStep] = useState(0);
 
   // On the Unshield tab, read the live spendable note (the on chain note this
   // identity can redeem) so the form shows the max instead of letting the user
@@ -136,6 +139,23 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
     };
   }, [mode]);
 
+  // Light the pipeline lamps one-by-one while a submission runs; once lit they
+  // stay lit, advancing toward the last step.
+  useEffect(() => {
+    if (!busy) return;
+    setActiveStep(1);
+    const id = setInterval(() => {
+      setActiveStep((s) => (s < PIPELINE.length ? s + 1 : s));
+    }, 700);
+    return () => clearInterval(id);
+  }, [busy]);
+
+  // On completion: success/handled paths light the whole pipeline; an error
+  // freezes the lamps where they reached, marking the failing step.
+  useEffect(() => {
+    if (result && result.status !== 'error') setActiveStep(PIPELINE.length);
+  }, [result]);
+
   const meta = MODES.find((m) => m.id === mode)!;
   const ticker = assetLabel.split(' ')[0];
 
@@ -151,11 +171,13 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
   function switchMode(next: Mode) {
     setMode(next);
     setResult(null);
+    setActiveStep(0);
   }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!spending || recipientError) return;
+    setActiveStep(0);
     setBusy(true);
     setResult(null);
     try {
@@ -265,7 +287,7 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
                   onChange={(e) => setSacAddress(e.target.value)}
                 />
                 <p className="mt-1.5 text-[11px] text-ink-faint">
-                  asset_id = Poseidon(sac_address), the note binds to this asset.
+                  The new note is bound to this asset.
                 </p>
               </div>
             )}
@@ -281,16 +303,14 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
                   onChange={(e) => setRecipient(e.target.value)}
                 />
                 <p className="mt-1.5 text-[11px] text-ink-faint">
-                  Must be KYC-approved &amp; non-sanctioned. The demo pays the
-                  pre-registered recipient (Bank B → the contract&apos;s registered payout address);
-                  arbitrary recipients need an admin <span className="font-mono">register_transparent</span> (FIN-010).
+                  Must be KYC-approved and non-sanctioned. The demo pays a pre-registered recipient (Bank B).
                 </p>
               </div>
             )}
 
             <div>
               <label className="label" htmlFor="sc-amount">
-                Amount<span className="ml-1 font-normal normal-case text-ink-faint">raw SAC units</span>
+                Amount<span className="ml-1 font-normal normal-case text-ink-faint">base units</span>
               </label>
               <div className="relative">
                 <input
@@ -309,7 +329,7 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
                 {displayAmount ? (
                   <>
                     <span className="font-mono text-sm font-semibold text-ink">{displayAmount}</span>
-                    <span>{ticker} · {DISPLAY_DECIMALS} display decimals (ZK layer never rescales, #16)</span>
+                    <span>{ticker} · {DISPLAY_DECIMALS} decimals</span>
                   </>
                 ) : (
                   <>Display conversion appears here as you type.</>
@@ -368,20 +388,43 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
                 Proof pipeline · client side
               </p>
               <ol>
-                {PIPELINE.map((p, i) => (
-                  <li key={p.step} className="flex gap-3">
-                    <div className="flex flex-col items-center">
-                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-blue-200 bg-blue-50 text-[11px] font-bold text-blue-700">
-                        {i + 1}
-                      </span>
-                      {i < PIPELINE.length - 1 && <span aria-hidden="true" className="my-1 w-px flex-1 bg-blue-100" />}
-                    </div>
-                    <div className="pb-3">
-                      <p className="text-xs font-semibold text-ink">{p.step}</p>
-                      <p className="text-[11px] leading-snug text-ink-faint">{p.detail}</p>
-                    </div>
-                  </li>
-                ))}
+                {PIPELINE.map((p, i) => {
+                  const lit = i < activeStep;
+                  const isCurrent = busy && i === activeStep - 1;
+                  return (
+                    <li key={p.step} className="flex gap-3">
+                      <div className="flex flex-col items-center">
+                        <span
+                          className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border text-[11px] font-bold transition-all duration-500 ${
+                            lit
+                              ? 'border-blue-600 bg-blue-600 text-white shadow-[0_0_0_3px_rgba(37,99,235,0.18)]'
+                              : 'border-blue-200 bg-blue-50 text-blue-700'
+                          } ${isCurrent ? 'scale-110' : 'scale-100'}`}
+                        >
+                          {i + 1}
+                        </span>
+                        {i < PIPELINE.length - 1 && (
+                          <span
+                            aria-hidden="true"
+                            className={`my-1 w-px flex-1 transition-colors duration-500 ${
+                              i < activeStep - 1 ? 'bg-blue-500' : 'bg-blue-100'
+                            }`}
+                          />
+                        )}
+                      </div>
+                      <div className="pb-3">
+                        <p
+                          className={`text-xs font-semibold transition-colors duration-500 ${
+                            lit ? 'text-blue-700' : 'text-ink'
+                          }`}
+                        >
+                          {p.step}
+                        </p>
+                        <p className="text-[11px] leading-snug text-ink-faint">{p.detail}</p>
+                      </div>
+                    </li>
+                  );
+                })}
               </ol>
             </div>
           </div>
@@ -390,8 +433,7 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
         {/* ---- Action bar --------------------------------------------- */}
         <div className="mt-2 flex flex-col gap-3 border-t border-blue-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
           <p className="order-2 max-w-sm text-[11px] leading-relaxed text-ink-faint sm:order-1">
-            The witness is assembled and proven in this tab, keys and note plaintext never leave the
-            browser.
+            Everything is proven right here in this tab, your keys never leave the browser.
           </p>
           <div className="order-1 sm:order-2 sm:text-right">
             <button type="submit" className="btn-primary w-full sm:w-auto sm:min-w-[14rem]" disabled={disabled}>

@@ -89,9 +89,9 @@ export default function InstitutionPage() {
               <path d="M12 3l7 3v5c0 4.4-3 8.3-7 10-4-1.7-7-5.6-7-10V6l7-3Z" />
             </svg>
             <span>
-              <span className="font-semibold text-ink-muted">Trust boundary.</span> Keys, the
-              witness, and note plaintext stay in this tab. The prover runs client side; nothing
-              secret reaches a shared backend.
+              <span className="font-semibold text-ink-muted">Trust boundary.</span> Your keys and
+              note details stay in this tab. Proofs are built locally, nothing secret ever reaches a
+              server.
             </span>
           </p>
         </aside>
@@ -99,9 +99,7 @@ export default function InstitutionPage() {
 
       {/* ---- Footnote: DvP is a labelled stretch goal --------------------- */}
       <p className="border-t border-blue-100 pt-5 text-[11px] leading-relaxed text-ink-faint">
-        DvP (atomic two-asset settlement) is a stretch goal. The demo path uses a single combined
-        proof holding both parties&apos; secrets and is non-production (ARCHITECTURE.md → Settlement);
-        production DvP is escrow / two phase.
+        Atomic two-asset settlement (DvP) is a demo-only preview and not yet production-ready.
       </p>
     </div>
   );

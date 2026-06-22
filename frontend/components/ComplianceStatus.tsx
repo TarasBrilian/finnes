@@ -52,7 +52,7 @@ export function ComplianceStatus({ spending }: { spending: SpendingKeypair | nul
         </div>
       )}
 
-      <span className="ml-auto text-[11px] text-ink-faint">Proven in circuit on every transfer.</span>
+      <span className="ml-auto text-[11px] text-ink-faint">Checked on every transfer.</span>
     </div>
   );
 }

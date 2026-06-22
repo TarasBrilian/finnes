@@ -67,11 +67,7 @@ export function FreezePanel({ selected }: { selected: OnChainTxSummary | null })
       </div>
 
       <p className="mt-2 max-w-2xl text-sm text-ink-muted">
-        The auditor (read authority) identifies a target commitment by decrypting a transaction with
-        the view key; the issuer (write authority) freezes it. A frozen note is unspendable: every
-        spend must prove non membership against <span className="mono">frozen_root</span> (invariant
-        #14/#19). No authority can compute a note&apos;s nullifier, so clawback is freeze-based, not a
-        forced spend.
+        The auditor identifies a note; the issuer freezes it. A frozen note can no longer be spent.
       </p>
 
       {/* Phase 1, pick cm_target from the disclosed transaction's outputs. */}

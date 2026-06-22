@@ -65,7 +65,7 @@ export function ConfidentialBalances({ spending }: { spending: SpendingKeypair |
                 className={`inline-block h-1.5 w-1.5 rounded-full ${isMock ? 'bg-amber-300' : 'animate-glowpulse bg-accent'}`}
               />
               {balances.length} asset{balances.length === 1 ? '' : 's'} · {totalNotes} note
-              {totalNotes === 1 ? '' : 's'} · {isMock ? 'demo fixture (RPC offline)' : 'live on chain'}
+              {totalNotes === 1 ? '' : 's'} · {isMock ? 'demo data' : 'live on chain'}
             </span>
           )}
         </div>
@@ -105,7 +105,7 @@ export function ConfidentialBalances({ spending }: { spending: SpendingKeypair |
                 </div>
                 <p className="stat mt-1.5 text-white">{formatRawAmount(b.rawAmount)}</p>
                 <p className="mt-1 text-xs text-blue-200/60">
-                  {b.noteCount} note{b.noteCount === 1 ? '' : 's'} · raw SAC units
+                  {b.noteCount} note{b.noteCount === 1 ? '' : 's'}
                 </p>
               </div>
             ))}
@@ -113,10 +113,8 @@ export function ConfidentialBalances({ spending }: { spending: SpendingKeypair |
         )}
 
         <p className="relative mt-7 max-w-2xl border-t border-white/10 pt-4 text-[11px] leading-relaxed text-blue-200/60">
-          Your unspent notes on the live commitment tree, each commitment present on chain and not
-          yet nullified, matched client side to a note you hold. Amounts are raw SAC units formatted
-          with display decimals; the ZK layer never rescales. Balances are per asset
-          and never summed across assets.
+          Your unspent notes on chain, matched to notes you hold. Each asset is shown separately and
+          never combined.
         </p>
       </div>
     </section>
