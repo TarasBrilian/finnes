@@ -31,7 +31,7 @@ import { frozenNonMembership } from './freeze.js';
 import { buildChainTree, indexFrozen, type ChainTree } from './indexer.js';
 import { saveStoredNote } from './note-store.js';
 import { proveInBrowser } from './prove-browser.js';
-import { isNullifierUsed, submitInvocation } from './soroban.js';
+import { isNullifierUsed, readTreeState, submitInvocation } from './soroban.js';
 import type { OpResult, OpStep, StepStatus } from './finnes-client.js';
 
 // --- result helpers (mirrors finnes-client) --------------------------------
@@ -162,24 +162,32 @@ async function spendableNotes(ownerPk: bigint, chain: ChainTree): Promise<Spenda
 }
 
 /**
- * Shield one note of `value` to the demo identity: read the LIVE tree from chain
- * events → assemble → prove → submit → remember it. Returns the tx hash. Anchors
- * to the current on-chain frontier (the indexer), so it can never drift.
+ * Shield one note of `value` to the demo identity: read the AUTHORITATIVE tree
+ * state from the contract → assemble → prove → submit → remember it. Returns the
+ * tx hash.
+ *
+ * `old_frontier`/`next_index` come from the contract's own `current_frontier` +
+ * `leaf_count` views, NOT from an event-reconstructed tree. A stateless RPC event
+ * re-read only sees Testnet's ~22h retention window, so an aged-out leaf prefix
+ * makes the reconstructed frontier stale and the contract rejects the proof with
+ * `UnknownAnchorRoot` (#10). Shield needs no inclusion path (no shielded input),
+ * so the contract's frontier + leaf count are the complete, drift-proof anchor.
  */
 async function doShield(value: bigint, steps: OpStep[], label: string): Promise<string> {
   const { st, me, asset } = identity();
   if (value <= 0n || value > asset.perTxLimitRaw) {
     throw new Error(`shield amount must be in (0, ${asset.perTxLimitRaw}] raw (per-tx limit)`);
   }
-  const chain = await buildChainTree(); // live frontier + leaf count from on-chain events
-  const leafIndex = chain.leafCount;
+  const { frontier, leafCount } = await readTreeState(); // authoritative on-chain append state
+  if (!frontier) throw new Error('contract returned no frontier (is it initialised?)');
+  const leafIndex = leafCount;
   const outNote = { assetId: asset.assetId, value, ownerPk: me.ownerPk, rho: randFr(), rNote: randFr() };
   const { witness } = buildShieldWitness({
     outNote,
     kycPath: me.kycPath, kycRoot: st.kycRoot,
     sacAddress: sacAddressToField(asset.sacAddress), decimals: BigInt(asset.decimals), perTxLimitRaw: asset.perTxLimitRaw,
     assetsPath: asset.assetsPath, assetsRoot: st.assetsRoot,
-    oldFrontier: chain.tree.frontier(), nextIndex: leafIndex, fee: 0n,
+    oldFrontier: frontier, nextIndex: leafIndex, fee: 0n,
     auditorPk: st.auditorPk, kView: DEMO_AUDITOR_VIEW_KEY, kPair: randFr(), rhoEncAuditor: randFr(), rhoEncRecipient: randFr(),
   });
   const proof = await proveInBrowser('shield', witness as Record<string, unknown>);

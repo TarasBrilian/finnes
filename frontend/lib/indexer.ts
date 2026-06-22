@@ -72,7 +72,13 @@ async function indexEffects(): Promise<RawEffect[]> {
     const filters = [{ type: 'contract' as const, contractIds: [CONTRACT_ID] }];
     const req = cursor ? { cursor, filters, limit: 200 } : { startLedger: start, filters, limit: 200 };
     const r = await s.getEvents(req as Parameters<typeof s.getEvents>[0]);
-    if (!r.events.length) break;
+    // Do NOT break on an empty page: Soroban RPC `getEvents` scans only a bounded
+    // ledger window per call, so a request whose `startLedger` precedes the first
+    // event returns an EMPTY page WITH a cursor to continue. Breaking here (the old
+    // behaviour) stopped at the first gap and missed every later event — the
+    // regulator ledger and the spendable-note scan both came back empty whenever
+    // `startLedger` was more than one scan-window behind the events. Follow the
+    // cursor across empty pages; terminate only when the cursor stops advancing.
     for (const ev of r.events) {
       effects.push({
         topic: scValToNative(ev.topic[0]!) as string,

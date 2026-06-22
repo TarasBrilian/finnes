@@ -118,6 +118,17 @@ fn init_sets_root_and_window() {
 }
 
 #[test]
+fn views_expose_authoritative_tree_state() {
+    // The write path reads `current_frontier` + `leaf_count` directly so it never
+    // anchors `old_frontier`/`next_index` to a (possibly aged-out) event re-read.
+    // After init the main tree is empty: frontier == the seed frontier, count == 0.
+    let env = Env::default();
+    let (client, _admin, _issuer) = setup(&env);
+    assert_eq!(client.current_frontier(), Some(empty_frontier(&env)));
+    assert_eq!(client.leaf_count(), 0);
+}
+
+#[test]
 #[should_panic] // AlreadyInitialized
 fn double_init_rejected() {
     let env = Env::default();
