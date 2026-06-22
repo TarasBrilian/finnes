@@ -42,7 +42,7 @@ function looksLikeStellarAddress(s: string): boolean {
 
 const RECIPIENT_ADDRESS_ERROR =
   "That's a transparent Stellar address (G…). A confidential transfer needs the recipient's " +
-  'shielded key (owner_pk), share it from the “Shielded key” panel.';
+  'shielded key (the zk… value they share with you), not a G… address.';
 
 interface ModeMeta {
   readonly id: Mode;
@@ -233,7 +233,6 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
               <div>
                 <label className="label" htmlFor="sc-recipient-pk">
                   Recipient shielded key
-                  <span className="ml-1 font-normal normal-case text-ink-faint">owner_pk</span>
                 </label>
                 <input
                   id="sc-recipient-pk"
@@ -249,7 +248,7 @@ export function SettlementConsole({ spending }: { spending: SpendingKeypair | nu
                   </p>
                 ) : (
                   <p className="mt-1.5 text-[11px] text-ink-faint">
-                    Public key the receiver shares, safe to paste.
+                    Paste the recipient&apos;s shielded key (the zk… they share with you), not your own.
                   </p>
                 )}
               </div>

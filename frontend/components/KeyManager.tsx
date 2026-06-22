@@ -16,8 +16,8 @@ function shortFr(f: bigint): string {
 /**
  * The recipient's shielded key as the sender pastes it into the transfer form.
  * Prefixed `zk` so it can never be mistaken for a transparent Stellar address
- * (G…) or an Ethereum-style 0x… address. The transfer form labels its field
- * "Recipient shielded key (owner_pk)" to match this exactly.
+ * (G…) or an Ethereum-style 0x… address. The transfer form's "Recipient
+ * shielded key" field expects exactly this value (the recipient's public key).
  */
 function shieldedKeyString(f: bigint): string {
   return `zk${f.toString(16)}`;
@@ -63,7 +63,7 @@ export function KeyManager() {
           <div>
             <h3 className="text-base font-bold text-ink">Shielded key</h3>
             <p className="mt-0.5 text-xs text-ink-muted">
-              Spending + viewing key. In-memory only.
+              Your spending and viewing key. In-memory only.
             </p>
           </div>
         </div>
@@ -73,6 +73,12 @@ export function KeyManager() {
           </button>
         )}
       </div>
+
+      <p className="mt-3 text-[11px] leading-relaxed text-ink-faint">
+        This is your own receiving identity. Share its public key so others can
+        send you a confidential transfer. To send, paste the recipient&apos;s key
+        in the transfer form, not this one.
+      </p>
 
       {!kp && (
         <button
@@ -99,8 +105,8 @@ export function KeyManager() {
               </button>
             </div>
             <p className="mt-0.5 text-[11px] text-ink-faint">
-              Share this with the sender (owner_pk). This is what they paste into a confidential
-              transfer. It is public; safe to share.
+              Give this to anyone who wants to send you a confidential transfer. They paste it
+              as the recipient key. It is public and safe to share.
             </p>
           </div>
           <div className="flex items-center gap-2">
