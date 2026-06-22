@@ -161,6 +161,13 @@ export interface IndexedOutput {
   readonly cAuditor: Ciphertext;
 }
 
+/** The values an `unshield` reveals PUBLICLY on-chain (no view key needed). */
+export interface PublicReveal {
+  readonly assetId: bigint;
+  readonly amount: bigint;
+  readonly recipient: bigint;
+}
+
 /** One on-chain transaction reconstructed from a contract event (PUBLIC data only). */
 export interface IndexedTransaction {
   readonly txHash: string;
@@ -170,6 +177,8 @@ export interface IndexedTransaction {
   readonly nullifiers: readonly string[];
   /** Output notes carrying the regulator-decryptable auditor ciphertext. */
   readonly outputs: readonly IndexedOutput[];
+  /** For `unshield`: the asset/amount/recipient revealed in the clear on-chain. */
+  readonly publicReveal?: PublicReveal;
 }
 
 const nfHex = (b: Buffer | Uint8Array): string =>
@@ -220,6 +229,13 @@ export async function indexTransactions(): Promise<IndexedTransaction[]> {
         nullifiers: [nfHex(v.nf_in_0 as Buffer)],
         // No change note (exact spend, cm_change_0 == 0) → no decryptable output.
         outputs: cc === 0n ? [] : [{ commitment: cc, cAuditor: cipherAt(cAud, 0) }],
+        // The value leaving to the transparent layer is PUBLIC on-chain — surface
+        // it so the regulator sees the unshield even with no confidential note.
+        publicReveal: {
+          assetId: toBig(v.asset_id as Buffer),
+          amount: toBig(v.amount as Buffer),
+          recipient: toBig(v.recipient as Buffer),
+        },
       });
     }
   }

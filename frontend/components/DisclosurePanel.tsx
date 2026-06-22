@@ -98,8 +98,20 @@ export function DisclosurePanel({ tx }: { tx: OnChainTxSummary | null }) {
               />
               <div className="relative">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="eyebrow-light">Full transaction · visible only to you</span>
+                  <span className="eyebrow-light">
+                    {view.publicOnly
+                      ? 'Unshield · already public on-chain'
+                      : 'Full transaction · visible only to you'}
+                  </span>
                 </div>
+
+                {view.publicOnly && (
+                  <p className="mt-3 text-[11px] leading-relaxed text-blue-200/70">
+                    This is an exact-spend unshield: it carries no confidential note. The value
+                    leaving the shielded pool to a transparent address is revealed in the clear,
+                    nothing was hidden to decrypt here.
+                  </p>
+                )}
 
                 <p className="mt-4 text-xs font-medium uppercase tracking-wide text-blue-200/80">
                   {view.assetLabel}
