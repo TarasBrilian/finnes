@@ -12,4 +12,10 @@
 # ceremony, invariant #10) — never committed. Copy the .zkey from Railway:
 #   railway ssh --service ceremony "base64 -w0 setup/build/<c>/<c>.zkey" 2>/dev/null \
 #     | base64 -d > public/artifacts/<c>/<c>.zkey
+#
+# DEPLOY (Vercel / any git deploy): the .zkey CANNOT ride the deploy — they are
+# gitignored AND transfer.zkey (~105MB) exceeds GitHub's 100MB file cap. Host them
+# externally (Cloudflare R2 / S3 / a GitHub Release, CORS + HTTP range enabled) and
+# set NEXT_PUBLIC_ZKEY_BASE (or per-circuit NEXT_PUBLIC_ZKEY_URL_<CIRCUIT>) in the
+# deploy env. The .wasm stay committed and are served from /artifacts. See lib/config.ts.
 *.zkey

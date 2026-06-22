@@ -45,20 +45,48 @@ export const HORIZON_URL = env('NEXT_PUBLIC_HORIZON_URL', 'https://horizon-testn
 
 /**
  * Base URL for the in-browser proving artifacts (option 2, client-side snarkjs).
- * Each circuit loads `${ARTIFACT_BASE}/<circuit>/<circuit>.wasm` and
- * `${ARTIFACT_BASE}/<circuit>/<circuit>.zkey`. These are served as STATIC files
- * from `frontend/public/artifacts/` (gitignored, the operator copies the D=20
- * .wasm/.zkey there; the .zkey are large: shield 31MB / unshield 64MB /
- * transfer 110MB, and demo-only per invariant #10, so never committed).
+ * Each circuit loads a `.wasm` (witness generator) and a `.zkey` (proving key).
+ * They are served as STATIC files, but the two have very different size/limits, so
+ * they are configured SEPARATELY:
+ *
+ * - **WASM** (small: shield 208KB / unshield 318KB / transfer 435KB) are COMMITTED
+ *   under `frontend/public/artifacts/<c>/<c>.wasm`, so a git deploy (Vercel) serves
+ *   them from ARTIFACT_BASE (`/artifacts`) with no extra setup.
+ * - **ZKEY** (large: shield 31MB / unshield 64MB / transfer 105MB) are GITIGNORED
+ *   (demo-only, invariant #10) AND exceed GitHub's 100MB file cap + Vercel's deploy
+ *   limits, so they CANNOT ride a git deploy. On a deployed build, host them on
+ *   external storage (Cloudflare R2 / S3 / a GitHub Release — CORS + HTTP range
+ *   enabled) and point NEXT_PUBLIC_ZKEY_BASE there. Locally they live under
+ *   `frontend/public/artifacts/<c>/` and ZKEY_BASE falls back to ARTIFACT_BASE, so
+ *   `npm run dev` needs no env var.
+ *
+ * NOTE (Next.js inlining): only STATIC `process.env.NEXT_PUBLIC_*` reads are
+ * inlined into the client bundle — the dynamic `env()` helper above resolves
+ * server-side only, so its overrides do NOT reach the browser. The in-browser
+ * prover runs client-side, so the ZKEY vars below are read STATICALLY on purpose.
  */
 export const ARTIFACT_BASE = env('NEXT_PUBLIC_ARTIFACT_BASE', '/artifacts');
 
+/** Where the large `.zkey` are served from (defaults to ARTIFACT_BASE for local dev). */
+export const ZKEY_BASE = process.env.NEXT_PUBLIC_ZKEY_BASE || ARTIFACT_BASE;
+
 export type CircuitName = 'shield' | 'transfer' | 'unshield';
+
+/**
+ * Optional per-circuit FULL `.zkey` URL overrides (win over ZKEY_BASE). Use these
+ * for flat hosts that can't mirror the `<c>/<c>.zkey` layout — e.g. GitHub Release
+ * assets, which are flat-named. Read statically so Next inlines them client-side.
+ */
+const ZKEY_URL_OVERRIDE: Record<CircuitName, string | undefined> = {
+  shield: process.env.NEXT_PUBLIC_ZKEY_URL_SHIELD,
+  transfer: process.env.NEXT_PUBLIC_ZKEY_URL_TRANSFER,
+  unshield: process.env.NEXT_PUBLIC_ZKEY_URL_UNSHIELD,
+};
 
 /** Resolve the wasm + zkey URLs for a circuit's in-browser proof. */
 export function artifactUrls(circuit: CircuitName): { wasmUrl: string; zkeyUrl: string } {
   return {
     wasmUrl: `${ARTIFACT_BASE}/${circuit}/${circuit}.wasm`,
-    zkeyUrl: `${ARTIFACT_BASE}/${circuit}/${circuit}.zkey`,
+    zkeyUrl: ZKEY_URL_OVERRIDE[circuit] || `${ZKEY_BASE}/${circuit}/${circuit}.zkey`,
   };
 }

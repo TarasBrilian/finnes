@@ -92,8 +92,11 @@ function identity() {
 }
 
 const proveHint =
-  'Place the D=20 .zkey under public/artifacts/<circuit>/ (gitignored; copy from the ' +
-  'Railway ceremony or setup/build) for in-browser proving.';
+  'The D=20 .zkey are gitignored and too large for a git deploy (transfer.zkey ~105MB > ' +
+  "GitHub's 100MB cap). On a deployed build (Vercel) host them on external storage " +
+  '(Cloudflare R2 / S3 / a GitHub Release, CORS + HTTP range enabled) and set ' +
+  'NEXT_PUBLIC_ZKEY_BASE (or per-circuit NEXT_PUBLIC_ZKEY_URL_<CIRCUIT>); for local dev ' +
+  'place them under public/artifacts/<circuit>/ (copy from the Railway ceremony or setup/build).';
 const submitHint = 'Connect a funded Testnet Freighter account (it signs + pays).';
 
 /**
@@ -353,7 +356,7 @@ function classify(prior: OpStep[], e: unknown): OpStep {
   }
   // Proving artifacts missing (only before a proof was produced).
   const proven = prior.some((s) => s.label.startsWith('Generate Groth16'));
-  if (!proven && /zkey|wasm|artifact|Failed to fetch|404|fullProve|Invalid witness length/i.test(msg)) {
+  if (!proven && /zkey|wasm|artifact|Failed to fetch|404|fullProve|not served|Invalid File format|Invalid witness length/i.test(msg)) {
     return err('Generate Groth16 proof (in-browser)', `${msg}. ${proveHint}`);
   }
   // Wallet / signing problems.

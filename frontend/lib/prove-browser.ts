@@ -40,6 +40,31 @@ export async function proveInBrowser(
   witness: Record<string, unknown>,
 ): Promise<BrowserProof> {
   const { wasmUrl, zkeyUrl } = artifactUrls(circuit);
+
+  // Preflight the proving key. The #1 failure on a git-based deploy (e.g. Vercel)
+  // is a MISSING .zkey: they are gitignored and too large to ride the deploy, so
+  // the URL 404s and snarkjs reads the HTML error page as a zkey, surfacing the
+  // opaque "Invalid File format". A cheap HEAD turns that into an actionable error.
+  // Skipped silently if HEAD is blocked (CORS / unsupported) so a correctly-served
+  // external host is never falsely rejected — fullProve then does the real fetch.
+  let head: Response | undefined;
+  try {
+    head = await fetch(zkeyUrl, { method: 'HEAD' });
+  } catch {
+    /* CORS preflight / HEAD unsupported: fall through to fullProve */
+  }
+  if (head) {
+    const ct = head.headers.get('content-type') ?? '';
+    if (head.status === 404 || head.status === 403 || ct.includes('text/html')) {
+      throw new Error(
+        `proving key not served: ${zkeyUrl} (HTTP ${head.status}). The .zkey are ` +
+          `gitignored and too large for a git deploy. Host them on external storage ` +
+          `(Cloudflare R2 / S3 / a GitHub Release, with CORS + HTTP range enabled) and ` +
+          `set NEXT_PUBLIC_ZKEY_BASE (or NEXT_PUBLIC_ZKEY_URL_${circuit.toUpperCase()}); ` +
+          `for local dev place it under frontend/public/artifacts/${circuit}/.`,
+      );
+    }
+  }
   // snarkjs types the witness as its narrower `CircuitInput`; our flat circom
   // record (incl. nested `string[][]` signals) is a valid superset at runtime, so
   // cast to the exact param type (mirrors prover/src/prove.ts).
