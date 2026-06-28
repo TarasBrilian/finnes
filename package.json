@@ -8,7 +8,8 @@
   "workspaces": [
     "sdk",
     "prover",
-    "frontend"
+    "frontend",
+    "indexer"
   ],
   "scripts": {
     "circuits:build": "bash scripts/build-circuits.sh",
@@ -54,7 +55,11 @@
     "init:config": "tsx scripts/gen-init-config.ts",
     "init": "bash scripts/init.sh",
     "deploy": "bash scripts/deploy.sh",
-    "typecheck": "tsc -b sdk prover"
+    "indexer:dev": "npm run -w @finnes/indexer dev",
+    "indexer:start": "npm run -w @finnes/indexer start",
+    "indexer:build": "npm run -w @finnes/indexer build",
+    "indexer:migrate": "npm run -w @finnes/indexer migrate",
+    "typecheck": "tsc -b sdk prover indexer"
   },
   "devDependencies": {
     "tsx": "^4.16.0",

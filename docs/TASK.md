@@ -568,7 +568,7 @@ Frozen-commitment set management; two-phase two-key (auditor identifies `cm_targ
   the enforcement mechanism and is complete; recovery-mint UI is a follow-up. Optional
   dual-signature freeze (auditor + issuer) also remains a follow-up (contract TODO).
 
-### [~] FIN-019 · P3 · Backend tier (indexer / API / relayer) — INDEXER DONE + LIVE-VERIFIED; API/relayer deferred
+### [~] FIN-019 · P3 · Backend tier (indexer / API / relayer) — stateless INDEXER DONE + LIVE-VERIFIED; stateful indexer + API → FIN-029; relayer deferred
 Indexer (event subscription, off-chain tree reconstruction, ciphertext store), API (paths/roots/ciphertexts), relayer (fee-bump submission; per-asset `fee` term is 0 in demo). Replaces the frontend's mock/stubbed reads.
 - **Done (indexer — event subscription + tree + ciphertext store, LIVE-VERIFIED):**
   `frontend/lib/indexer.ts` now does a full single-pass event replay over Soroban
@@ -605,14 +605,92 @@ Indexer (event subscription, off-chain tree reconstruction, ciphertext store), A
   FIN-025 on-chain record exactly. The 3-tx local fixture is now a fallback, not the
   source. `tsc` clean (only the pre-existing snarkjs-resolution errors), `next build`
   GREEN (8/8 routes).
-- **Remaining (deferred, not blocking the demo):** a standalone API service
-  (paths/roots/ciphertexts over HTTP) and the relayer (fee-bump submission; `fee` is
-  0 in demo). The frontend reads RPC directly, so neither is needed for the demo
-  path. The institution **balances** panel now reads the session's unspent on-chain
-  notes live (FIN-027, owned-by-local-opening); the remaining gap is cross-party
-  **recipient**-ciphertext scanning from chain (discovering a note someone else sent
-  you), which needs an on-chain-recoverable `c_recipient` key (ECDH/note-encryption,
-  not the demo's throwaway pairwise key) — a circuit-touching crypto change.
+- **Remaining (deferred):** only the **relayer** (fee-bump submission; `fee` is 0 in
+  demo) is still scoped here. The stateless RPC re-read above cannot serve many clients
+  across RPC retention, so the **stateful indexer + HTTP API** (paths/roots/ciphertexts)
+  is promoted to **FIN-029** (root-cause fix for `UnknownAnchorRoot` #10). The cross-party
+  **recipient**-ciphertext scan-from-chain gap is tracked once, in FIN-027's "Known gap"
+  (it needs an on-chain-recoverable `c_recipient` key, a circuit-touching change FIN-029
+  does not close).
+
+### [ ] FIN-029 · P1 · Stateful persistent indexer service + API (multi-party; root-cause fix for `UnknownAnchorRoot` #10)
+> **Detailed build spec (DB schema + API contract): [`docs/INDEXER_IMPLEMENTATION.md`](./INDEXER_IMPLEMENTATION.md).**
+
+The demo's indexer (FIN-019) is **stateless**: it rebuilds the commitment tree on
+every read from Soroban RPC `getEvents` within Testnet's **~22h retention window**
+(`frontend/lib/indexer.ts:67`, `latest-17000`) plus a hardcoded 5-leaf seed
+(`frontend/lib/live-notes.ts`). That works only while the shared global tree is small
+and recent. It **breaks — and will keep breaking — once the tree grows past the seed
+AND early leaves age out of RPC.**
+
+- **Observed failure (2026-06-28):** a frontend `confidential_transfer` against the
+  live contract `CD3AO6XD…` was rejected with **`Error(Contract, #10) = UnknownAnchorRoot`**
+  (`errors.rs:28`) at the *first* check (`lib.rs:182`, `is_recent_root`), **before**
+  the (valid, 73-signal) proof was ever verified. Root cause: on-chain `leaf_count = 23`,
+  `current_root = 4e35b2b1…`, but the stateless re-read saw almost none of those 23
+  leaves (aged out) and the 5-leaf seed only covers the original (pre-redeploy) contract
+  — so `buildChainTree()` produced a partial, **mis-rooted** tree, placing the spent
+  notes at leaves 0,1 instead of their true positions; the resulting `anchor_root` was
+  never in the contract's recent-roots window (cap 64). `shield` is immune (it reads
+  authoritative `current_frontier`/`leaf_count`, no inclusion path); `transfer`/`unshield`
+  need the full tree for inclusion paths, so they cannot avoid it.
+- **Why multi-party makes it unavoidable:** the commitment tree is ONE global shared
+  structure (every party's notes append to it). With many users on intermittent clients,
+  **no single browser ever observes the complete history** — events that occur while a
+  client is offline age out of RPC permanently. Building valid inclusion paths + a
+  recognized `anchor_root` therefore requires a single always-on party that ingests
+  EVERY event and persists the full tree. This is the **backend/indexer tier** in
+  `ARCHITECTURE.md` (README: "not yet scaffolded") — required, not optional, once usage
+  is multi-party (hence P1).
+- **Privacy (trust boundary unchanged):** the indexer handles **PUBLIC data only** —
+  commitments, nullifiers, roots, field-packed ciphertexts, proofs. It **never** holds
+  `owner_sk`/`k_view`/note plaintext (those stay client-side, invariant #8).
+  Centralizing it does NOT weaken confidentiality; a compromised indexer leaks nothing
+  secret (`ARCHITECTURE.md` → "Backend is untrusted for confidentiality; only ever sees
+  public data").
+
+**Scope:**
+1. **Indexer daemon (Node/TS, always-on):** backfill from contract genesis → DB, then
+   continuously poll new events and append. Maintain, per tree (Main + Escrow): the
+   ordered leaf list + incremental tree (root/frontier), the recent-roots ring, the
+   nullifier set, the per-output auditor/recipient ciphertext store, and the frozen set.
+   Reuse the decode/tree logic already in `frontend/lib/indexer.ts` (move server-side,
+   make stateful); no on-chain hashing (invariant #11) — the tree is rebuilt from event
+   leaves.
+2. **Database (Railway Postgres or a persisted volume):** survives restarts; not bound
+   by RPC retention.
+3. **HTTP API (public reads, CORS):** `GET /roots` (recent window), `GET /path/:leafIndex`
+   (Merkle inclusion path + the anchoring root), `GET /ciphertexts?since=` (recipient /
+   regulator scanning), `GET /frozen` (set + `frozen_root`), `GET /state` (frontier +
+   leaf_count cross-check).
+4. **Frontend rewire:** replace the `buildChainTree()` / `indexTransactions()` /
+   `indexFrozen()` RPC re-reads with API calls; keep authoritative `readTreeState()` for
+   the `shield` append. The write-path then anchors to an indexer-served recent root with
+   a correct inclusion path → no #10.
+
+**Deploy (no new VPS):** run the service + Postgres on **Railway** (the project already
+uses it — same place as the `ceremony` container). VPS / Fly / Render / serverless+managed-DB
+are alternatives, not requirements.
+
+**Caveat — current contract:** `CD3AO6XD…` has already lost its ~23 aged-out leaves
+(events gone; the contract stores no leaves), so they cannot be fully recovered from RPC.
+**Start the indexer from a FRESH redeploy** (capture from genesis), or backfill from
+**Horizon** transaction history (invoke args carry `cm_out`; heavier). Recommend
+redeploy-fresh.
+
+**Note (cross-party recipient scan):** this indexer is **necessary but not sufficient** to
+discover a note someone ELSE sent you from chain — it serves the ciphertexts, but the
+recoverable `c_recipient` key is a separate circuit-touching change tracked once in FIN-027's
+"Known gap" (not closed here).
+
+**Acceptance:** the indexer reconstructs a tree whose root equals the contract's
+`current_root` **regardless of elapsed time / RPC retention**; a `confidential_transfer`
+and an `unshield` built against an indexer-served inclusion path + recent root **verify
+on-chain with no #10**, even after the early leaves have aged out of RPC; two different
+clients (separate browsers/devices) both read the same complete tree; a public-data-only
+audit confirms the indexer stores/serves **no secret**.
+**Deps:** FIN-019 (the stateless indexer it supersedes), FIN-027 (write-path that consumes
+the API), FIN-015 (deployed contract; pairs with a fresh redeploy).
 
 ### [~] FIN-020 · P3 · Threshold / multi-auditor view keys — SDK k-of-n DONE; optional UI wiring deferred
 No single auditor honeypot — split the view key across authorities.

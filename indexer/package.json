@@ -1,0 +1,32 @@
+{
+  "name": "@finnes/indexer",
+  "version": "0.0.0",
+  "description": "Stateful indexer + HTTP API for Finnes (FIN-029). Persists the commitment tree from genesis so any client gets a correct inclusion path + an in-window anchor root (root-cause fix for UnknownAnchorRoot #10). PUBLIC data only (invariant #8); the on-chain Groth16 proof is the integrity guarantee, so the indexer is UNTRUSTED.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "migrate": "tsx src/db/migrate.ts",
+    "test:integration": "node test/integration.mjs",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@finnes/sdk": "*",
+    "@stellar/stellar-sdk": "^14.6.1",
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
