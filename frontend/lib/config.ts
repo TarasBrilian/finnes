@@ -11,13 +11,13 @@
 const env = (k: string, fallback: string): string =>
   (typeof process !== 'undefined' && process.env?.[k]) || fallback;
 
-/** The deployed Finnes contract (FIN-015). Redeployed with the `current_frontier`
- *  / `leaf_count` views so the write path anchors `old_frontier`/`next_index` to
- *  authoritative on-chain state instead of an event re-read (fixes the aged-out
- *  frontier drift that rejected `shield` with `UnknownAnchorRoot`, #10). */
+/** The deployed Finnes contract. REDEPLOYED FRESH 2026-06-28 (CBWSM7RW…) so the
+ *  stateful indexer (FIN-029) tracks from genesis; the prior CD3AO6XD… tree aged out
+ *  of RPC retention, which is what produced the `UnknownAnchorRoot` (#10) on transfer.
+ *  Override per-deployment via NEXT_PUBLIC_FINNES_CONTRACT_ID. */
 export const CONTRACT_ID = env(
   'NEXT_PUBLIC_FINNES_CONTRACT_ID',
-  'CD3AO6XDA632MC35OYHM6TLO4Q3GJZA67VSUUSTRGLSBD3OTKF2FOYCF',
+  'CBWSM7RWD3OFCBNPPUSPA4QFFSF7FFRFO6HR3O52LN757AFUKCBZ7RFU',
 );
 
 /** Soroban RPC endpoint (Testnet). */
