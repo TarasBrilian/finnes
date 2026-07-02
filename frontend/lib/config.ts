@@ -23,6 +23,23 @@ export const CONTRACT_ID = env(
 /** Soroban RPC endpoint (Testnet). */
 export const RPC_URL = env('NEXT_PUBLIC_SOROBAN_RPC_URL', 'https://soroban-testnet.stellar.org');
 
+/**
+ * Stateful indexer (FIN-029) base URL for the DRIFT-PROOF read path. When set,
+ * the write-path reads the COMPLETE commitment tree + frozen set from it instead
+ * of reconstructing from RPC `getEvents` — which only sees Testnet's event
+ * retention window and silently drops aged-out leaves, producing the wrong
+ * `anchor_root`/`old_frontier` and an `UnknownAnchorRoot` (#10) on transfer /
+ * unshield. Empty → fall back to direct RPC reconstruction (fine for local dev
+ * where all events are still in-window). Routes live under `${INDEXER_URL}/v1/…`.
+ *
+ * On Vercel set this to the same-origin proxy path `/indexer` (see the
+ * `rewrites()` in next.config.mjs), so the HTTPS page never fetches the plain
+ * HTTP indexer directly (mixed content). Read STATICALLY (not via the dynamic
+ * `env()` helper) because this is consumed CLIENT-SIDE, and only literal
+ * `process.env.NEXT_PUBLIC_*` reads are inlined into the browser bundle.
+ */
+export const INDEXER_URL = (process.env.NEXT_PUBLIC_INDEXER_URL || '').replace(/\/+$/, '');
+
 /** Testnet network passphrase. */
 export const NETWORK_PASSPHRASE = env(
   'NEXT_PUBLIC_NETWORK_PASSPHRASE',

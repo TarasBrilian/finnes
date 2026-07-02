@@ -9,6 +9,16 @@ const nextConfig = {
   // The sibling workspace packages ship TypeScript source (scaffold), so let
   // Next transpile them directly rather than expecting a prebuilt `dist/`.
   transpilePackages: ['@finnes/sdk', '@finnes/prover'],
+  // Same-origin HTTPS proxy to the stateful indexer (FIN-029). The browser only
+  // ever calls same-origin `/indexer/*` (HTTPS on Vercel), and Next forwards it
+  // server-side to the plain-HTTP indexer origin — sidestepping the mixed-content
+  // block a direct `http://` fetch from the HTTPS page would otherwise hit. The
+  // client read-path targets this when NEXT_PUBLIC_INDEXER_URL=/indexer. Override
+  // the upstream with INDEXER_ORIGIN at build time.
+  async rewrites() {
+    const origin = process.env.INDEXER_ORIGIN || 'http://103.127.134.131:8080';
+    return [{ source: '/indexer/:path*', destination: `${origin}/:path*` }];
+  },
   webpack: (config, { isServer }) => {
     // The sibling packages (and this app's lib/) use NodeNext-style `.js` import
     // specifiers that actually resolve to `.ts` source. Teach webpack to map

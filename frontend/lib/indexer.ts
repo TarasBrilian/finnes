@@ -29,10 +29,30 @@ import { Buffer } from 'buffer';
 import type { Ciphertext, Commitment, Fr } from '@finnes/sdk';
 import { IncrementalMerkleTree, K_A, TREE_DEPTH } from '@finnes/sdk';
 
-import { CONTRACT_ID, RPC_URL } from './config.js';
+import { CONTRACT_ID, INDEXER_URL, RPC_URL } from './config.js';
 import { liveSeedCommitments } from './live-notes.js';
 
 const toBig = (b: Buffer | Uint8Array): bigint => BigInt('0x' + Buffer.from(b).toString('hex'));
+
+/**
+ * GET JSON from the stateful indexer (FIN-029). Returns null ONLY when no
+ * indexer is configured (`NEXT_PUBLIC_INDEXER_URL` empty) so the caller uses the
+ * RPC-reconstruction fallback. When an indexer IS configured but unreachable we
+ * THROW — silently degrading to RPC would resurrect the very aged-out-tree bug
+ * (#10) the indexer exists to prevent, and a clear "indexer unreachable" beats a
+ * misleading crypto-looking rejection. Only PUBLIC data crosses (invariant #5).
+ */
+async function indexerGet<T>(path: string): Promise<T | null> {
+  if (!INDEXER_URL) return null;
+  const res = await fetch(`${INDEXER_URL}${path}`, { headers: { accept: 'application/json' } });
+  if (!res.ok) {
+    throw new Error(`indexer ${path} → HTTP ${res.status} (is NEXT_PUBLIC_INDEXER_URL / the indexer reachable?)`);
+  }
+  return (await res.json()) as T;
+}
+
+/** Parse a 0x-less 32-byte hex string (indexer wire form) to a field element. */
+const hexToBig = (h: string): bigint => BigInt('0x' + h);
 
 /** Slice `K_a`/`K_r` field-packed ciphertext slots for output `n` into a Ciphertext. */
 function cipherAt(packed: readonly (Buffer | Uint8Array)[] | undefined, n: number): Ciphertext {
@@ -140,9 +160,24 @@ function bridgeAgedOutPrefix(events: readonly bigint[]): bigint[] {
   return p > 0 ? [...seed.slice(0, p), ...events] : [...events];
 }
 
-/** Build the live commitment tree from on-chain events (the real anchor). */
+/**
+ * Build the live commitment tree — the anchor for transfer/unshield proofs.
+ *
+ * Prefers the stateful indexer (FIN-029): it persists the tree from genesis, so
+ * `/v1/leaves` returns the COMPLETE ordered leaf set even after older events age
+ * out of the RPC event-retention window — the root cause of `UnknownAnchorRoot`
+ * (#10). Those leaves already start at leaf 0, so NO aged-out-prefix bridge is
+ * needed. Without a configured indexer we fall back to the direct RPC
+ * reconstruction (bridged), which is correct only while every leaf event is still
+ * in-window (local dev / very recent contracts). Building the SDK tree from the
+ * indexer's leaves reproduces the contract's root/frontier byte-for-byte (proven
+ * against `/v1/state` + `current_frontier`).
+ */
 export async function buildChainTree(): Promise<ChainTree> {
-  const commitments = bridgeAgedOutPrefix(await fetchLiveCommitments());
+  const indexed = await indexerGet<{ leaves: string[] }>('/v1/leaves');
+  const commitments = indexed
+    ? indexed.leaves.map(hexToBig)
+    : bridgeAgedOutPrefix(await fetchLiveCommitments());
   const tree = new IncrementalMerkleTree(TREE_DEPTH);
   commitments.forEach((c) => tree.insert(c));
   return { tree, commitments, leafCount: commitments.length };
@@ -264,6 +299,16 @@ export interface FrozenState {
  * which reproduces the genesis `frozen_root` (consistent with the write-path).
  */
 export async function indexFrozen(): Promise<FrozenState> {
+  // Prefer the stateful indexer (persists every freeze; immune to RPC retention,
+  // so a freeze older than the window is never silently dropped).
+  const indexed = await indexerGet<{ frozen: string[]; frozenRoot: string | null }>('/v1/frozen');
+  if (indexed) {
+    return {
+      frozen: indexed.frozen.map(hexToBig),
+      frozenRoot: indexed.frozenRoot ? hexToBig(indexed.frozenRoot) : null,
+    };
+  }
+  // Fallback: replay `freeze` events over the RPC retention window.
   const effects = await indexEffects();
   const frozen: bigint[] = [];
   let frozenRoot: bigint | null = null;
